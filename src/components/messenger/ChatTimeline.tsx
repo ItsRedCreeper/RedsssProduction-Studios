@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Hash, MessagesSquare } from "lucide-react";
 import { MessageItem } from "@/components/messenger/MessageItem";
+import type { MentionMaps } from "@/lib/mentions";
 import type { ChatMessage, ReactionGroup } from "@/components/messenger/types";
 
 type ChatTimelineProps = {
@@ -15,8 +16,8 @@ type ChatTimelineProps = {
   currentUsername?: string | null;
   roleNames?: string[];
   channelNames?: string[];
+  mentionMaps?: MentionMaps;
   canDeleteOthers?: boolean;
-  typingLabel?: string | null;
   reactionMap: Record<string, ReactionGroup[]>;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
@@ -36,8 +37,8 @@ export function ChatTimeline({
   currentUsername,
   roleNames,
   channelNames,
+  mentionMaps,
   canDeleteOthers,
-  typingLabel,
   reactionMap,
   onReply,
   onEdit,
@@ -74,9 +75,11 @@ export function ChatTimeline({
             key={message.id}
             message={message}
             isOwn={!!currentUserId && message.user_id === currentUserId}
+            currentUserId={currentUserId}
             currentUsername={currentUsername}
             roleNames={roleNames}
             channelNames={channelNames}
+            mentionMaps={mentionMaps}
             canDeleteOthers={canDeleteOthers}
             reactions={reactionMap[message.id] ?? []}
             onReply={onReply}
@@ -88,9 +91,6 @@ export function ChatTimeline({
           />
         ))
       )}
-      {typingLabel ? (
-        <p className="px-4 pt-1 text-xs text-muted">{typingLabel}</p>
-      ) : null}
       <div ref={bottomRef} />
     </div>
   );

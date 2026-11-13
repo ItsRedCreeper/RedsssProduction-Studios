@@ -29,6 +29,7 @@ import {
   MessageComposer,
   type MentionSuggestion,
 } from "@/components/messenger/MessageComposer";
+import type { TypingPerson } from "@/components/messenger/TypingIndicator";
 import { MemberList } from "@/components/messenger/MemberList";
 import { VoicePane } from "@/components/messenger/VoicePane";
 import { VoiceConnectionBar } from "@/components/messenger/VoiceConnectionBar";
@@ -50,6 +51,7 @@ import {
   upsertReaction,
 } from "@/components/messenger/data";
 import { can, mergeRolePermissions, PERMISSIONS } from "@/lib/permissions";
+import { encodeMentions, type MentionMaps } from "@/lib/mentions";
 import type { Tables } from "@/lib/supabase/database.types";
 import type {
   Category,
@@ -159,7 +161,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [serverRoles, setServerRoles] = useState<Role[]>([]);
   const [members, setMembers] = useState<MemberView[]>([]);
-  const [typingUsers, setTypingUsers] = useState<Record<string, number>>({});
+  const [typingUsers, setTypingUsers] = useState<
+    Record<string, { until: number; username: string; avatarUrl: string | null }>
+  >({});
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [dmMessages, setDmMessages] = useState<ChatMessage[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
@@ -1000,19 +1004,32 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const channel = supabase
       .channel(`typing:${channelId}`)
       .on("broadcast", { event: "typing" }, ({ payload }) => {
-        const userId = (payload as { userId?: string })?.userId;
+        const data = payload as {
+          userId?: string;
+          username?: string;
+          avatarUrl?: string | null;
+        };
+        const userId = data.userId;
         if (!userId || userId === selfId) return;
-        setTypingUsers((prev) => ({ ...prev, [userId]: Date.now() + 3000 }));
+        setTypingUsers((prev) => ({
+          ...prev,
+          [userId]: {
+            until: Date.now() + 3500,
+            username: data.username || prev[userId]?.username || "Someone",
+            avatarUrl:
+              data.avatarUrl ?? prev[userId]?.avatarUrl ?? null,
+          },
+        }));
       })
       .subscribe();
     typingChannelRef.current = channel;
     const tick = window.setInterval(() => {
       const now = Date.now();
       setTypingUsers((prev) => {
-        const next: Record<string, number> = {};
+        const next: typeof prev = {};
         let changed = false;
-        for (const [id, until] of Object.entries(prev)) {
-          if (until > now) next[id] = until;
+        for (const [id, info] of Object.entries(prev)) {
+          if (info.until > now) next[id] = info;
           else changed = true;
         }
         return changed ? next : prev;
@@ -1102,7 +1119,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const mentionSuggestions = useMemo<MentionSuggestion[]>(() => {
     const users = members.map((member) => ({
       id: member.user_id,
-      label: member.username,
+      label: member.nickname?.trim() || member.username,
       kind: "user" as const,
     }));
     const roles = serverRoles.map((role) => ({
@@ -1120,6 +1137,25 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return [...users, ...roles, ...channelItems];
   }, [members, serverRoles, channels]);
 
+  const mentionMaps = useMemo<MentionMaps>(() => {
+    const usersById: MentionMaps["usersById"] = {};
+    for (const member of members) {
+      usersById[member.user_id] = {
+        id: member.user_id,
+        username: member.nickname?.trim() || member.username,
+      };
+    }
+    const rolesById: MentionMaps["rolesById"] = {};
+    for (const role of serverRoles) {
+      rolesById[role.id] = { id: role.id, name: role.name };
+    }
+    const channelsById: MentionMaps["channelsById"] = {};
+    for (const channel of channels) {
+      channelsById[channel.id] = { id: channel.id, name: channel.name };
+    }
+    return { usersById, rolesById, channelsById };
+  }, [members, serverRoles, channels]);
+
   const roleNames = useMemo(
     () => serverRoles.map((role) => role.name),
     [serverRoles],
@@ -1129,32 +1165,45 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     [channels],
   );
 
-  const typingLabel = useMemo(() => {
+  const typingPeople = useMemo<TypingPerson[]>(() => {
     const now = Date.now();
-    const names = Object.entries(typingUsers)
-      .filter(([, until]) => until > now)
-      .map(([id]) => membersById.get(id)?.username ?? "Someone")
-      .filter((name) => name);
-    if (names.length === 0) return null;
-    if (names.length === 1) return `${names[0]} is typing…`;
-    if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
-    return "Several people are typing…";
+    return Object.entries(typingUsers)
+      .filter(([, info]) => info.until > now)
+      .map(([userId, info]) => {
+        const member = membersById.get(userId);
+        return {
+          userId,
+          username: member?.username || info.username || "Someone",
+          avatarUrl: member?.avatar_url ?? info.avatarUrl ?? null,
+        };
+      })
+      // Stable order so avatar stacks don't jump while people keep typing.
+      .sort((a, b) => a.username.localeCompare(b.username));
   }, [typingUsers, membersById]);
 
   const typingChannelRef = useRef<ReturnType<
     ReturnType<typeof createClient>["channel"]
   > | null>(null);
+  const lastTypingSentRef = useRef(0);
 
   const publishTyping = useCallback(() => {
     const userId = user?.id;
     const channel = typingChannelRef.current;
     if (!userId || !channel) return;
+    const now = Date.now();
+    // Throttle so multi-user typing stays responsive without flooding Realtime.
+    if (now - lastTypingSentRef.current < 1200) return;
+    lastTypingSentRef.current = now;
     void channel.send({
       type: "broadcast",
       event: "typing",
-      payload: { userId, username: profile?.username ?? "Someone" },
+      payload: {
+        userId,
+        username: profile?.username ?? "Someone",
+        avatarUrl: profile?.avatar_url ?? null,
+      },
     });
-  }, [user?.id, profile?.username]);
+  }, [user?.id, profile?.username, profile?.avatar_url]);
 
   const unreadChannelIds = useMemo(() => {
     const unread = new Set<string>();
@@ -1321,7 +1370,21 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError("Files must be 10MB or smaller.");
       return;
     }
-    const text = content || file?.name || "";
+    // Discord-style: store <@id> tokens so display names (incl. spaces) resolve correctly.
+    const encoded = content
+      ? encodeMentions(content, {
+          users: members.map((member) => ({
+            id: member.user_id,
+            username: member.nickname?.trim() || member.username,
+          })),
+          roles: serverRoles.map((role) => ({ id: role.id, name: role.name })),
+          channels: channels.map((channel) => ({
+            id: channel.id,
+            name: channel.name,
+          })),
+        })
+      : "";
+    const text = encoded || file?.name || "";
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const optimistic: ChatMessage = {
@@ -1429,7 +1492,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return [...withoutTemp, saved];
     });
     setLastMessageAt((prev) => ({ ...prev, [channelId]: saved.created_at }));
-    if (content.includes("@")) {
+    if (text.includes("<@") || content.includes("@")) {
       void supabase.rpc("notify_message_mentions", {
         p_message_id: saved.id,
         p_channel_id: channelId,
@@ -2082,8 +2145,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               currentUsername={profile?.username ?? null}
               roleNames={roleNames}
               channelNames={channelNames}
+              mentionMaps={mentionMaps}
               canDeleteOthers={canManageMessages}
-              typingLabel={typingLabel}
               reactionMap={reactionMap}
               onReply={setReplyTo}
               onEdit={editChannel}
@@ -2153,7 +2216,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               allowAttach={textMode && canSendMessages}
               disabled={!user || (textMode && !canSendMessages)}
               mentionSuggestions={textMode ? mentionSuggestions : []}
-              typingLabel={textMode ? typingLabel : null}
+              typingPeople={textMode ? typingPeople : []}
               onDraft={setDraft}
               onCancelReply={() => setReplyTo(null)}
               onFile={chooseFile}

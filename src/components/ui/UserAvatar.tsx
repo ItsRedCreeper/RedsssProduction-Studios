@@ -3,13 +3,14 @@ import { avatarLetter } from "@/lib/avatar";
 type UserAvatarProps = {
   username: string;
   avatarUrl?: string | null;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   className?: string;
   /** Discord-style green speaking ring */
   speaking?: boolean;
 };
 
 const sizeClasses = {
+  xs: "h-4 w-4 text-[8px]",
   sm: "h-8 w-8 text-xs",
   md: "h-10 w-10 text-sm",
   lg: "h-11 w-11 text-sm",

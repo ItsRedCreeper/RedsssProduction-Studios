@@ -17,6 +17,7 @@ import {
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { formatTimestamp } from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
+import type { MentionMaps } from "@/lib/mentions";
 import {
   QUICK_REACTIONS,
   type ChatMessage,
@@ -27,9 +28,11 @@ type MessageItemProps = {
   message: ChatMessage;
   isOwn: boolean;
   reactions?: ReactionGroup[];
+  currentUserId?: string | null;
   currentUsername?: string | null;
   roleNames?: string[];
   channelNames?: string[];
+  mentionMaps?: MentionMaps;
   canDeleteOthers?: boolean;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
@@ -49,9 +52,11 @@ export function MessageItem({
   message,
   isOwn,
   reactions = [],
+  currentUserId = null,
   currentUsername,
   roleNames,
   channelNames,
+  mentionMaps,
   canDeleteOthers = false,
   onReply,
   onEdit,
@@ -225,9 +230,11 @@ export function MessageItem({
             {message.content && (
               <p className="whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed text-[#dbdee1]">
                 {formatMessageContent(message.content, {
+                  currentUserId,
                   currentUsername,
                   roleNames,
                   channelNames,
+                  mentionMaps,
                 })}
               </p>
             )}

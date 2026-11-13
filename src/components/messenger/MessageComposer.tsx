@@ -2,6 +2,10 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Hash, Paperclip, Plus, Reply, Shield, User, X } from "lucide-react";
+import {
+  TypingIndicator,
+  type TypingPerson,
+} from "@/components/messenger/TypingIndicator";
 
 export type MentionSuggestion = {
   id: string;
@@ -19,7 +23,7 @@ type MessageComposerProps = {
   allowAttach: boolean;
   disabled?: boolean;
   mentionSuggestions?: MentionSuggestion[];
-  typingLabel?: string | null;
+  typingPeople?: TypingPerson[];
   onDraft: (value: string) => void;
   onCancelReply: () => void;
   onFile: (file: File) => void;
@@ -38,7 +42,7 @@ export function MessageComposer({
   allowAttach,
   disabled,
   mentionSuggestions = [],
-  typingLabel,
+  typingPeople = [],
   onDraft,
   onCancelReply,
   onFile,
@@ -54,7 +58,9 @@ export function MessageComposer({
   const mentionQuery = useMemo(() => {
     const cursor = inputRef.current?.selectionStart ?? draft.length;
     const before = draft.slice(0, cursor);
-    const match = before.match(/(^|[\s])([@#])([A-Za-z0-9_.-]*)$/);
+    // Discord keeps the picker open while you type a display name — including spaces.
+    // Query runs from the trigger to the cursor (no second @/#, no newline).
+    const match = before.match(/(^|[\s])([@#])([^\n@#]*)$/);
     if (!match) return null;
     return {
       trigger: match[2] as "@" | "#",
@@ -69,9 +75,18 @@ export function MessageComposer({
       mentionQuery.trigger === "#"
         ? (item: MentionSuggestion) => item.kind === "channel"
         : (item: MentionSuggestion) => item.kind === "user" || item.kind === "role";
+    const query = mentionQuery.query.trim();
+    const queryCompact = query.replace(/\s+/g, " ");
     return mentionSuggestions
       .filter(kindFilter)
-      .filter((item) => item.label.toLowerCase().includes(mentionQuery.query))
+      .filter((item) => {
+        const label = item.label.toLowerCase();
+        if (!queryCompact) return true;
+        // Match full label or each whitespace-separated chunk (Discord-like filter).
+        if (label.includes(queryCompact)) return true;
+        const parts = queryCompact.split(" ").filter(Boolean);
+        return parts.every((part) => label.includes(part));
+      })
       .slice(0, 8);
   }, [mentionQuery, mentionSuggestions]);
 
@@ -81,6 +96,7 @@ export function MessageComposer({
 
   function applyMention(item: MentionSuggestion) {
     if (!mentionQuery) return;
+    // Insert the full display label (spaces included). On send we encode to <@id> tokens.
     const prefix = item.kind === "channel" ? "#" : "@";
     const before = draft.slice(0, mentionQuery.start);
     const after = draft.slice(inputRef.current?.selectionStart ?? draft.length);
@@ -100,9 +116,7 @@ export function MessageComposer({
 
   return (
     <div className="shrink-0 px-4 pb-6 pt-2">
-      {typingLabel && (
-        <p className="mb-1.5 px-1 text-xs text-muted">{typingLabel}</p>
-      )}
+      <TypingIndicator people={typingPeople} className="mb-1.5 px-1" />
       {replying && (
         <div className="flex items-center gap-2 rounded-t-md border-l-4 border-accent bg-[#2b2d31] px-4 py-2">
           <Reply className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
