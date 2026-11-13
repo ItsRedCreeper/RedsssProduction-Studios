@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Hash, LogOut, Settings, UserPlus } from "lucide-react";
+import { ChevronDown, FolderPlus, Hash, LogOut, Settings, UserPlus } from "lucide-react";
 
 type ServerHeaderMenuProps = {
   serverName: string;
   onInvite: () => void;
   onSettings: () => void;
   onCreateChannel?: () => void;
+  onCreateCategory?: () => void;
   onLeave?: () => void;
 };
 
@@ -16,6 +17,7 @@ export function ServerHeaderMenu({
   onInvite,
   onSettings,
   onCreateChannel,
+  onCreateCategory,
   onLeave,
 }: ServerHeaderMenuProps) {
   const [open, setOpen] = useState(false);
@@ -80,6 +82,20 @@ export function ServerHeaderMenu({
             >
               <Hash className="h-4 w-4" strokeWidth={1.75} />
               Create Channel
+            </button>
+          )}
+          {onCreateCategory && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onCreateCategory();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-accent hover:text-white"
+            >
+              <FolderPlus className="h-4 w-4" strokeWidth={1.75} />
+              Create Category
             </button>
           )}
           <button

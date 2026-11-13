@@ -423,6 +423,53 @@ export function ServerSettingsModal({
     setCategoryName("");
   }
 
+  async function renameCategory(category: Category, nextName: string) {
+    const trimmed = nextName.trim();
+    if (!trimmed || trimmed === category.name) return;
+    setError(null);
+    const supabase = createClient();
+    const { data, error: updateError } = await supabase
+      .from("channel_categories")
+      .update({ name: trimmed })
+      .eq("id", category.id)
+      .select("*")
+      .single();
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not rename category.");
+      return;
+    }
+    onChannelsChanged(
+      channels,
+      categories.map((item) => (item.id === category.id ? data : item)).sort(byPosition),
+    );
+  }
+
+  async function deleteCategory(categoryId: string) {
+    setError(null);
+    const supabase = createClient();
+    // Detach channels first so they become uncategorized.
+    await supabase
+      .from("channels")
+      .update({ category_id: null })
+      .eq("category_id", categoryId);
+    const { error: deleteError } = await supabase
+      .from("channel_categories")
+      .delete()
+      .eq("id", categoryId);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    onChannelsChanged(
+      channels.map((channel) =>
+        channel.category_id === categoryId
+          ? { ...channel, category_id: null }
+          : channel,
+      ),
+      categories.filter((category) => category.id !== categoryId),
+    );
+  }
+
   async function createChannel(event: FormEvent) {
     event.preventDefault();
     const trimmed = channelName.trim().toLowerCase().replace(/\s+/g, "-");
@@ -815,6 +862,21 @@ export function ServerSettingsModal({
                   </button>
                 </form>
 
+                <ul className="space-y-1">
+                  {sortedCategories.length === 0 ? (
+                    <li className="text-sm text-muted">No categories yet.</li>
+                  ) : (
+                    sortedCategories.map((category) => (
+                      <CategoryRow
+                        key={category.id}
+                        category={category}
+                        onSave={(name) => void renameCategory(category, name)}
+                        onDelete={() => void deleteCategory(category.id)}
+                      />
+                    ))
+                  )}
+                </ul>
+
                 <form
                   onSubmit={createChannel}
                   className="flex flex-wrap items-end gap-2 border-t border-black/30 pt-4"
@@ -1081,6 +1143,70 @@ function RoleRow({
           </label>
         ))}
       </div>
+    </li>
+  );
+}
+
+function CategoryRow({
+  category,
+  onSave,
+  onDelete,
+}: {
+  category: Category;
+  onSave: (name: string) => void;
+  onDelete: () => void;
+}) {
+  const [name, setName] = useState(category.name);
+  const [confirm, setConfirm] = useState(false);
+
+  useEffect(() => {
+    setName(category.name);
+  }, [category.name]);
+
+  return (
+    <li className="flex flex-wrap items-center gap-2 rounded-md bg-[#2b2d31] px-2 py-2">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+        Category
+      </span>
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        maxLength={40}
+        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm uppercase tracking-wide text-white outline-none focus:border-accent/40"
+      />
+      <button
+        type="button"
+        onClick={() => onSave(name)}
+        className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058]"
+      >
+        Save
+      </button>
+      {confirm ? (
+        <>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white"
+          >
+            Confirm
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirm(false)}
+            className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-white"
+          >
+            Cancel
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirm(true)}
+          className="rounded-md px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-accent-muted"
+        >
+          Delete
+        </button>
+      )}
     </li>
   );
 }

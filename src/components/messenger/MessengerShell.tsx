@@ -18,6 +18,7 @@ import {
 } from "@/lib/messenger-routes";
 import { CreateServerModal } from "@/components/messenger/CreateServerModal";
 import { CreateChannelModal } from "@/components/messenger/CreateChannelModal";
+import { CreateCategoryModal } from "@/components/messenger/CreateCategoryModal";
 import { InvitePeopleModal } from "@/components/messenger/InvitePeopleModal";
 import { ServerRail } from "@/components/messenger/ServerRail";
 import { ChannelSidebar } from "@/components/messenger/ChannelSidebar";
@@ -180,6 +181,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [createChannelType, setCreateChannelType] = useState<"text" | "voice">("text");
   const [createChannelCategoryId, setCreateChannelCategoryId] = useState<string | null>(null);
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1329,6 +1331,36 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setCreateChannelOpen(true);
   }
 
+  function openCreateCategory() {
+    if (!canManageChannels && !isServerOwner) {
+      setError("You don't have permission to manage channels.");
+      return;
+    }
+    setCreateCategoryOpen(true);
+  }
+
+  async function renameCategory(categoryId: string, name: string) {
+    if (!canManageChannels && !isServerOwner) {
+      setError("You don't have permission to manage channels.");
+      return false;
+    }
+    const supabase = createClient();
+    const { data, error: updateError } = await supabase
+      .from("channel_categories")
+      .update({ name })
+      .eq("id", categoryId)
+      .select("*")
+      .single();
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not rename category.");
+      return false;
+    }
+    setCategories((prev) =>
+      prev.map((category) => (category.id === categoryId ? data : category)),
+    );
+    return true;
+  }
+
   function startDm(otherUserId: string) {
     if (pane === "home" && dmParam === otherUserId) {
       void openDm(otherUserId).then((id) => {
@@ -1943,13 +1975,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             unreadChannelIds={unreadChannelIds}
             voiceStates={displayVoiceStates}
             membersById={membersById}
+            speakingUserIds={speakingUserIds}
             loading={loadingChannels}
             canLeave={activeServer.owner_id !== user?.id}
+            canManageChannels={canManageChannels || isServerOwner}
             connectedVoiceChannelId={connection?.channelId ?? null}
             onSelectChannel={selectChannel}
             onInvite={openInvite}
             onSettings={openSettings}
             onCreateChannel={openCreateChannel}
+            onCreateCategory={openCreateCategory}
+            onRenameCategory={renameCategory}
             onLeave={() => setLeaveOpen(true)}
             footer={voiceFooter}
           />
@@ -2259,6 +2295,20 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           onCreated={(serverId) => {
             void loadServers();
             router.push(messengerServerPath(serverId));
+          }}
+        />
+      )}
+
+      {user && activeServer && (
+        <CreateCategoryModal
+          open={createCategoryOpen}
+          serverId={activeServer.id}
+          categoryCount={categories.length}
+          onClose={() => setCreateCategoryOpen(false)}
+          onCreated={(category) => {
+            setCategories((prev) =>
+              [...prev, category].sort((a, b) => a.position - b.position),
+            );
           }}
         />
       )}
