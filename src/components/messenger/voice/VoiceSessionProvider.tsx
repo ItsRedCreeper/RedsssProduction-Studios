@@ -69,30 +69,25 @@ const VoiceSessionContext = createContext<VoiceSessionContextValue | null>(null)
 const SPEAKING_THRESHOLD = 0.04;
 const SPEAKING_HANG_MS = 350;
 const VOICE_SKIP_KEY = "redsss-voice-skip-channels";
+/** Keep presence alive while connected; stop heartbeats → grace kick. */
+const VOICE_HEARTBEAT_MS = 15_000;
+/** Discord-like grace: drop after ~1 min without a heartbeat (tab close / crash). */
+export const VOICE_STALE_AFTER_MS = 60_000;
+const VOICE_STALE_INTERVAL = "60 seconds";
+const VOICE_CLEANUP_POLL_MS = 20_000;
 
-/** Cancels Strict Mode double-invoke teardown so we don't drop voice on remount. */
+/**
+ * Accidental unmount (refresh / Strict Mode) must NOT wipe voice_states immediately.
+ * Heartbeats stop on close; cleanup_stale_voice_states removes the row after VOICE_STALE_AFTER_MS.
+ * Intentional leaveVoice() still deletes right away.
+ */
 let pendingLeaveTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingLeaveUserId: string | null = null;
 
 function cancelPendingLeave() {
   if (pendingLeaveTimer != null) {
     clearTimeout(pendingLeaveTimer);
     pendingLeaveTimer = null;
-    pendingLeaveUserId = null;
   }
-}
-
-function scheduleLeaveVoice(userId: string) {
-  cancelPendingLeave();
-  pendingLeaveUserId = userId;
-  pendingLeaveTimer = setTimeout(() => {
-    pendingLeaveTimer = null;
-    const id = pendingLeaveUserId;
-    pendingLeaveUserId = null;
-    if (!id) return;
-    const supabase = createClient();
-    void supabase.from("voice_states").delete().eq("user_id", id);
-  }, 500);
 }
 
 function readSkipChannels(): Set<string> {
@@ -654,6 +649,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Timed out while away — don't rejoin a dead session.
+      const ageMs = Date.now() - new Date(data.updated_at).getTime();
+      if (Number.isFinite(ageMs) && ageMs > VOICE_STALE_AFTER_MS) {
+        await supabase.from("voice_states").delete().eq("user_id", user!.id);
+        return;
+      }
+
       const [{ data: channel }, { data: server }] = await Promise.all([
         supabase.from("channels").select("id, name").eq("id", data.channel_id).maybeSingle(),
         supabase.from("servers").select("id, name").eq("id", data.server_id).maybeSingle(),
@@ -700,14 +702,53 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     void leaveVoice();
   }, [pathname, leaveVoice]);
 
+  // Heartbeat so other clients know we're still here; stopping implies grace disconnect.
+  useEffect(() => {
+    if (!connection || !user) return;
+    const supabase = createClient();
+    const userId = user.id;
+
+    async function beat() {
+      if (!connectionRef.current || userIdRef.current !== userId) return;
+      const updatedAt = new Date().toISOString();
+      const { error } = await supabase
+        .from("voice_states")
+        .update({ updated_at: updatedAt })
+        .eq("user_id", userId);
+      if (error) console.error(error.message);
+    }
+
+    void beat();
+    const timer = window.setInterval(() => void beat(), VOICE_HEARTBEAT_MS);
+    return () => window.clearInterval(timer);
+  }, [connection, user]);
+
+  // Periodically purge ghost occupants whose heartbeats stopped.
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+
+    async function prune() {
+      const { error } = await supabase.rpc("cleanup_stale_voice_states", {
+        max_age: VOICE_STALE_INTERVAL,
+      });
+      if (error) console.error(error.message);
+    }
+
+    void prune();
+    const timer = window.setInterval(() => void prune(), VOICE_CLEANUP_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [user]);
+
   useEffect(() => {
     return () => {
       voiceOpRef.current += 1;
       stopMicMonitor();
       void stopMesh();
       detachBroadcast();
-      const userId = userIdRef.current;
-      if (userId) scheduleLeaveVoice(userId);
+      // Do not delete voice_states here — brief refresh / remount should keep the seat
+      // until heartbeats expire and cleanup_stale_voice_states runs.
+      cancelPendingLeave();
     };
   }, [detachBroadcast, stopMesh, stopMicMonitor]);
 

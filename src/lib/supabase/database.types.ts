@@ -138,6 +138,10 @@ export type Database = {
     }
     Views: Record<string, never>
     Functions: {
+      cleanup_stale_voice_states: {
+        Args: { max_age?: string }
+        Returns: number
+      }
       create_notification: {
         Args: {
           p_user_id: string;

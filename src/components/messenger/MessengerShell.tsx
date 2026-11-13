@@ -37,7 +37,10 @@ import { VoiceConnectionBar } from "@/components/messenger/VoiceConnectionBar";
 import { ResizableSidebar } from "@/components/messenger/ResizableSidebar";
 import { ServerHeaderMenu } from "@/components/messenger/ServerHeaderMenu";
 import { ServerSettingsModal } from "@/components/messenger/ServerSettingsModal";
-import { useVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
+import {
+  useVoiceSession,
+  VOICE_STALE_AFTER_MS,
+} from "@/components/messenger/voice/VoiceSessionProvider";
 import { useMessengerSidebarWidth } from "@/hooks/useMessengerSidebarWidth";
 import {
   dmRowsToMessages,
@@ -241,8 +244,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     !!activeChannel &&
     connection.channelId === activeChannel.id;
   const displayVoiceStates = useMemo(() => {
+    const now = Date.now();
+    const fresh = voiceStates.filter((state) => {
+      // Keep your own seat while connected even between heartbeats.
+      if (user && connection && state.user_id === user.id) return true;
+      const age = now - new Date(state.updated_at).getTime();
+      return !Number.isFinite(age) || age <= VOICE_STALE_AFTER_MS;
+    });
     if (!user || !connection || connection.serverId !== activeServerId) {
-      return voiceStates;
+      return fresh;
     }
     const selfRow: VoiceState = {
       user_id: user.id,
@@ -252,7 +262,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       deafened,
       updated_at: new Date().toISOString(),
     };
-    const withoutSelf = voiceStates.filter((state) => state.user_id !== user.id);
+    const withoutSelf = fresh.filter((state) => state.user_id !== user.id);
     return [...withoutSelf, selfRow];
   }, [voiceStates, user, connection, activeServerId, muted, deafened]);
 
