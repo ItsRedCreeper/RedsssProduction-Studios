@@ -12,16 +12,11 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useBlockedUsers } from "@/hooks/useBlockedUsers";
-import {
-  ensureDmConversation,
-  loadFriendshipWith,
-  type FriendProfile,
-} from "@/lib/friends";
+import { ensureDmConversation, type FriendProfile } from "@/lib/friends";
 import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
 import {
   SmallProfileCard,
   type MutualFocus,
-  type SmallProfileReadyData,
 } from "@/components/profile/SmallProfileCard";
 import { BigProfileModal } from "@/components/profile/BigProfileModal";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
@@ -51,22 +46,20 @@ const ProfileContext = createContext<ProfileContextValue | null>(null);
 
 function clampCardPosition(anchor?: DOMRect | null): Anchor {
   const width = 300;
-  // Tall estimate covering banner + mutuals + Message/Add Friend + Block/View rows.
-  const height = 520;
-  const vh = Math.round(window.visualViewport?.height ?? window.innerHeight);
-  const vw = Math.round(window.visualViewport?.width ?? window.innerWidth);
+  // Prefer a taller estimate so the first paint stays on-screen before ResizeObserver runs.
+  const height = 420;
   if (!anchor) {
     return {
-      top: Math.max(8, vh / 2 - height / 2),
-      left: Math.max(8, vw / 2 - width / 2),
+      top: Math.max(24, window.innerHeight / 2 - height / 2),
+      left: Math.max(24, window.innerWidth / 2 - width / 2),
     };
   }
   let left = anchor.right + 10;
-  if (left + width > vw - 8) left = anchor.left - width - 10;
+  if (left + width > window.innerWidth - 8) left = anchor.left - width - 10;
   if (left < 8) left = 8;
   let top = anchor.top;
-  if (top + height > vh - 8) {
-    top = Math.max(8, vh - height - 8);
+  if (top + height > window.innerHeight - 8) {
+    top = Math.max(8, window.innerHeight - height - 8);
   }
   return { top, left };
 }
@@ -109,7 +102,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     profile: FriendProfile;
     top: number;
     left: number;
-    ready: SmallProfileReadyData;
   } | null>(null);
   const [big, setBig] = useState<FriendProfile | null>(null);
   const [bigFocus, setBigFocus] = useState<MutualFocus | null>(null);
@@ -136,31 +128,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const openSmallProfile = useCallback(
     async (userId: string, anchorEl?: HTMLElement | null) => {
-      // Capture anchor rect before the async work so scroll/layout can't move it.
-      const anchorRect = anchorEl?.getBoundingClientRect() ?? null;
-      const isSelf = !!user && user.id === userId;
-
-      // Open fast: profile + friendship only. Mutuals load inside the card
-      // behind fixed-height placeholders so the popover doesn't grow off-screen.
-      const [profile, friendship] = await Promise.all([
-        fetchProfile(userId),
-        isSelf
-          ? Promise.resolve({ status: "none" as const, edgeId: null })
-          : loadFriendshipWith(userId),
-      ]);
+      const profile = await fetchProfile(userId);
       if (!profile) return;
-
-      const pos = clampCardPosition(anchorRect);
-      setSmall({
-        profile,
-        ...pos,
-        ready: {
-          friendStatus: friendship.status,
-          friendEdgeId: friendship.edgeId,
-        },
-      });
+      const pos = clampCardPosition(anchorEl?.getBoundingClientRect() ?? null);
+      setSmall({ profile, ...pos });
     },
-    [user],
+    [],
   );
 
   const openBigProfile = useCallback(async (
@@ -269,11 +242,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             onClick={() => setSmall(null)}
           />
           <SmallProfileCard
-            key={small.profile.id}
             profile={small.profile}
             top={small.top}
             left={small.left}
-            ready={small.ready}
             isSelf={!!user && small.profile.id === user.id}
             isBlocked={isBlocked(small.profile.id)}
             onClose={() => setSmall(null)}
