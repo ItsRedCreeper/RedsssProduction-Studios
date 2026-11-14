@@ -181,14 +181,81 @@ export async function acceptFriendRequest(requestId: string) {
 
 export async function declineOrCancelFriendRequest(requestId: string) {
   const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: row, error: loadError } = await supabase
+    .from("friends")
+    .select("id, user_id, friend_id, status")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (loadError || !row) {
+    return { error: loadError?.message ?? "Request not found." };
+  }
+
+  const declining =
+    row.status === "pending" && row.friend_id === user.id; // I was the recipient
+  const requesterId = row.user_id;
+
   const { error } = await supabase.from("friends").delete().eq("id", requestId);
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+
+  if (declining && requesterId !== user.id) {
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle();
+    await supabase.rpc("create_notification", {
+      p_user_id: requesterId,
+      p_type: "friend_declined",
+      p_title: `${me?.username ?? "Someone"} declined your friend request`,
+      p_body: "You can send another request from Add Friend.",
+      p_link: "/messenger/channels/@me?friends=add",
+    });
+  }
+
+  return { error: null as string | null };
 }
 
 export async function removeFriendship(edgeId: string) {
   const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: row, error: loadError } = await supabase
+    .from("friends")
+    .select("id, user_id, friend_id, status")
+    .eq("id", edgeId)
+    .maybeSingle();
+  if (loadError || !row) {
+    return { error: loadError?.message ?? "Friendship not found." };
+  }
+
+  const otherId = row.user_id === user.id ? row.friend_id : row.user_id;
   const { error } = await supabase.from("friends").delete().eq("id", edgeId);
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+
+  if (row.status === "accepted" && otherId !== user.id) {
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle();
+    await supabase.rpc("create_notification", {
+      p_user_id: otherId,
+      p_type: "friend_removed",
+      p_title: `${me?.username ?? "Someone"} removed you as a friend`,
+      p_body: "Open Friends to manage your friends list.",
+      p_link: "/messenger/channels/@me?friends=friends",
+    });
+  }
+
+  return { error: null as string | null };
 }
 
 export async function ensureDmConversation(otherUserId: string) {

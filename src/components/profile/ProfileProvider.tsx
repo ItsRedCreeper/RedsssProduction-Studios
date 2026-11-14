@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { ensureDmConversation, type FriendProfile } from "@/lib/friends";
-import { messengerHomePath } from "@/lib/messenger-routes";
+import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
 import {
   SmallProfileCard,
   type MutualFocus,
@@ -95,10 +95,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     async (userId: string) => {
       if (!user || userId === user.id) return;
       const { conversationId, error } = await ensureDmConversation(userId);
-      if (error || !conversationId) {
-        router.push(`${messengerHomePath()}?dm=${userId}`);
+      if (!error && conversationId) {
+        // Open the exact DM thread (selected), not just the DM home list.
+        router.push(messengerDmPath(conversationId));
         return;
       }
+      // Fallback: home + ?dm= lets MessengerShell create/open and then select them.
       router.push(`${messengerHomePath()}?dm=${userId}`);
     },
     [user, router],

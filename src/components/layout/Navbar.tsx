@@ -209,9 +209,9 @@ export function Navbar() {
         onClose={() => setNotificationsOpen(false)}
         userId={user?.id ?? null}
         onUnreadChange={setUnreadNotifications}
-        onOpenFriendsPending={() => {
+        onOpenFriends={(tab) => {
           setNotificationsOpen(false);
-          profileUi.openFriends("pending");
+          profileUi.openFriends(tab);
         }}
       />
 

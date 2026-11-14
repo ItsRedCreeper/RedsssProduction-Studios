@@ -428,7 +428,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          event: "*",
           schema: "public",
           table: "dm_participants",
           filter: `user_id=eq.${user.id}`,
@@ -1413,13 +1413,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   function startDm(otherUserId: string) {
-    if (pane === "home" && dmParam === otherUserId) {
-      void openDm(otherUserId).then((id) => {
-        if (id) router.replace(messengerDmPath(id));
-      });
-      return;
-    }
-    router.push(`${messengerHomePath()}?dm=${otherUserId}`);
+    void openDm(otherUserId).then((id) => {
+      if (id) {
+        router.push(messengerDmPath(id));
+        return;
+      }
+      router.push(`${messengerHomePath()}?dm=${otherUserId}`);
+    });
   }
 
   function selectThread(threadId: string) {

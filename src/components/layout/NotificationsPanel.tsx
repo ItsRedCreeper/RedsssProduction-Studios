@@ -16,12 +16,14 @@ export type AppNotification = {
   created_at: string;
 };
 
+type FriendsOpenTab = "friends" | "pending" | "add";
+
 type NotificationsPanelProps = {
   open: boolean;
   onClose: () => void;
   userId: string | null;
   onUnreadChange?: (count: number) => void;
-  onOpenFriendsPending?: () => void;
+  onOpenFriends?: (tab: FriendsOpenTab) => void;
 };
 
 export function NotificationsPanel({
@@ -29,7 +31,7 @@ export function NotificationsPanel({
   onClose,
   userId,
   onUnreadChange,
-  onOpenFriendsPending,
+  onOpenFriends,
 }: NotificationsPanelProps) {
   const router = useRouter();
   const [items, setItems] = useState<AppNotification[]>([]);
@@ -105,15 +107,29 @@ export function NotificationsPanel({
     onUnreadChange?.(0);
   }
 
+  function friendsTabFromNotification(item: AppNotification): FriendsOpenTab | null {
+    if (item.type === "friend_request" || item.link?.includes("friends=pending")) {
+      return "pending";
+    }
+    if (item.type === "friend_declined" || item.link?.includes("friends=add")) {
+      return "add";
+    }
+    if (
+      item.type === "friend_accepted" ||
+      item.type === "friend_removed" ||
+      item.link?.includes("friends=friends")
+    ) {
+      return "friends";
+    }
+    return null;
+  }
+
   async function openItem(item: AppNotification) {
     if (!item.read) await markRead(item.id);
     onClose();
-    if (
-      item.type === "friend_request" ||
-      item.type === "friend_accepted" ||
-      item.link?.includes("friends=pending")
-    ) {
-      onOpenFriendsPending?.();
+    const friendsTab = friendsTabFromNotification(item);
+    if (friendsTab) {
+      onOpenFriends?.(friendsTab);
       return;
     }
     if (item.link) router.push(item.link);
