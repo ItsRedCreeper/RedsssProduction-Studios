@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Ban,
   Check,
   MessageSquare,
   Search,
@@ -27,6 +28,10 @@ import {
   type FriendProfile,
 } from "@/lib/friends";
 import {
+  loadBlockedUsers,
+  type BlockedUser,
+} from "@/lib/blocking";
+import {
   FRIENDS_PANEL_MAX,
   FRIENDS_PANEL_MIN,
   useFriendsPanelWidth,
@@ -51,6 +56,7 @@ const TABS: { id: FriendsTab; label: string }[] = [
   { id: "friends", label: "Friends" },
   { id: "pending", label: "Pending" },
   { id: "add", label: "Add Friend" },
+  { id: "blocked", label: "Blocked" },
 ];
 
 export function FriendsPanel({
@@ -72,6 +78,9 @@ export function FriendsPanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<FriendEdge | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [unblockTarget, setUnblockTarget] = useState<BlockedUser | null>(null);
+  const [unblocking, setUnblocking] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -81,12 +90,21 @@ export function FriendsPanel({
   const refresh = useCallback(async () => {
     if (!userId) {
       setEdges([]);
+      setBlockedUsers([]);
       return;
     }
     setLoading(true);
-    const { edges: next, error: loadError } = await loadFriendEdges(userId);
-    setEdges(next);
-    setError(loadError);
+    const [{ edges: next, error: loadError }, blockedResult] = await Promise.all([
+      loadFriendEdges(userId),
+      loadBlockedUsers(),
+    ]);
+    const blockedIds = new Set(
+      (blockedResult.users ?? []).map((person) => person.id),
+    );
+    // Hide anyone you've blocked from friends/pending lists.
+    setEdges(next.filter((edge) => !blockedIds.has(edge.other.id)));
+    setBlockedUsers(blockedResult.users);
+    setError(loadError ?? blockedResult.error);
     setLoading(false);
   }, [userId]);
 
@@ -99,6 +117,18 @@ export function FriendsPanel({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "friends" },
+        () => {
+          void refresh();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "blocked_users",
+          filter: `blocker_id=eq.${userId}`,
+        },
         () => {
           void refresh();
         },
@@ -179,11 +209,19 @@ export function FriendsPanel({
 
   async function handleAdd(person: FriendProfile) {
     if (!userId) return;
+    if (profileUi?.isBlocked(person.id)) {
+      setError("Unblock this user before sending a friend request.");
+      return;
+    }
     setBusyId(person.id);
     const { error: sendError } = await sendFriendRequest(userId, person.id);
     setBusyId(null);
     if (sendError) {
-      setError(sendError);
+      setError(
+        sendError.includes("violates row-level security")
+          ? "You can't send a friend request to this user."
+          : sendError,
+      );
       return;
     }
     await refresh();
@@ -199,6 +237,19 @@ export function FriendsPanel({
       return;
     }
     setRemoveTarget(null);
+    await refresh();
+  }
+
+  async function confirmUnblock() {
+    if (!unblockTarget || !profileUi) return;
+    setUnblocking(true);
+    const { error: unblockError } = await profileUi.unblockUser(unblockTarget.id);
+    setUnblocking(false);
+    if (unblockError) {
+      setError(unblockError);
+      return;
+    }
+    setUnblockTarget(null);
     await refresh();
   }
 
@@ -242,6 +293,9 @@ export function FriendsPanel({
             <p className="mt-0.5 text-xs text-muted">
               {friends.length} friend{friends.length === 1 ? "" : "s"}
               {incoming.length > 0 ? ` · ${incoming.length} pending` : ""}
+              {blockedUsers.length > 0
+                ? ` · ${blockedUsers.length} blocked`
+                : ""}
             </p>
           </div>
           <button
@@ -258,7 +312,11 @@ export function FriendsPanel({
           {TABS.map((item) => {
             const active = tab === item.id;
             const badge =
-              item.id === "pending" ? incoming.length + outgoing.length : 0;
+              item.id === "pending"
+                ? incoming.length + outgoing.length
+                : item.id === "blocked"
+                  ? blockedUsers.length
+                  : 0;
             return (
               <button
                 key={item.id}
@@ -477,6 +535,7 @@ export function FriendsPanel({
               )}
               <ul>
                 {results.map((person) => {
+                  const blocked = profileUi?.isBlocked(person.id) ?? false;
                   const rel = userId
                     ? relationshipFor(userId, person.id, edges)
                     : { status: "none" as const, edge: null };
@@ -500,46 +559,117 @@ export function FriendsPanel({
                             {person.username}
                           </span>
                           <span className="block truncate text-xs text-muted">
-                            {statusLabel(person.status)}
+                            {blocked ? "Blocked" : statusLabel(person.status)}
                           </span>
                         </span>
                       </button>
-                      {rel.status === "none" && (
+                      {blocked ? (
                         <button
                           type="button"
-                          disabled={busyId === person.id}
-                          onClick={() => void handleAdd(person)}
-                          className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                          onClick={() => setUnblockTarget(
+                            blockedUsers.find((row) => row.id === person.id) ?? {
+                              ...person,
+                              blocked_at: new Date().toISOString(),
+                            },
+                          )}
+                          className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058]"
                         >
-                          <UserPlus className="h-3.5 w-3.5" strokeWidth={2} />
-                          Add Friend
+                          Unblock
                         </button>
-                      )}
-                      {rel.status === "outgoing" && (
-                        <span className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-[#dbdee1]">
-                          Request Sent
-                        </span>
-                      )}
-                      {rel.status === "friends" && (
-                        <span className="rounded-md bg-accent-muted px-2.5 py-1.5 text-xs font-medium text-accent">
-                          Friends
-                        </span>
-                      )}
-                      {rel.status === "incoming" && rel.edge && (
-                        <button
-                          type="button"
-                          disabled={busyId === rel.edge.id}
-                          onClick={() => void handleAccept(rel.edge!)}
-                          className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
-                        >
-                          Accept
-                        </button>
+                      ) : (
+                        <>
+                          {rel.status === "none" && (
+                            <button
+                              type="button"
+                              disabled={busyId === person.id}
+                              onClick={() => void handleAdd(person)}
+                              className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                            >
+                              <UserPlus className="h-3.5 w-3.5" strokeWidth={2} />
+                              Add Friend
+                            </button>
+                          )}
+                          {rel.status === "outgoing" && (
+                            <span className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-[#dbdee1]">
+                              Request Sent
+                            </span>
+                          )}
+                          {rel.status === "friends" && (
+                            <span className="rounded-md bg-accent-muted px-2.5 py-1.5 text-xs font-medium text-accent">
+                              Friends
+                            </span>
+                          )}
+                          {rel.status === "incoming" && rel.edge && (
+                            <button
+                              type="button"
+                              disabled={busyId === rel.edge.id}
+                              onClick={() => void handleAccept(rel.edge!)}
+                              className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                            >
+                              Accept
+                            </button>
+                          )}
+                        </>
                       )}
                     </li>
                   );
                 })}
               </ul>
             </div>
+          )}
+
+          {tab === "blocked" && (
+            <ul>
+              {loading && (
+                <li className="px-3 py-6 text-center text-sm text-muted">
+                  Loading blocked users…
+                </li>
+              )}
+              {!loading && blockedUsers.length === 0 && (
+                <li className="px-3 py-6 text-center text-sm text-muted">
+                  No blocked users.
+                </li>
+              )}
+              {!loading &&
+                blockedUsers.map((person) => (
+                  <li
+                    key={person.id}
+                    className="mb-1 flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-surface-hover"
+                  >
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      onClick={() => profileUi?.openBigProfile(person.id)}
+                    >
+                      <span className="relative shrink-0">
+                        <UserAvatar
+                          username={person.username}
+                          avatarUrl={person.avatar_url}
+                          size="md"
+                        />
+                        <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface p-0.5 text-accent">
+                          <Ban className="h-3 w-3" strokeWidth={2} />
+                        </span>
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {person.username}
+                        </span>
+                        <span className="block truncate text-xs text-muted">
+                          Blocked
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnblockTarget(person)}
+                      className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058]"
+                    >
+                      Unblock
+                    </button>
+                  </li>
+                ))}
+            </ul>
           )}
         </div>
       </aside>
@@ -557,6 +687,23 @@ export function FriendsPanel({
         busy={removing}
         onCancel={() => setRemoveTarget(null)}
         onConfirm={() => void confirmRemove()}
+      />
+
+      <ConfirmModal
+        open={!!unblockTarget}
+        title={
+          unblockTarget
+            ? `Unblock ${unblockTarget.username}?`
+            : "Unblock user?"
+        }
+        description="They will be able to message you and send friend requests again. You will not automatically become friends."
+        confirmLabel="Unblock"
+        cancelLabel="Cancel"
+        busy={unblocking}
+        onCancel={() => {
+          if (!unblocking) setUnblockTarget(null);
+        }}
+        onConfirm={() => void confirmUnblock()}
       />
     </>
   );

@@ -11,6 +11,7 @@ export type FriendProfile = {
   status_text: string | null;
   bio: string | null;
   banner_url: string | null;
+  banner_color: string | null;
   created_at?: string | null;
 };
 
@@ -27,6 +28,7 @@ function asProfile(row: Partial<FriendProfile> & { id: string; username: string 
     status_text: row.status_text ?? null,
     bio: row.bio ?? null,
     banner_url: row.banner_url ?? null,
+    banner_color: row.banner_color ?? null,
     created_at: row.created_at ?? null,
   };
 }
@@ -85,7 +87,7 @@ export async function loadFriendEdges(userId: string) {
 
   const { data: profiles, error: profileError } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, status, status_text, bio, banner_url")
+    .select("id, username, avatar_url, status, status_text, bio, banner_url, banner_color")
     .in("id", unique);
   if (profileError) return { edges: [] as FriendEdge[], error: profileError.message };
 
@@ -210,7 +212,7 @@ export async function searchProfiles(query: string, excludeId: string) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, status, status_text, bio, banner_url")
+    .select("id, username, avatar_url, status, status_text, bio, banner_url, banner_color")
     .ilike("username", `%${trimmed}%`)
     .neq("id", excludeId)
     .limit(20);

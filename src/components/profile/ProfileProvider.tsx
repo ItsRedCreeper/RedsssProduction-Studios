@@ -11,6 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import { useBlockedUsers } from "@/hooks/useBlockedUsers";
 import { ensureDmConversation, type FriendProfile } from "@/lib/friends";
 import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
 import {
@@ -19,8 +20,9 @@ import {
 } from "@/components/profile/SmallProfileCard";
 import { BigProfileModal } from "@/components/profile/BigProfileModal";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
-export type FriendsTab = "friends" | "pending" | "add";
+export type FriendsTab = "friends" | "pending" | "add" | "blocked";
 
 type Anchor = { top: number; left: number };
 
@@ -34,13 +36,17 @@ type ProfileContextValue = {
   friendsTab: FriendsTab;
   setFriendsTab: (tab: FriendsTab) => void;
   messageUser: (userId: string) => Promise<void>;
+  isBlocked: (userId: string | null | undefined) => boolean;
+  blockedIds: string[];
+  requestBlock: (userId: string, username: string) => void;
+  unblockUser: (userId: string) => Promise<{ error: string | null }>;
 };
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 
 function clampCardPosition(anchor?: DOMRect | null): Anchor {
-  const width = 280;
-  const height = 280;
+  const width = 300;
+  const height = 320;
   if (!anchor) {
     return {
       top: Math.max(24, window.innerHeight / 2 - height / 2),
@@ -61,7 +67,9 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
   const supabase = createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, status, status_text, bio, banner_url, created_at")
+    .select(
+      "id, username, avatar_url, status, status_text, bio, banner_url, banner_color, created_at",
+    )
     .eq("id", userId)
     .maybeSingle();
   if (!data) return null;
@@ -73,6 +81,7 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
     status_text: data.status_text,
     bio: data.bio,
     banner_url: data.banner_url,
+    banner_color: data.banner_color,
     created_at: data.created_at,
   };
 }
@@ -80,6 +89,12 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { user, profile: current } = useCurrentProfile();
+  const {
+    blockedIds,
+    isBlocked,
+    blockUser,
+    unblockUser: unblockUserFn,
+  } = useBlockedUsers();
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [friendsTab, setFriendsTab] = useState<FriendsTab>("friends");
   const [small, setSmall] = useState<{
@@ -90,20 +105,24 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [big, setBig] = useState<FriendProfile | null>(null);
   const [bigFocus, setBigFocus] = useState<MutualFocus | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [blockTarget, setBlockTarget] = useState<{
+    id: string;
+    username: string;
+  } | null>(null);
+  const [blocking, setBlocking] = useState(false);
 
   const messageUser = useCallback(
     async (userId: string) => {
       if (!user || userId === user.id) return;
+      if (isBlocked(userId)) return;
       const { conversationId, error } = await ensureDmConversation(userId);
       if (!error && conversationId) {
-        // Open the exact DM thread (selected), not just the DM home list.
         router.push(messengerDmPath(conversationId));
         return;
       }
-      // Fallback: home + ?dm= lets MessengerShell create/open and then select them.
       router.push(`${messengerHomePath()}?dm=${userId}`);
     },
-    [user, router],
+    [user, router, isBlocked],
   );
 
   const openSmallProfile = useCallback(
@@ -142,6 +161,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
                 status_text: current.status_text,
                 bio: current.bio,
                 banner_url: current.banner_url,
+                banner_color: current.banner_color,
                 created_at: current.created_at,
               }
             : null);
@@ -157,6 +177,25 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const closeFriends = useCallback(() => setFriendsOpen(false), []);
 
+  const requestBlock = useCallback((userId: string, username: string) => {
+    if (!user || userId === user.id) return;
+    setBlockTarget({ id: userId, username });
+  }, [user]);
+
+  const confirmBlock = useCallback(async () => {
+    if (!blockTarget) return;
+    setBlocking(true);
+    const { error } = await blockUser(blockTarget.id);
+    setBlocking(false);
+    if (error) return;
+    const blockedId = blockTarget.id;
+    setBlockTarget(null);
+    setSmall((prev) => (prev?.profile.id === blockedId ? null : prev));
+    setBig((prev) => (prev?.id === blockedId ? null : prev));
+    setBigFocus(null);
+    setEditOpen(false);
+  }, [blockTarget, blockUser]);
+
   const value = useMemo<ProfileContextValue>(
     () => ({
       openSmallProfile,
@@ -168,6 +207,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       friendsTab,
       setFriendsTab,
       messageUser,
+      isBlocked,
+      blockedIds,
+      requestBlock,
+      unblockUser: unblockUserFn,
     }),
     [
       openSmallProfile,
@@ -178,6 +221,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       friendsOpen,
       friendsTab,
       messageUser,
+      isBlocked,
+      blockedIds,
+      requestBlock,
+      unblockUserFn,
     ],
   );
 
@@ -198,6 +245,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             top={small.top}
             left={small.left}
             isSelf={!!user && small.profile.id === user.id}
+            isBlocked={isBlocked(small.profile.id)}
             onClose={() => setSmall(null)}
             onMessage={() => {
               const id = small.profile.id;
@@ -214,6 +262,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
               setSmall(null);
               void openBigProfile(id, section);
             }}
+            onBlock={() =>
+              requestBlock(small.profile.id, small.profile.username)
+            }
+            onUnblock={() => void unblockUserFn(small.profile.id)}
           />
         </>
       )}
@@ -222,6 +274,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         <BigProfileModal
           profile={big}
           isSelf={!!user && big.id === user.id}
+          isBlocked={isBlocked(big.id)}
           focusSection={bigFocus}
           onClose={() => {
             setBig(null);
@@ -237,6 +290,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           onOpenProfile={(userId) => {
             void openBigProfile(userId);
           }}
+          onBlock={() => requestBlock(big.id, big.username)}
+          onUnblock={() => void unblockUserFn(big.id)}
         />
       )}
 
@@ -255,6 +310,20 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           }}
         />
       )}
+
+      <ConfirmModal
+        open={!!blockTarget}
+        title={blockTarget ? `Block ${blockTarget.username}?` : "Block user?"}
+        description="They will no longer be able to message you, send friend requests, or interact with you. You can unblock them later."
+        confirmLabel="Block"
+        cancelLabel="Cancel"
+        danger
+        busy={blocking}
+        onCancel={() => {
+          if (!blocking) setBlockTarget(null);
+        }}
+        onConfirm={() => void confirmBlock()}
+      />
     </ProfileContext.Provider>
   );
 }

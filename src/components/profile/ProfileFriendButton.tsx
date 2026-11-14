@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, UserPlus } from "lucide-react";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import {
   acceptFriendRequest,
   loadFriendshipWith,
@@ -23,12 +24,14 @@ export function ProfileFriendButton({
   className = "",
 }: ProfileFriendButtonProps) {
   const { user } = useCurrentProfile();
+  const profileUi = useOptionalProfileUi();
   const [status, setStatus] = useState<FriendStatus | "loading">("loading");
   const [edgeId, setEdgeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const blocked = profileUi?.isBlocked(otherUserId) ?? false;
 
   useEffect(() => {
-    if (!user || user.id === otherUserId) {
+    if (!user || user.id === otherUserId || blocked) {
       setStatus("none");
       setEdgeId(null);
       return;
@@ -44,9 +47,9 @@ export function ProfileFriendButton({
     return () => {
       cancelled = true;
     };
-  }, [user, otherUserId]);
+  }, [user, otherUserId, blocked]);
 
-  if (!user || user.id === otherUserId) return null;
+  if (!user || user.id === otherUserId || blocked) return null;
 
   const compact = size === "sm";
   const base =

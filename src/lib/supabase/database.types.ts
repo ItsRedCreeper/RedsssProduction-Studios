@@ -39,6 +39,22 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["dm_participants"]["Insert"]>
         Relationships: []
       }
+      blocked_users: {
+        Row: {
+          id: string
+          blocker_id: string
+          blocked_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          blocker_id: string
+          blocked_id: string
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["blocked_users"]["Insert"]>
+        Relationships: []
+      }
       friends: {
         Row: { id: string; user_id: string; friend_id: string; status: string; created_at: string }
         Insert: { id?: string; user_id: string; friend_id: string; status: string; created_at?: string }
@@ -84,6 +100,7 @@ export type Database = {
           status_text: string | null
           bio: string | null
           banner_url: string | null
+          banner_color: string | null
           created_at: string
         }
         Insert: {
@@ -94,6 +111,7 @@ export type Database = {
           status_text?: string | null
           bio?: string | null
           banner_url?: string | null
+          banner_color?: string | null
           created_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>
@@ -160,6 +178,14 @@ export type Database = {
         Args: { request_id: string }
         Returns: string
       }
+      are_users_blocked: {
+        Args: { a: string; b: string }
+        Returns: boolean
+      }
+      block_user: {
+        Args: { target_id: string }
+        Returns: undefined
+      }
       cleanup_stale_voice_states: {
         Args: { max_age?: string }
         Returns: number
@@ -202,6 +228,10 @@ export type Database = {
           p_author_id: string;
           p_content: string;
         }
+        Returns: undefined
+      }
+      unblock_user: {
+        Args: { target_id: string }
         Returns: undefined
       }
     }

@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { ImagePlus, X } from "lucide-react";
+import { ImagePlus, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { uploadProfileAsset, type FriendProfile } from "@/lib/friends";
+import {
+  BANNER_COLOR_PRESETS,
+  DEFAULT_BANNER_COLOR,
+  normalizeBannerColor,
+  resolveBannerColor,
+} from "@/lib/profile-banner";
 import { notifyProfileUpdated } from "@/hooks/useCurrentProfile";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { DirtySaveButton } from "@/components/ui/DirtySaveButton";
+import { ProfileBanner } from "@/components/profile/ProfileBanner";
 
 type EditProfileModalProps = {
   open: boolean;
@@ -24,6 +32,9 @@ export function EditProfileModal({
   const [bio, setBio] = useState(profile.bio ?? "");
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url);
   const [bannerUrl, setBannerUrl] = useState(profile.banner_url);
+  const [bannerColor, setBannerColor] = useState(
+    resolveBannerColor(profile.banner_color),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<"avatar" | "banner" | null>(null);
@@ -34,8 +45,17 @@ export function EditProfileModal({
     setBio(profile.bio ?? "");
     setAvatarUrl(profile.avatar_url);
     setBannerUrl(profile.banner_url);
+    setBannerColor(resolveBannerColor(profile.banner_color));
     setError(null);
   }, [open, profile]);
+
+  const dirty =
+    username.trim() !== profile.username ||
+    (bio.trim() || "") !== (profile.bio?.trim() || "") ||
+    avatarUrl !== profile.avatar_url ||
+    bannerUrl !== profile.banner_url ||
+    resolveBannerColor(bannerColor) !==
+      resolveBannerColor(profile.banner_color);
 
   if (!open) return null;
 
@@ -64,6 +84,7 @@ export function EditProfileModal({
       setError("Username is required.");
       return;
     }
+    const color = normalizeBannerColor(bannerColor) ?? DEFAULT_BANNER_COLOR;
     setSaving(true);
     setError(null);
     const supabase = createClient();
@@ -74,9 +95,12 @@ export function EditProfileModal({
         bio: bio.trim() || null,
         avatar_url: avatarUrl,
         banner_url: bannerUrl,
+        banner_color: color,
       })
       .eq("id", profile.id)
-      .select("id, username, avatar_url, status, status_text, bio, banner_url")
+      .select(
+        "id, username, avatar_url, status, status_text, bio, banner_url, banner_color, created_at",
+      )
       .single();
     setSaving(false);
     if (updateError || !data) {
@@ -91,6 +115,8 @@ export function EditProfileModal({
       status_text: data.status_text,
       bio: data.bio,
       banner_url: data.banner_url,
+      banner_color: data.banner_color,
+      created_at: data.created_at,
     });
     notifyProfileUpdated();
     onClose();
@@ -127,50 +153,124 @@ export function EditProfileModal({
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
               Banner
             </p>
-            <label className="relative flex h-28 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-[#1e1f22]">
-              {bannerUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={bannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-              ) : (
-                <span className="absolute inset-0 bg-gradient-to-br from-accent/80 to-[#7f1d1d]" />
-              )}
-              <span className="relative z-10 inline-flex items-center gap-2 rounded-md bg-black/55 px-3 py-1.5 text-xs font-medium text-white">
-                <ImagePlus className="h-3.5 w-3.5" strokeWidth={2} />
-                {uploading === "banner" ? "Uploading…" : "Change banner"}
-              </span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                disabled={!!uploading || saving}
-                onChange={(event) =>
-                  void onPick("banner", event.target.files?.[0] ?? null)
-                }
-              />
-            </label>
+            <ProfileBanner
+              bannerUrl={bannerUrl}
+              bannerColor={bannerColor}
+              className="relative flex h-28 items-center justify-center rounded-lg border border-dashed border-border"
+            >
+              <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 px-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-black/55 px-3 py-1.5 text-xs font-medium text-white hover:bg-black/70">
+                  <ImagePlus className="h-3.5 w-3.5" strokeWidth={2} />
+                  {uploading === "banner" ? "Uploading…" : bannerUrl ? "Change image" : "Upload image"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    disabled={!!uploading || saving}
+                    onChange={(event) => {
+                      void onPick("banner", event.target.files?.[0] ?? null);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+                {bannerUrl && (
+                  <button
+                    type="button"
+                    disabled={saving || !!uploading}
+                    onClick={() => setBannerUrl(null)}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-black/55 px-3 py-1.5 text-xs font-medium text-white hover:bg-black/70 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                    Remove image
+                  </button>
+                )}
+              </div>
+            </ProfileBanner>
+
+            {!bannerUrl && (
+              <div className="mt-3">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+                  Banner color
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {BANNER_COLOR_PRESETS.map((swatch) => {
+                    const selected =
+                      bannerColor.toLowerCase() === swatch.toLowerCase();
+                    return (
+                      <button
+                        key={swatch}
+                        type="button"
+                        title={swatch}
+                        aria-label={`Banner color ${swatch}`}
+                        aria-pressed={selected}
+                        disabled={saving}
+                        onClick={() => setBannerColor(swatch)}
+                        className={`h-7 w-7 rounded-full border-2 transition ${
+                          selected
+                            ? "border-white scale-110"
+                            : "border-transparent hover:border-white/50"
+                        }`}
+                        style={{ backgroundColor: swatch }}
+                      />
+                    );
+                  })}
+                  <label
+                    className="relative h-7 w-7 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-[#4e5058] hover:border-white/50"
+                    title="Custom color"
+                  >
+                    <span
+                      className="absolute inset-0"
+                      style={{ backgroundColor: bannerColor }}
+                    />
+                    <input
+                      type="color"
+                      value={bannerColor}
+                      disabled={saving}
+                      onChange={(event) => setBannerColor(event.target.value)}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                      aria-label="Custom banner color"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
-            <label className="relative cursor-pointer">
-              <UserAvatar
-                username={username || profile.username}
-                avatarUrl={avatarUrl}
-                size="lg"
-                className="!h-16 !w-16 !text-lg"
-              />
-              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-semibold text-white opacity-0 transition hover:opacity-100">
-                {uploading === "avatar" ? "…" : "Edit"}
-              </span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                disabled={!!uploading || saving}
-                onChange={(event) =>
-                  void onPick("avatar", event.target.files?.[0] ?? null)
-                }
-              />
-            </label>
+            <div className="flex flex-col items-center gap-2">
+              <label className="relative cursor-pointer">
+                <UserAvatar
+                  username={username || profile.username}
+                  avatarUrl={avatarUrl}
+                  size="lg"
+                  className="!h-16 !w-16 !text-lg"
+                />
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-semibold text-white opacity-0 transition hover:opacity-100">
+                  {uploading === "avatar" ? "…" : "Edit"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  disabled={!!uploading || saving}
+                  onChange={(event) => {
+                    void onPick("avatar", event.target.files?.[0] ?? null);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  disabled={saving || !!uploading}
+                  onClick={() => setAvatarUrl(null)}
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-[#949ba4] hover:text-white disabled:opacity-50"
+                >
+                  <Trash2 className="h-3 w-3" strokeWidth={2} />
+                  Remove
+                </button>
+              )}
+            </div>
             <div className="min-w-0 flex-1">
               <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
                 Username
@@ -209,15 +309,15 @@ export function EditProfileModal({
             disabled={saving}
             className="rounded-md px-3 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
           >
-            Cancel
+            Close
           </button>
-          <button
+          <DirtySaveButton
             type="submit"
-            disabled={saving || !!uploading}
-            className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
+            dirty={dirty}
+            saving={saving}
+            disabled={!!uploading || !username.trim()}
+            label="Save"
+          />
         </div>
       </form>
     </div>

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageSquare, X } from "lucide-react";
+import { Ban, MessageSquare, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { avatarLetter } from "@/lib/avatar";
@@ -21,10 +22,13 @@ type SmallProfileCardProps = {
   top: number;
   left: number;
   isSelf: boolean;
+  isBlocked?: boolean;
   onClose: () => void;
   onMessage: () => void;
   onViewProfile: () => void;
   onViewMutuals: (section: MutualFocus) => void;
+  onBlock?: () => void;
+  onUnblock?: () => void;
 };
 
 export function SmallProfileCard({
@@ -32,10 +36,13 @@ export function SmallProfileCard({
   top,
   left,
   isSelf,
+  isBlocked = false,
   onClose,
   onMessage,
   onViewProfile,
   onViewMutuals,
+  onBlock,
+  onUnblock,
 }: SmallProfileCardProps) {
   const bio = profile.bio?.trim() || profile.status_text?.trim() || "";
   const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
@@ -82,16 +89,11 @@ export function SmallProfileCard({
           className="relative block h-16 w-full overflow-hidden"
           aria-label="View full profile"
         >
-          {profile.banner_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={profile.banner_url}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="h-full w-full bg-gradient-to-br from-accent to-[#7f1d1d]" />
-          )}
+          <ProfileBanner
+            bannerUrl={profile.banner_url}
+            bannerColor={profile.banner_color}
+            className="h-full w-full"
+          />
         </button>
 
         <button
@@ -212,7 +214,12 @@ export function SmallProfileCard({
         )}
 
         <div className="mt-3 flex flex-col gap-2">
-          {!isSelf && (
+          {!isSelf && isBlocked && (
+            <div className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-[#f2b8b5]">
+              You have blocked this user.
+            </div>
+          )}
+          {!isSelf && !isBlocked && (
             <div className="flex gap-2">
               <button
                 type="button"
@@ -225,13 +232,44 @@ export function SmallProfileCard({
               <ProfileFriendButton otherUserId={profile.id} size="sm" />
             </div>
           )}
-          <button
-            type="button"
-            onClick={onViewProfile}
-            className="inline-flex w-full items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
-          >
-            View Profile
-          </button>
+          {!isSelf && (
+            <div className="flex gap-2">
+              {isBlocked ? (
+                <button
+                  type="button"
+                  onClick={onUnblock}
+                  className="inline-flex flex-1 items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
+                >
+                  Unblock
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onBlock}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-[#f2b8b5] hover:bg-[#4e5058]"
+                >
+                  <Ban className="h-4 w-4" strokeWidth={1.75} />
+                  Block
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onViewProfile}
+                className="inline-flex flex-1 items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
+              >
+                View Profile
+              </button>
+            </div>
+          )}
+          {isSelf && (
+            <button
+              type="button"
+              onClick={onViewProfile}
+              className="inline-flex w-full items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
+            >
+              View Profile
+            </button>
+          )}
         </div>
       </div>
     </div>

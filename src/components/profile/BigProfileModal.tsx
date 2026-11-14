@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, MessageSquare, Pencil, X } from "lucide-react";
+import { Ban, ChevronDown, ChevronUp, MessageSquare, Pencil, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { avatarLetter } from "@/lib/avatar";
@@ -22,21 +23,27 @@ const VISIBLE_LIMIT = 6;
 type BigProfileModalProps = {
   profile: FriendProfile;
   isSelf: boolean;
+  isBlocked?: boolean;
   focusSection?: MutualFocus | null;
   onClose: () => void;
   onMessage: () => void;
   onEdit: () => void;
   onOpenProfile?: (userId: string) => void;
+  onBlock?: () => void;
+  onUnblock?: () => void;
 };
 
 export function BigProfileModal({
   profile,
   isSelf,
+  isBlocked = false,
   focusSection = null,
   onClose,
   onMessage,
   onEdit,
   onOpenProfile,
+  onBlock,
+  onUnblock,
 }: BigProfileModalProps) {
   const bio = profile.bio?.trim() || "";
   const statusText = profile.status_text?.trim() || "";
@@ -126,26 +133,20 @@ export function BigProfileModal({
       />
       <div className="relative z-10 flex max-h-[min(90vh,44rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-[#111214] shadow-2xl shadow-black/60">
         <div className="relative shrink-0 pb-12">
-          <div className="relative h-36 sm:h-44">
-            {profile.banner_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={profile.banner_url}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="h-full w-full bg-gradient-to-br from-accent via-[#991b1b] to-[#1e1f22]" />
-            )}
+          <ProfileBanner
+            bannerUrl={profile.banner_url}
+            bannerColor={profile.banner_color}
+            className="relative h-36 sm:h-44"
+          >
             <button
               type="button"
               onClick={onClose}
-              className="absolute right-3 top-3 rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
+              className="absolute right-3 top-3 z-10 rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
               aria-label="Close"
             >
               <X className="h-4 w-4" strokeWidth={2} />
             </button>
-          </div>
+          </ProfileBanner>
 
           <div className="absolute bottom-0 left-5 flex items-end gap-3">
             <span className="relative rounded-full bg-[#111214] p-1.5">
@@ -161,7 +162,7 @@ export function BigProfileModal({
             </span>
           </div>
 
-          <div className="absolute bottom-1 right-5 flex items-center gap-2">
+          <div className="absolute bottom-1 right-5 flex flex-wrap items-center justify-end gap-2">
             {isSelf ? (
               <button
                 type="button"
@@ -171,8 +172,24 @@ export function BigProfileModal({
                 <Pencil className="h-4 w-4" strokeWidth={1.75} />
                 Edit Profile
               </button>
+            ) : isBlocked ? (
+              <button
+                type="button"
+                onClick={onUnblock}
+                className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
+              >
+                Unblock
+              </button>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={onBlock}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-[#f2b8b5] hover:bg-[#4e5058]"
+                >
+                  <Ban className="h-4 w-4" strokeWidth={1.75} />
+                  Block
+                </button>
                 <ProfileFriendButton otherUserId={profile.id} />
                 <button
                   type="button"
@@ -199,6 +216,12 @@ export function BigProfileModal({
               {statusLabel(profile.status)}
               {statusText ? ` · ${statusText}` : ""}
             </p>
+            {!isSelf && isBlocked && (
+              <p className="mt-3 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-[#f2b8b5]">
+                You have blocked this user. They cannot message you, send friend
+                requests, or interact with you until you unblock them.
+              </p>
+            )}
 
             {(memberSince || (!isSelf && friendsSince)) && (
               <div className="mt-4 flex flex-wrap gap-x-8 gap-y-3 border-t border-white/10 pt-4">

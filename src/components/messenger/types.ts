@@ -17,6 +17,7 @@ export type MiniProfile = {
   status_text: string | null;
   bio?: string | null;
   banner_url?: string | null;
+  banner_color?: string | null;
 };
 
 export type ReplyPreview = {
@@ -49,6 +50,7 @@ export type MemberView = {
   status_text: string | null;
   bio?: string | null;
   banner_url?: string | null;
+  banner_color?: string | null;
   roleIds: string[];
 };
 

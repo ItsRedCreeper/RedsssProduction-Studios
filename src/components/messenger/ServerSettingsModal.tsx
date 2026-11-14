@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { DirtySaveButton } from "@/components/ui/DirtySaveButton";
 import {
   byPosition,
   inviteUrl,
@@ -194,6 +195,11 @@ export function ServerSettingsModal({
   }, [categories, channelCategoryId]);
 
   if (!open) return null;
+
+  const overviewDirty =
+    name.trim() !== server.name ||
+    (description.trim() || "") !== (server.description?.trim() || "") ||
+    isPublic !== server.is_public;
 
   async function saveOverview(event: FormEvent) {
     event.preventDefault();
@@ -645,13 +651,13 @@ export function ServerSettingsModal({
                     Make this server discoverable
                   </span>
                 </label>
-                <button
+                <DirtySaveButton
                   type="submit"
-                  disabled={saving}
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
-                >
-                  {saving ? "Saving…" : "Save changes"}
-                </button>
+                  dirty={overviewDirty}
+                  saving={saving}
+                  disabled={name.trim().length < 2}
+                  label="Save changes"
+                />
               </form>
             )}
 
@@ -958,13 +964,16 @@ export function ServerSettingsModal({
                             className="min-w-0 flex-1 rounded-md border border-border bg-[#1e1f22] px-2 py-1 text-sm outline-none focus:border-accent/50"
                             autoFocus
                           />
-                          <button
-                            type="button"
+                          <DirtySaveButton
+                            size="sm"
+                            dirty={
+                              editChannelName.trim() !== channel.name &&
+                              editChannelName.trim().length > 0
+                            }
+                            saving={saving}
+                            label="Save"
                             onClick={() => void renameChannel(channel.id)}
-                            className="rounded-md bg-accent px-2 py-1 text-xs font-semibold text-white"
-                          >
-                            Save
-                          </button>
+                          />
                           <button
                             type="button"
                             onClick={() => setEditingChannelId(null)}
@@ -1073,6 +1082,20 @@ function RoleRow({
     );
   }, [role.name, role.color, role.permissions]);
 
+  const baselinePerms =
+    role.permissions &&
+    typeof role.permissions === "object" &&
+    !Array.isArray(role.permissions)
+      ? (role.permissions as Record<string, boolean>)
+      : {};
+  const dirty =
+    name.trim() !== role.name ||
+    (color || "#dc2626").toLowerCase() !==
+      (role.color || "#dc2626").toLowerCase() ||
+    ROLE_PERM_OPTIONS.some(
+      (option) => Boolean(perms[option.key]) !== Boolean(baselinePerms[option.key]),
+    );
+
   return (
     <li className="space-y-2 rounded-md bg-[#2b2d31] px-2 py-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -1088,13 +1111,13 @@ function RoleRow({
         onChange={(event) => setName(event.target.value)}
         className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-white outline-none focus:border-accent/40"
       />
-      <button
-        type="button"
+      <DirtySaveButton
+        size="sm"
+        dirty={dirty}
+        disabled={!name.trim()}
+        label="Save"
         onClick={() => onSave(role, name, color, perms)}
-        className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058]"
-      >
-        Save
-      </button>
+      />
       {confirm ? (
         <>
           <button
@@ -1163,6 +1186,8 @@ function CategoryRow({
     setName(category.name);
   }, [category.name]);
 
+  const dirty = name.trim() !== category.name && name.trim().length > 0;
+
   return (
     <li className="flex flex-wrap items-center gap-2 rounded-md bg-[#2b2d31] px-2 py-2">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
@@ -1174,13 +1199,12 @@ function CategoryRow({
         maxLength={40}
         className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm uppercase tracking-wide text-white outline-none focus:border-accent/40"
       />
-      <button
-        type="button"
+      <DirtySaveButton
+        size="sm"
+        dirty={dirty}
+        label="Save"
         onClick={() => onSave(name)}
-        className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058]"
-      >
-        Save
-      </button>
+      />
       {confirm ? (
         <>
           <button

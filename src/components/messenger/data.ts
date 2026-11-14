@@ -83,7 +83,7 @@ export async function loadProfiles(ids: string[]): Promise<MiniProfile[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, status, status_text, bio, banner_url")
+    .select("id, username, avatar_url, status, status_text, bio, banner_url, banner_color")
     .in("id", unique);
   if (error || !data) return [];
   return data.map((row) => ({
@@ -94,6 +94,7 @@ export async function loadProfiles(ids: string[]): Promise<MiniProfile[]> {
     status_text: row.status_text,
     bio: row.bio,
     banner_url: row.banner_url,
+    banner_color: row.banner_color,
   }));
 }
 

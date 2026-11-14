@@ -16,7 +16,7 @@ export type AppNotification = {
   created_at: string;
 };
 
-type FriendsOpenTab = "friends" | "pending" | "add";
+type FriendsOpenTab = "friends" | "pending" | "add" | "blocked";
 
 type NotificationsPanelProps = {
   open: boolean;

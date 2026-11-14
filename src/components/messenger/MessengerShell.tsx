@@ -42,6 +42,7 @@ import {
   VOICE_STALE_AFTER_MS,
 } from "@/components/messenger/voice/VoiceSessionProvider";
 import { useMessengerSidebarWidth } from "@/hooks/useMessengerSidebarWidth";
+import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import {
   dmRowsToMessages,
   fetchLastMessageMap,
@@ -71,6 +72,7 @@ import type {
 } from "@/components/messenger/types";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const EMPTY_BLOCKED_IDS: string[] = [];
 
 function mergeIncoming(prev: ChatMessage[], incoming: ChatMessage): ChatMessage[] {
   if (prev.some((message) => message.id === incoming.id)) {
@@ -140,6 +142,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const searchParams = useSearchParams();
   const dmParam = searchParams.get("dm");
   const { user, profile } = useCurrentProfile();
+  const profileUi = useOptionalProfileUi();
+  const blockedIds = profileUi?.blockedIds ?? EMPTY_BLOCKED_IDS;
+  const isBlocked = useCallback(
+    (userId: string | null | undefined) =>
+      !!userId && blockedIds.includes(userId),
+    [blockedIds],
+  );
   const voice = useVoiceSession();
 
   const pathIds = discover
@@ -225,6 +234,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const activeChannel = channels.find((channel) => channel.id === activeChannelId) ?? null;
   const activeThread =
     threads.find((thread) => thread.id === activeConversationId) ?? null;
+  const dmBlocked =
+    !!activeThread && isBlocked(activeThread.otherUserId);
   const textMode = pane === "server" && activeChannel?.type === "text";
   const voiceMode = pane === "server" && activeChannel?.type === "voice";
   const dmMode = pane === "home" && !!activeConversationId;
@@ -614,6 +625,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             status_text: memberProfile?.status_text ?? null,
             bio: memberProfile?.bio ?? null,
             banner_url: memberProfile?.banner_url ?? null,
+            banner_color: memberProfile?.banner_color ?? null,
             roleIds,
           };
         }),
@@ -1169,8 +1181,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     isOwner: isServerOwner,
   });
 
+  const visibleMembers = useMemo(
+    () => members.filter((member) => !isBlocked(member.user_id)),
+    [members, isBlocked],
+  );
+
+  const visibleThreads = useMemo(
+    () => threads.filter((thread) => !isBlocked(thread.otherUserId)),
+    [threads, isBlocked],
+  );
+
   const mentionSuggestions = useMemo<MentionSuggestion[]>(() => {
-    const users = members.map((member) => ({
+    const users = visibleMembers.map((member) => ({
       id: member.user_id,
       label: member.nickname?.trim() || member.username,
       kind: "user" as const,
@@ -1188,7 +1210,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         kind: "channel" as const,
       }));
     return [...users, ...roles, ...channelItems];
-  }, [members, serverRoles, channels]);
+  }, [visibleMembers, serverRoles, channels]);
 
   const mentionMaps = useMemo<MentionMaps>(() => {
     const usersById: MentionMaps["usersById"] = {};
@@ -1296,34 +1318,45 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     readAt,
   ]);
 
+  const unblockedMessages = useMemo(
+    () => messages.filter((message) => !isBlocked(message.user_id)),
+    [messages, isBlocked],
+  );
+  const unblockedDmMessages = useMemo(
+    () => dmMessages.filter((message) => !isBlocked(message.user_id)),
+    [dmMessages, isBlocked],
+  );
+
   const pinList = useMemo(() => {
     const map = new Map<string, ChatMessage>();
     for (const message of pinnedExtra) {
-      if (message.pinned) map.set(message.id, message);
+      if (message.pinned && !isBlocked(message.user_id)) {
+        map.set(message.id, message);
+      }
     }
-    for (const message of messages) {
+    for (const message of unblockedMessages) {
       if (message.pinned) map.set(message.id, message);
     }
     return [...map.values()].sort(
       (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
     );
-  }, [messages, pinnedExtra]);
+  }, [unblockedMessages, pinnedExtra, isBlocked]);
 
   const searchNeedle = searchQuery.trim().toLowerCase();
   const visibleMessages = searchNeedle
-    ? messages.filter((message) =>
+    ? unblockedMessages.filter((message) =>
         `${message.content} ${message.profiles?.username ?? ""}`
           .toLowerCase()
           .includes(searchNeedle),
       )
-    : messages;
+    : unblockedMessages;
   const visibleDmMessages = searchNeedle
-    ? dmMessages.filter((message) =>
+    ? unblockedDmMessages.filter((message) =>
         `${message.content} ${message.profiles?.username ?? ""}`
           .toLowerCase()
           .includes(searchNeedle),
       )
-    : dmMessages;
+    : unblockedDmMessages;
 
   function selectHome() {
     setLeaveOpen(false);
@@ -1413,6 +1446,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   function startDm(otherUserId: string) {
+    if (isBlocked(otherUserId)) {
+      setError("Unblock this user before messaging them.");
+      return;
+    }
     void openDm(otherUserId).then((id) => {
       if (id) {
         router.push(messengerDmPath(id));
@@ -1606,6 +1643,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   async function sendDm() {
     if (!user || !activeConversationId || sending) return;
+    const otherId =
+      threads.find((thread) => thread.id === activeConversationId)?.otherUserId ??
+      activeThread?.otherUserId ??
+      null;
+    if (otherId && isBlocked(otherId)) {
+      setError("You blocked this user. Unblock them to send messages.");
+      return;
+    }
     const conversationId = activeConversationId;
     const content = draft.trim();
     if (!content) return;
@@ -1716,10 +1761,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     );
 
     // Notify the other participant and make sure their sidebar can pick it up.
-    const otherId =
-      threads.find((thread) => thread.id === conversationId)?.otherUserId ??
-      activeThread?.otherUserId ??
-      null;
     if (otherId) {
       void supabase.rpc("create_notification", {
         p_user_id: otherId,
@@ -2046,7 +2087,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       <ResizableSidebar width={sidebarWidth} onResizeStart={beginResize}>
         {pane === "home" ? (
           <HomeSidebar
-            threads={threads}
+            threads={visibleThreads}
             activeThreadId={activeConversationId}
             loadingThreads={loadingThreads}
             onSelectThread={selectThread}
@@ -2170,7 +2211,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
           {pane === "home" && (
             <div className="flex gap-1 overflow-x-auto border-b border-black/20 px-2 py-2 sm:hidden">
-              {threads.map((thread) => (
+              {visibleThreads.map((thread) => (
                 <button
                   key={thread.id}
                   type="button"
@@ -2321,37 +2362,43 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             </div>
           )}
 
-          {(textMode || dmMode) && (
-            <MessageComposer
-              placeholder={
-                textMode && !canSendMessages
-                  ? "You don't have permission to send messages"
-                  : replyTo
-                    ? `Reply to @${replyTo.profiles?.username ?? "user"}`
-                    : dmMode
-                      ? `Message @${activeThread?.username ?? "user"}`
-                      : `Message #${activeChannel?.name ?? "channel"}`
-              }
-              draft={draft}
-              replyAuthor={replyTo ? replyTo.profiles?.username ?? "user" : null}
-              replyContent={replyTo?.content ?? null}
-              pendingFileName={textMode ? pendingFile?.name ?? null : null}
-              sending={sending}
-              allowAttach={textMode && canSendMessages}
-              disabled={!user || (textMode && !canSendMessages)}
-              mentionSuggestions={textMode ? mentionSuggestions : []}
-              typingPeople={textMode ? typingPeople : []}
-              onDraft={setDraft}
-              onCancelReply={() => setReplyTo(null)}
-              onFile={chooseFile}
-              onClearFile={() => setPendingFile(null)}
-              onTyping={textMode ? publishTyping : undefined}
-              onSubmit={() => {
-                if (dmMode) void sendDm();
-                else void sendChannel();
-              }}
-            />
-          )}
+          {(textMode || dmMode) &&
+            (dmMode && dmBlocked ? (
+              <div className="border-t border-border bg-[#2b2d31] px-4 py-3 text-sm text-[#f2b8b5]">
+                You blocked this user. Unblock them from Friends → Blocked to
+                message again.
+              </div>
+            ) : (
+              <MessageComposer
+                placeholder={
+                  textMode && !canSendMessages
+                    ? "You don't have permission to send messages"
+                    : replyTo
+                      ? `Reply to @${replyTo.profiles?.username ?? "user"}`
+                      : dmMode
+                        ? `Message @${activeThread?.username ?? "user"}`
+                        : `Message #${activeChannel?.name ?? "channel"}`
+                }
+                draft={draft}
+                replyAuthor={replyTo ? replyTo.profiles?.username ?? "user" : null}
+                replyContent={replyTo?.content ?? null}
+                pendingFileName={textMode ? pendingFile?.name ?? null : null}
+                sending={sending}
+                allowAttach={textMode && canSendMessages}
+                disabled={!user || (textMode && !canSendMessages)}
+                mentionSuggestions={textMode ? mentionSuggestions : []}
+                typingPeople={textMode ? typingPeople : []}
+                onDraft={setDraft}
+                onCancelReply={() => setReplyTo(null)}
+                onFile={chooseFile}
+                onClearFile={() => setPendingFile(null)}
+                onTyping={textMode ? publishTyping : undefined}
+                onSubmit={() => {
+                  if (dmMode) void sendDm();
+                  else void sendChannel();
+                }}
+              />
+            ))}
         </section>
 
         {pane === "server" && membersOpen && (
@@ -2363,7 +2410,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           />
         )}
         <MemberList
-          members={members}
+          members={visibleMembers}
           ownerId={activeServer?.owner_id ?? null}
           currentUserId={user?.id ?? null}
           onMessage={startDm}
