@@ -46,20 +46,22 @@ const ProfileContext = createContext<ProfileContextValue | null>(null);
 
 function clampCardPosition(anchor?: DOMRect | null): Anchor {
   const width = 300;
-  // Prefer a taller estimate so the first paint stays on-screen before ResizeObserver runs.
-  const height = 420;
+  // Tall estimate covering banner + mutuals + Message/Add Friend + Block/View rows.
+  const height = 520;
+  const vh = Math.round(window.visualViewport?.height ?? window.innerHeight);
+  const vw = Math.round(window.visualViewport?.width ?? window.innerWidth);
   if (!anchor) {
     return {
-      top: Math.max(24, window.innerHeight / 2 - height / 2),
-      left: Math.max(24, window.innerWidth / 2 - width / 2),
+      top: Math.max(8, vh / 2 - height / 2),
+      left: Math.max(8, vw / 2 - width / 2),
     };
   }
   let left = anchor.right + 10;
-  if (left + width > window.innerWidth - 8) left = anchor.left - width - 10;
+  if (left + width > vw - 8) left = anchor.left - width - 10;
   if (left < 8) left = 8;
   let top = anchor.top;
-  if (top + height > window.innerHeight - 8) {
-    top = Math.max(8, window.innerHeight - height - 8);
+  if (top + height > vh - 8) {
+    top = Math.max(8, vh - height - 8);
   }
   return { top, left };
 }
@@ -128,9 +130,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const openSmallProfile = useCallback(
     async (userId: string, anchorEl?: HTMLElement | null) => {
+      // Capture anchor rect before the async fetch so scroll/layout can't move it.
+      const anchorRect = anchorEl?.getBoundingClientRect() ?? null;
       const profile = await fetchProfile(userId);
       if (!profile) return;
-      const pos = clampCardPosition(anchorEl?.getBoundingClientRect() ?? null);
+      const pos = clampCardPosition(anchorRect);
       setSmall({ profile, ...pos });
     },
     [],
