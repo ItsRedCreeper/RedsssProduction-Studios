@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import {
@@ -21,10 +21,9 @@ export function useBlockedUsers() {
   const { user } = useCurrentProfile();
   const [ids, setIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  // Unique topic per hook instance so concurrent mounts don't reuse a subscribed channel.
-  const channelKeyRef = useRef(
-    `blocked-users:${Math.random().toString(36).slice(2)}`,
-  );
+  // Stable unique topic per hook instance (avoid Math.random — breaks prerender).
+  const instanceId = useId();
+  const channelKey = `blocked-users:${instanceId}`;
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -45,7 +44,7 @@ export function useBlockedUsers() {
     if (!user) return;
     const supabase = createClient();
     const channel = supabase
-      .channel(`${channelKeyRef.current}:${user.id}`)
+      .channel(`${channelKey}:${user.id}`)
       .on(
         "postgres_changes",
         {
@@ -69,7 +68,7 @@ export function useBlockedUsers() {
       window.removeEventListener(BLOCKED_CHANGED_EVENT, onChanged);
       void supabase.removeChannel(channel);
     };
-  }, [user, refresh]);
+  }, [user, refresh, channelKey]);
 
   const blockedSet = useMemo(() => new Set(ids), [ids]);
 
