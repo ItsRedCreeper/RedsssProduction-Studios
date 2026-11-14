@@ -29,6 +29,7 @@ import {
 } from "@/lib/friends";
 import {
   loadBlockedUsers,
+  loadIsBlockedBy,
   type BlockedUser,
 } from "@/lib/blocking";
 import {
@@ -59,6 +60,31 @@ const TABS: { id: FriendsTab; label: string }[] = [
   { id: "blocked", label: "Blocked" },
 ];
 
+const BLOCKED_SEEN_KEY = "redsss-blocked-seen-ids";
+
+function readSeenBlockedIds(userId: string): Set<string> | null {
+  try {
+    const raw = localStorage.getItem(`${BLOCKED_SEEN_KEY}:${userId}`);
+    if (raw == null) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeSeenBlockedIds(userId: string, ids: Set<string>) {
+  try {
+    localStorage.setItem(
+      `${BLOCKED_SEEN_KEY}:${userId}`,
+      JSON.stringify([...ids]),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 export function FriendsPanel({
   open,
   onClose,
@@ -79,6 +105,7 @@ export function FriendsPanel({
   const [removeTarget, setRemoveTarget] = useState<FriendEdge | null>(null);
   const [removing, setRemoving] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [seenBlockedIds, setSeenBlockedIds] = useState<Set<string>>(() => new Set());
   const [unblockTarget, setUnblockTarget] = useState<BlockedUser | null>(null);
   const [unblocking, setUnblocking] = useState(false);
 
@@ -86,6 +113,24 @@ export function FriendsPanel({
     if (!open) return;
     setTab(profileUi?.friendsTab ?? initialTab);
   }, [open, initialTab, profileUi?.friendsTab]);
+
+  useEffect(() => {
+    if (!userId) {
+      setSeenBlockedIds(new Set());
+      return;
+    }
+    const stored = readSeenBlockedIds(userId);
+    if (stored) setSeenBlockedIds(stored);
+  }, [userId]);
+
+  // First visit: treat current blocks as already seen so only *new* blocks highlight.
+  useEffect(() => {
+    if (!userId || loading) return;
+    if (readSeenBlockedIds(userId) != null) return;
+    const seeded = new Set(blockedUsers.map((person) => person.id));
+    writeSeenBlockedIds(userId, seeded);
+    setSeenBlockedIds(seeded);
+  }, [userId, loading, blockedUsers]);
 
   const refresh = useCallback(async () => {
     if (!userId) {
@@ -171,16 +216,62 @@ export function FriendsPanel({
   function changeTab(next: FriendsTab) {
     setTab(next);
     profileUi?.setFriendsTab(next);
+    if (next === "blocked" && userId) {
+      const nextSeen = new Set(blockedUsers.map((person) => person.id));
+      setSeenBlockedIds(nextSeen);
+      writeSeenBlockedIds(userId, nextSeen);
+    }
   }
 
+  // Opening directly on Blocked (e.g. from a notification) also clears the highlight.
+  useEffect(() => {
+    if (!open || !userId || tab !== "blocked") return;
+    const nextSeen = new Set(blockedUsers.map((person) => person.id));
+    setSeenBlockedIds((prev) => {
+      let changed = nextSeen.size !== prev.size;
+      if (!changed) {
+        for (const id of nextSeen) {
+          if (!prev.has(id)) {
+            changed = true;
+            break;
+          }
+        }
+      }
+      if (!changed) return prev;
+      writeSeenBlockedIds(userId, nextSeen);
+      return nextSeen;
+    });
+  }, [open, userId, tab, blockedUsers]);
+
+  const unseenBlockedCount = useMemo(() => {
+    let count = 0;
+    for (const person of blockedUsers) {
+      if (!seenBlockedIds.has(person.id)) count += 1;
+    }
+    return count;
+  }, [blockedUsers, seenBlockedIds]);
+
   async function handleMessage(person: FriendProfile) {
+    if (profileUi?.isBlocked(person.id)) {
+      setError("You blocked this user. Unblock them to send messages.");
+      return;
+    }
+    const { blockedByThem } = await loadIsBlockedBy(person.id);
+    if (blockedByThem) {
+      setError("This user has blocked you.");
+      return;
+    }
     onMessage({
       id: person.id,
       username: person.username,
       avatar_url: person.avatar_url,
       status: person.status,
     });
-    await profileUi?.messageUser(person.id);
+    const result = await profileUi?.messageUser(person.id);
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
     onClose();
   }
 
@@ -311,12 +402,12 @@ export function FriendsPanel({
         <div className="flex gap-1 border-b border-border px-3 py-2">
           {TABS.map((item) => {
             const active = tab === item.id;
-            const badge =
-              item.id === "pending"
-                ? incoming.length + outgoing.length
-                : item.id === "blocked"
-                  ? blockedUsers.length
-                  : 0;
+            const pendingBadge =
+              item.id === "pending" ? incoming.length + outgoing.length : 0;
+            const blockedTotal =
+              item.id === "blocked" ? blockedUsers.length : 0;
+            const blockedUnseen =
+              item.id === "blocked" ? unseenBlockedCount : 0;
             return (
               <button
                 key={item.id}
@@ -329,11 +420,20 @@ export function FriendsPanel({
                 }`}
               >
                 {item.label}
-                {badge > 0 && (
+                {pendingBadge > 0 && (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] text-white">
-                    {badge}
+                    {pendingBadge}
                   </span>
                 )}
+                {blockedUnseen > 0 ? (
+                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] text-white">
+                    {blockedUnseen}
+                  </span>
+                ) : blockedTotal > 0 ? (
+                  <span className="ml-1.5 text-[10px] font-medium text-muted">
+                    {blockedTotal}
+                  </span>
+                ) : null}
               </button>
             );
           })}

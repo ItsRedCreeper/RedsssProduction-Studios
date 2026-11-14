@@ -12,7 +12,10 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useBlockedUsers } from "@/hooks/useBlockedUsers";
-import { loadIsBlockedBy } from "@/lib/blocking";
+import {
+  friendlyBlockDmMessage,
+  loadIsBlockedBy,
+} from "@/lib/blocking";
 import {
   ensureDmConversation,
   loadFriendshipWith,
@@ -45,7 +48,7 @@ type ProfileContextValue = {
   friendsOpen: boolean;
   friendsTab: FriendsTab;
   setFriendsTab: (tab: FriendsTab) => void;
-  messageUser: (userId: string) => Promise<void>;
+  messageUser: (userId: string) => Promise<{ error: string | null }>;
   isBlocked: (userId: string | null | undefined) => boolean;
   blockedIds: string[];
   requestBlock: (userId: string, username: string) => void;
@@ -122,17 +125,38 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     username: string;
   } | null>(null);
   const [blocking, setBlocking] = useState(false);
+  const [messageNotice, setMessageNotice] = useState<string | null>(null);
 
   const messageUser = useCallback(
     async (userId: string) => {
-      if (!user || userId === user.id) return;
-      if (isBlocked(userId)) return;
+      if (!user || userId === user.id) return { error: null };
+      if (isBlocked(userId)) {
+        const error = "You blocked this user. Unblock them to send messages.";
+        setMessageNotice(error);
+        return { error };
+      }
+      const { blockedByThem } = await loadIsBlockedBy(userId);
+      if (blockedByThem) {
+        const error = "This user has blocked you.";
+        setMessageNotice(error);
+        return { error };
+      }
       const { conversationId, error } = await ensureDmConversation(userId);
       if (!error && conversationId) {
         router.push(messengerDmPath(conversationId));
-        return;
+        return { error: null };
+      }
+      const blockedMsg = friendlyBlockDmMessage(error);
+      if (blockedMsg) {
+        setMessageNotice(blockedMsg);
+        return { error: blockedMsg };
+      }
+      if (error) {
+        setMessageNotice(error);
+        return { error };
       }
       router.push(`${messengerHomePath()}?dm=${userId}`);
+      return { error: null };
     },
     [user, router, isBlocked],
   );
@@ -374,6 +398,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           if (!blocking) setBlockTarget(null);
         }}
         onConfirm={() => void confirmBlock()}
+      />
+
+      <ConfirmModal
+        open={!!messageNotice}
+        title="Can't send message"
+        description={messageNotice ?? ""}
+        confirmLabel="OK"
+        cancelLabel="Close"
+        onCancel={() => setMessageNotice(null)}
+        onConfirm={() => setMessageNotice(null)}
       />
     </ProfileContext.Provider>
   );

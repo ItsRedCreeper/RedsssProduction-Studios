@@ -161,6 +161,20 @@ export async function loadBlockRelation(otherUserId: string) {
   };
 }
 
+/** Map RPC/RLS block failures to a clear user-facing message. */
+export function friendlyBlockDmMessage(error: string | null | undefined) {
+  if (!error) return null;
+  const lower = error.toLowerCase();
+  if (
+    lower.includes("cannot message blocked user") ||
+    lower.includes("blocked user") ||
+    lower.includes("are_users_blocked")
+  ) {
+    return "This user has blocked you.";
+  }
+  return null;
+}
+
 export async function blockUser(targetId: string) {
   const supabase = createClient();
   const { error } = await supabase.rpc("block_user", { target_id: targetId });

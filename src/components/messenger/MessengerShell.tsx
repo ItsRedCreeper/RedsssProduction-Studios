@@ -57,6 +57,10 @@ import {
 } from "@/components/messenger/data";
 import { can, mergeRolePermissions, PERMISSIONS } from "@/lib/permissions";
 import { encodeMentions, type MentionMaps } from "@/lib/mentions";
+import {
+  friendlyBlockDmMessage,
+  loadIsBlockedBy,
+} from "@/lib/blocking";
 import type { Tables } from "@/lib/supabase/database.types";
 import type {
   Category,
@@ -236,6 +240,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     threads.find((thread) => thread.id === activeConversationId) ?? null;
   const dmBlocked =
     !!activeThread && isBlocked(activeThread.otherUserId);
+  const [dmBlockedByThem, setDmBlockedByThem] = useState(false);
+  const dmOtherId = activeThread?.otherUserId ?? null;
   const textMode = pane === "server" && activeChannel?.type === "text";
   const voiceMode = pane === "server" && activeChannel?.type === "voice";
   const dmMode = pane === "home" && !!activeConversationId;
@@ -285,6 +291,20 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const id = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(id);
   }, [toast]);
+
+  useEffect(() => {
+    if (!dmMode || !dmOtherId || dmBlocked) {
+      setDmBlockedByThem(false);
+      return;
+    }
+    let cancelled = false;
+    void loadIsBlockedBy(dmOtherId).then(({ blockedByThem }) => {
+      if (!cancelled) setDmBlockedByThem(blockedByThem);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dmMode, dmOtherId, dmBlocked]);
 
   useEffect(() => {
     rememberMessengerPath(pathname);
@@ -457,6 +477,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const openDm = useCallback(
     async (otherUserId: string) => {
       if (!user || otherUserId === user.id) return null;
+      if (isBlocked(otherUserId)) {
+        setError("You blocked this user. Unblock them to send messages.");
+        return null;
+      }
+      const { blockedByThem } = await loadIsBlockedBy(otherUserId);
+      if (blockedByThem) {
+        setError("This user has blocked you.");
+        return null;
+      }
       const existing = dmLocks.current.get(otherUserId);
       if (existing) return existing;
 
@@ -497,7 +526,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           .select("*")
           .single();
         if (convoError || !convo) {
-          setError(convoError?.message ?? "Could not start a conversation.");
+          setError(
+            friendlyBlockDmMessage(convoError?.message) ??
+              convoError?.message ??
+              "Could not start a conversation.",
+          );
           return null;
         }
         const { error: selfPartError } = await supabase.from("dm_participants").insert({
@@ -505,7 +538,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           user_id: user.id,
         });
         if (selfPartError) {
-          setError(selfPartError.message);
+          setError(
+            friendlyBlockDmMessage(selfPartError.message) ?? selfPartError.message,
+          );
           return null;
         }
         const { error: otherPartError } = await supabase.from("dm_participants").insert({
@@ -513,7 +548,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           user_id: otherUserId,
         });
         if (otherPartError) {
-          setError(otherPartError.message);
+          setError(
+            friendlyBlockDmMessage(otherPartError.message) ??
+              otherPartError.message,
+          );
           return null;
         }
         await refreshThreads();
@@ -525,7 +563,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       dmLocks.current.set(otherUserId, promise);
       return promise;
     },
-    [user, refreshThreads],
+    [user, refreshThreads, isBlocked],
   );
 
   useEffect(() => {
@@ -1447,16 +1485,22 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   function startDm(otherUserId: string) {
     if (isBlocked(otherUserId)) {
-      setError("Unblock this user before messaging them.");
+      setError("You blocked this user. Unblock them to send messages.");
       return;
     }
-    void openDm(otherUserId).then((id) => {
+    void (async () => {
+      const { blockedByThem } = await loadIsBlockedBy(otherUserId);
+      if (blockedByThem) {
+        setError("This user has blocked you.");
+        return;
+      }
+      const id = await openDm(otherUserId);
       if (id) {
         router.push(messengerDmPath(id));
         return;
       }
-      router.push(`${messengerHomePath()}?dm=${otherUserId}`);
-    });
+      // openDm already set a friendly error when blocked; don't fall through.
+    })();
   }
 
   function selectThread(threadId: string) {
@@ -1651,6 +1695,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError("You blocked this user. Unblock them to send messages.");
       return;
     }
+    if (otherId) {
+      const { blockedByThem } = await loadIsBlockedBy(otherId);
+      if (blockedByThem) {
+        setDmBlockedByThem(true);
+        setError("This user has blocked you.");
+        return;
+      }
+    }
     const conversationId = activeConversationId;
     const content = draft.trim();
     if (!content) return;
@@ -1705,7 +1757,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           message.id === tempId ? { ...message, failed: true } : message,
         ),
       );
-      setError(insertError?.message ?? "Failed to send message");
+      const blockedMsg = friendlyBlockDmMessage(insertError?.message);
+      if (blockedMsg) setDmBlockedByThem(true);
+      setError(blockedMsg ?? insertError?.message ?? "Failed to send message");
       setDraft(content);
       if (replySnapshot) setReplyTo(replySnapshot);
       setSending(false);
@@ -2367,6 +2421,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               <div className="border-t border-border bg-[#2b2d31] px-4 py-3 text-sm text-[#f2b8b5]">
                 You blocked this user. Unblock them from Friends → Blocked to
                 message again.
+              </div>
+            ) : dmMode && dmBlockedByThem ? (
+              <div className="border-t border-border bg-[#2b2d31] px-4 py-3 text-sm text-[#b5bac1]">
+                This user has blocked you. You can&apos;t send them messages.
               </div>
             ) : (
               <MessageComposer
