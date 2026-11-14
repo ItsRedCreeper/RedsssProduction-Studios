@@ -133,9 +133,9 @@ export function Navbar() {
                 type="button"
                 className="relative shrink-0"
                 title={statusLabel(profile?.status)}
-                onClick={(event) => {
+                onClick={() => {
                   if (!user) return;
-                  void profileUi.openSmallProfile(user.id, event.currentTarget);
+                  void profileUi.openBigProfile(user.id);
                 }}
               >
                 <UserAvatar

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MessageSquare, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { avatarLetter } from "@/lib/avatar";
 import {
@@ -210,21 +211,24 @@ export function SmallProfileCard({
           </div>
         )}
 
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-col gap-2">
           {!isSelf && (
-            <button
-              type="button"
-              onClick={onMessage}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
-            >
-              <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
-              Message
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onMessage}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+              >
+                <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
+                Message
+              </button>
+              <ProfileFriendButton otherUserId={profile.id} size="sm" />
+            </div>
           )}
           <button
             type="button"
             onClick={onViewProfile}
-            className="inline-flex flex-1 items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
+            className="inline-flex w-full items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
           >
             View Profile
           </button>

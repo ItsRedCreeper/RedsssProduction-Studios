@@ -136,6 +136,74 @@ export function relationshipFor(
   return { status: "incoming", edge };
 }
 
+/** Friendship status between the signed-in user and another profile. */
+export async function loadFriendshipWith(otherUserId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || user.id === otherUserId) {
+    return {
+      status: "none" as FriendStatus,
+      edgeId: null as string | null,
+      error: null as string | null,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("friends")
+    .select("id, user_id, friend_id, status")
+    .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+
+  if (error) {
+    return {
+      status: "none" as FriendStatus,
+      edgeId: null as string | null,
+      error: error.message,
+    };
+  }
+
+  const row = (data ?? []).find(
+    (edge) =>
+      (edge.user_id === user.id && edge.friend_id === otherUserId) ||
+      (edge.user_id === otherUserId && edge.friend_id === user.id),
+  );
+
+  if (!row) {
+    return {
+      status: "none" as FriendStatus,
+      edgeId: null as string | null,
+      error: null as string | null,
+    };
+  }
+  if (row.status === "accepted") {
+    return {
+      status: "friends" as FriendStatus,
+      edgeId: row.id,
+      error: null as string | null,
+    };
+  }
+  if (row.status === "pending" && row.user_id === user.id) {
+    return {
+      status: "outgoing" as FriendStatus,
+      edgeId: row.id,
+      error: null as string | null,
+    };
+  }
+  if (row.status === "pending" && row.friend_id === user.id) {
+    return {
+      status: "incoming" as FriendStatus,
+      edgeId: row.id,
+      error: null as string | null,
+    };
+  }
+  return {
+    status: "none" as FriendStatus,
+    edgeId: null as string | null,
+    error: null as string | null,
+  };
+}
+
 export async function searchProfiles(query: string, excludeId: string) {
   const trimmed = query.trim();
   if (trimmed.length < 1) return { results: [] as FriendProfile[], error: null as string | null };

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, MessageSquare, Pencil, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { avatarLetter } from "@/lib/avatar";
 import type { MutualFocus } from "@/components/profile/SmallProfileCard";
@@ -160,7 +161,7 @@ export function BigProfileModal({
             </span>
           </div>
 
-          <div className="absolute bottom-1 right-5">
+          <div className="absolute bottom-1 right-5 flex items-center gap-2">
             {isSelf ? (
               <button
                 type="button"
@@ -171,14 +172,17 @@ export function BigProfileModal({
                 Edit Profile
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={onMessage}
-                className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
-              >
-                <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
-                Message
-              </button>
+              <>
+                <ProfileFriendButton otherUserId={profile.id} />
+                <button
+                  type="button"
+                  onClick={onMessage}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+                >
+                  <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
+                  Message
+                </button>
+              </>
             )}
           </div>
         </div>
