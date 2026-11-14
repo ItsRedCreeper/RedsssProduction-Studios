@@ -14,6 +14,7 @@ import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
+import { useProfileUi } from "@/components/profile/ProfileProvider";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { NAV_LINKS } from "@/lib/nav";
 
@@ -27,15 +28,11 @@ export function Navbar() {
   const router = useRouter();
   const { user, profile, loading } = useCurrentProfile();
   const voice = useOptionalVoiceSession();
+  const profileUi = useProfileUi();
   const speaking = !!voice?.selfSpeaking;
-  const [friendsOpen, setFriendsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-
-  const showToast = useCallback((message: string) => {
-    setToast(message);
-  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -43,9 +40,9 @@ export function Navbar() {
     return () => window.clearTimeout(id);
   }, [toast]);
 
-  const handleMessage = (_friend: FriendListItem) => {
-    setFriendsOpen(false);
-  };
+  const handleMessage = useCallback((_friend: FriendListItem) => {
+    profileUi.closeFriends();
+  }, [profileUi]);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -120,21 +117,26 @@ export function Navbar() {
             <button
               type="button"
               className={`rounded-md p-2 transition-colors ${
-                friendsOpen
+                profileUi.friendsOpen
                   ? "bg-accent-muted text-accent"
                   : "text-muted hover:bg-surface-hover hover:text-foreground"
               }`}
               aria-label="Friends"
-              aria-expanded={friendsOpen}
-              onClick={() => setFriendsOpen(true)}
+              aria-expanded={profileUi.friendsOpen}
+              onClick={() => profileUi.openFriends("friends")}
             >
               <Users className="h-5 w-5" strokeWidth={1.75} />
             </button>
 
             <div className="ml-1 flex items-center gap-2.5">
-              <span
+              <button
+                type="button"
                 className="relative shrink-0"
                 title={statusLabel(profile?.status)}
+                onClick={(event) => {
+                  if (!user) return;
+                  void profileUi.openSmallProfile(user.id, event.currentTarget);
+                }}
               >
                 <UserAvatar
                   username={displayName}
@@ -147,10 +149,17 @@ export function Navbar() {
                   className={`absolute bottom-0 right-0 h-3 w-3 rounded-full ring-2 ring-background ${statusDotClass(profile?.status)}`}
                   aria-label={statusLabel(profile?.status)}
                 />
-              </span>
-              <span className="hidden max-w-[10rem] truncate text-sm font-semibold text-foreground sm:inline">
+              </button>
+              <button
+                type="button"
+                className="hidden max-w-[10rem] truncate text-sm font-semibold text-foreground sm:inline"
+                onClick={() => {
+                  if (!user) return;
+                  void profileUi.openBigProfile(user.id);
+                }}
+              >
                 {displayName}
-              </span>
+              </button>
               <button
                 type="button"
                 onClick={() => void handleSignOut()}
@@ -188,10 +197,11 @@ export function Navbar() {
       </header>
 
       <FriendsPanel
-        open={friendsOpen}
-        onClose={() => setFriendsOpen(false)}
+        open={profileUi.friendsOpen}
+        onClose={profileUi.closeFriends}
         onMessage={handleMessage}
         userId={user?.id ?? null}
+        initialTab={profileUi.friendsTab}
       />
 
       <NotificationsPanel
@@ -199,6 +209,10 @@ export function Navbar() {
         onClose={() => setNotificationsOpen(false)}
         userId={user?.id ?? null}
         onUnreadChange={setUnreadNotifications}
+        onOpenFriendsPending={() => {
+          setNotificationsOpen(false);
+          profileUi.openFriends("pending");
+        }}
       />
 
       {toast && (

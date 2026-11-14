@@ -17,6 +17,7 @@ import {
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { formatTimestamp } from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
+import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import type { MentionMaps } from "@/lib/mentions";
 import {
   QUICK_REACTIONS,
@@ -72,10 +73,15 @@ export function MessageItem({
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const profileUi = useOptionalProfileUi();
   const author = message.profiles?.username ?? "Unknown";
   const reply = message.reply_to;
   const replyAuthor = reply?.profiles?.username ?? "Unknown";
   const showToolbar = !message.optimistic && !editing;
+
+  function openAuthorProfile(element: HTMLElement) {
+    void profileUi?.openSmallProfile(message.user_id, element);
+  }
 
   useEffect(() => {
     if (!menuOpen && !pickerOpen) return;
@@ -121,13 +127,18 @@ export function MessageItem({
         message.optimistic ? "opacity-70" : ""
       } ${message.failed ? "bg-accent-muted/40" : ""}`}
     >
-      <div className="mt-0.5 shrink-0">
+      <button
+        type="button"
+        className="mt-0.5 shrink-0 rounded-full"
+        onClick={(event) => openAuthorProfile(event.currentTarget)}
+        aria-label={`Open ${author}'s profile`}
+      >
         <UserAvatar
           username={author}
           avatarUrl={message.profiles?.avatar_url}
           size="md"
         />
-      </div>
+      </button>
 
       <div className="min-w-0 flex-1 py-0.5 pr-2">
         {reply && (
@@ -156,9 +167,13 @@ export function MessageItem({
         )}
 
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-[0.95rem] font-medium text-foreground">
+          <button
+            type="button"
+            onClick={(event) => openAuthorProfile(event.currentTarget)}
+            className="text-[0.95rem] font-medium text-foreground hover:underline"
+          >
             {author}
-          </span>
+          </button>
           <time className="text-[11px] text-muted">
             {formatTimestamp(message.created_at)}
           </time>

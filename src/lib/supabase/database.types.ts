@@ -34,8 +34,8 @@ export type Database = {
         Relationships: []
       }
       dm_participants: {
-        Row: { conversation_id: string; user_id: string }
-        Insert: { conversation_id: string; user_id: string }
+        Row: { conversation_id: string; user_id: string; hidden: boolean }
+        Insert: { conversation_id: string; user_id: string; hidden?: boolean }
         Update: Partial<Database["public"]["Tables"]["dm_participants"]["Insert"]>
         Relationships: []
       }
@@ -76,8 +76,26 @@ export type Database = {
         Relationships: []
       }
       profiles: {
-        Row: { id: string; username: string; avatar_url: string | null; status: string; status_text: string | null; created_at: string }
-        Insert: { id: string; username: string; avatar_url?: string | null; status?: string; status_text?: string | null; created_at?: string }
+        Row: {
+          id: string
+          username: string
+          avatar_url: string | null
+          status: string
+          status_text: string | null
+          bio: string | null
+          banner_url: string | null
+          created_at: string
+        }
+        Insert: {
+          id: string
+          username: string
+          avatar_url?: string | null
+          status?: string
+          status_text?: string | null
+          bio?: string | null
+          banner_url?: string | null
+          created_at?: string
+        }
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>
         Relationships: []
       }
@@ -138,9 +156,17 @@ export type Database = {
     }
     Views: Record<string, never>
     Functions: {
+      accept_friend_request: {
+        Args: { request_id: string }
+        Returns: string
+      }
       cleanup_stale_voice_states: {
         Args: { max_age?: string }
         Returns: number
+      }
+      ensure_dm_conversation: {
+        Args: { other_user_id: string }
+        Returns: string
       }
       create_notification: {
         Args: {

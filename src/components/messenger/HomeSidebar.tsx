@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { statusDotClass } from "@/components/messenger/data";
 import type { DmThread } from "@/components/messenger/types";
@@ -10,6 +11,7 @@ type HomeSidebarProps = {
   activeThreadId: string | null;
   loadingThreads: boolean;
   onSelectThread: (threadId: string) => void;
+  onCloseThread?: (threadId: string) => void;
   footer?: ReactNode;
 };
 
@@ -18,6 +20,7 @@ export function HomeSidebar({
   activeThreadId,
   loadingThreads,
   onSelectThread,
+  onCloseThread,
   footer,
 }: HomeSidebarProps) {
   return (
@@ -37,11 +40,11 @@ export function HomeSidebar({
             {threads.map((thread) => {
               const active = thread.id === activeThreadId;
               return (
-                <li key={thread.id}>
+                <li key={thread.id} className="group/thread relative">
                   <button
                     type="button"
                     onClick={() => onSelectThread(thread.id)}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left ${
                       active
                         ? "bg-[#404249] text-white"
                         : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
@@ -67,6 +70,24 @@ export function HomeSidebar({
                       </span>
                     </span>
                   </button>
+                  {onCloseThread && (
+                    <button
+                      type="button"
+                      title="Close DM"
+                      aria-label={`Close DM with ${thread.username}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onCloseThread(thread.id);
+                      }}
+                      className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#949ba4] hover:bg-black/30 hover:text-white ${
+                        active
+                          ? "opacity-100"
+                          : "opacity-0 group-hover/thread:opacity-100 focus-visible:opacity-100"
+                      }`}
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={2} />
+                    </button>
+                  )}
                 </li>
               );
             })}

@@ -349,8 +349,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const supabase = createClient();
     const { data: mine, error: mineError } = await supabase
       .from("dm_participants")
-      .select("conversation_id")
-      .eq("user_id", user.id);
+      .select("conversation_id, hidden")
+      .eq("user_id", user.id)
+      .eq("hidden", false);
     if (mineError) {
       setError(mineError.message);
       setThreads([]);
@@ -420,7 +421,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         const supabase = createClient();
         const { data: mine, error: mineError } = await supabase
           .from("dm_participants")
-          .select("conversation_id")
+          .select("conversation_id, hidden")
           .eq("user_id", user.id);
         if (mineError) {
           setError(mineError.message);
@@ -437,6 +438,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         }
         const match = (theirs ?? []).find((row) => mineIds.has(row.conversation_id));
         if (match) {
+          // Re-open if this DM was closed (hidden) on our side.
+          await supabase
+            .from("dm_participants")
+            .update({ hidden: false })
+            .eq("conversation_id", match.conversation_id)
+            .eq("user_id", user.id);
           await refreshThreads();
           return match.conversation_id;
         }
@@ -573,6 +580,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             avatar_url: memberProfile?.avatar_url ?? null,
             status: memberProfile?.status ?? "offline",
             status_text: memberProfile?.status_text ?? null,
+            bio: memberProfile?.bio ?? null,
+            banner_url: memberProfile?.banner_url ?? null,
             roleIds,
           };
         }),
@@ -1386,6 +1395,24 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     router.push(messengerDmPath(threadId));
   }
 
+  async function closeThread(threadId: string) {
+    if (!user) return;
+    const supabase = createClient();
+    const { error: hideError } = await supabase
+      .from("dm_participants")
+      .update({ hidden: true })
+      .eq("conversation_id", threadId)
+      .eq("user_id", user.id);
+    if (hideError) {
+      setError(hideError.message);
+      return;
+    }
+    setThreads((prev) => prev.filter((thread) => thread.id !== threadId));
+    if (activeConversationId === threadId) {
+      router.push(messengerHomePath());
+    }
+  }
+
   function jumpToMessage(messageId: string) {
     const element = document.getElementById(`message-${messageId}`);
     if (!element) {
@@ -1973,6 +2000,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             activeThreadId={activeConversationId}
             loadingThreads={loadingThreads}
             onSelectThread={selectThread}
+            onCloseThread={(threadId) => void closeThread(threadId)}
             footer={voiceFooter}
           />
         ) : activeServer ? (

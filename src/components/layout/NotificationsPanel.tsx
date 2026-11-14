@@ -21,6 +21,7 @@ type NotificationsPanelProps = {
   onClose: () => void;
   userId: string | null;
   onUnreadChange?: (count: number) => void;
+  onOpenFriendsPending?: () => void;
 };
 
 export function NotificationsPanel({
@@ -28,6 +29,7 @@ export function NotificationsPanel({
   onClose,
   userId,
   onUnreadChange,
+  onOpenFriendsPending,
 }: NotificationsPanelProps) {
   const router = useRouter();
   const [items, setItems] = useState<AppNotification[]>([]);
@@ -106,6 +108,14 @@ export function NotificationsPanel({
   async function openItem(item: AppNotification) {
     if (!item.read) await markRead(item.id);
     onClose();
+    if (
+      item.type === "friend_request" ||
+      item.type === "friend_accepted" ||
+      item.link?.includes("friends=pending")
+    ) {
+      onOpenFriendsPending?.();
+      return;
+    }
     if (item.link) router.push(item.link);
   }
 
