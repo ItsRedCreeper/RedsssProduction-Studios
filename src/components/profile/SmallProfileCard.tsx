@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Ban, MessageSquare, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
@@ -16,6 +16,8 @@ import {
 } from "@/lib/friends";
 
 export type MutualFocus = "friends" | "servers";
+
+const VIEWPORT_MARGIN = 8;
 
 type SmallProfileCardProps = {
   profile: FriendProfile;
@@ -48,6 +50,52 @@ export function SmallProfileCard({
   const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
   const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
   const [loadingMutuals, setLoadingMutuals] = useState(!isSelf);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState({ top, left });
+
+  useEffect(() => {
+    setPos({ top, left });
+  }, [top, left, profile.id]);
+
+  // Keep the popover fully on-screen after Block/mutuals/etc. change its height.
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+
+    const clampToViewport = () => {
+      const height = el.offsetHeight;
+      const width = el.offsetWidth;
+      setPos((prev) => {
+        let nextTop = prev.top;
+        let nextLeft = prev.left;
+        if (nextTop + height > window.innerHeight - VIEWPORT_MARGIN) {
+          nextTop = Math.max(
+            VIEWPORT_MARGIN,
+            window.innerHeight - height - VIEWPORT_MARGIN,
+          );
+        }
+        if (nextLeft + width > window.innerWidth - VIEWPORT_MARGIN) {
+          nextLeft = Math.max(
+            VIEWPORT_MARGIN,
+            window.innerWidth - width - VIEWPORT_MARGIN,
+          );
+        }
+        if (nextTop < VIEWPORT_MARGIN) nextTop = VIEWPORT_MARGIN;
+        if (nextLeft < VIEWPORT_MARGIN) nextLeft = VIEWPORT_MARGIN;
+        if (nextTop === prev.top && nextLeft === prev.left) return prev;
+        return { top: nextTop, left: nextLeft };
+      });
+    };
+
+    clampToViewport();
+    const observer = new ResizeObserver(() => clampToViewport());
+    observer.observe(el);
+    window.addEventListener("resize", clampToViewport);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", clampToViewport);
+    };
+  }, [profile.id]);
 
   useEffect(() => {
     if (isSelf) {
@@ -78,9 +126,10 @@ export function SmallProfileCard({
 
   return (
     <div
+      ref={cardRef}
       data-profile-popover
-      className="fixed z-[80] w-[300px] overflow-hidden rounded-lg border border-[#1e1f22] bg-[#111214] shadow-2xl shadow-black/60"
-      style={{ top, left }}
+      className="fixed z-[80] max-h-[calc(100vh-16px)] w-[300px] overflow-y-auto overflow-x-hidden rounded-lg border border-[#1e1f22] bg-[#111214] shadow-2xl shadow-black/60"
+      style={{ top: pos.top, left: pos.left }}
     >
       <div className="relative pb-8">
         <button

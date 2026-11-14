@@ -46,7 +46,8 @@ const ProfileContext = createContext<ProfileContextValue | null>(null);
 
 function clampCardPosition(anchor?: DOMRect | null): Anchor {
   const width = 300;
-  const height = 320;
+  // Prefer a taller estimate so the first paint stays on-screen before ResizeObserver runs.
+  const height = 420;
   if (!anchor) {
     return {
       top: Math.max(24, window.innerHeight / 2 - height / 2),
