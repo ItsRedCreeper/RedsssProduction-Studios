@@ -44,6 +44,36 @@ body {
   font-family: var(--font-sora), system-ui, sans-serif;
 }
 
+/* Hand cursor on interactive controls (Tailwind preflight leaves buttons as default). */
+a[href],
+button:not(:disabled),
+summary,
+label[for],
+select:not(:disabled),
+input[type="button"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="file"]:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="menuitem"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+[role="link"]:not([aria-disabled="true"]),
+[role="switch"]:not([aria-disabled="true"]),
+[role="option"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled,
+[aria-disabled="true"],
+[aria-disabled="true"] * {
+  cursor: not-allowed;
+}
+
 /* Subtle noise texture for depth without flat fills */
 body::before {
   content: "";
