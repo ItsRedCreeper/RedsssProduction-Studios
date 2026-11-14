@@ -1,24 +1,31 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Ban, MessageSquare, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { avatarLetter } from "@/lib/avatar";
-import { loadIsBlockedBy } from "@/lib/blocking";
-import {
-  loadMutualFriends,
-  loadMutualServers,
-  type FriendProfile,
-  type MutualFriend,
-  type MutualServer,
+import type {
+  FriendProfile,
+  FriendStatus,
+  MutualFriend,
+  MutualServer,
 } from "@/lib/friends";
 
 export type MutualFocus = "friends" | "servers";
 
 const VIEWPORT_MARGIN = 8;
+
+export type SmallProfileReadyData = {
+  mutualFriends: MutualFriend[];
+  mutualServers: MutualServer[];
+  friendStatus: FriendStatus;
+  friendEdgeId: string | null;
+  /** Viewed user has blocked the current user. */
+  restricted: boolean;
+};
 
 type SmallProfileCardProps = {
   profile: FriendProfile;
@@ -26,6 +33,8 @@ type SmallProfileCardProps = {
   left: number;
   isSelf: boolean;
   isBlocked?: boolean;
+  /** Preloaded so the card opens at full size in one paint. */
+  ready: SmallProfileReadyData;
   onClose: () => void;
   onMessage: () => void;
   onViewProfile: () => void;
@@ -40,6 +49,7 @@ export function SmallProfileCard({
   left,
   isSelf,
   isBlocked = false,
+  ready,
   onClose,
   onMessage,
   onViewProfile,
@@ -47,22 +57,22 @@ export function SmallProfileCard({
   onBlock,
   onUnblock,
 }: SmallProfileCardProps) {
-  const [restricted, setRestricted] = useState(false);
+  const {
+    mutualFriends,
+    mutualServers,
+    friendStatus,
+    friendEdgeId,
+    restricted,
+  } = ready;
   const bio =
     restricted
       ? ""
       : profile.bio?.trim() || profile.status_text?.trim() || "";
-  const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
-  const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
-  const [loadingMutuals, setLoadingMutuals] = useState(!isSelf);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState({ top, left });
+  const [visible, setVisible] = useState(false);
 
-  useEffect(() => {
-    setPos({ top, left });
-  }, [top, left, profile.id]);
-
-  // Keep the popover fully on-screen after Block/mutuals/etc. change its height.
+  // Measure the fully-rendered card once, clamp, then reveal — no staged loading.
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el) return;
@@ -70,9 +80,9 @@ export function SmallProfileCard({
     const clampToViewport = () => {
       const height = el.offsetHeight;
       const width = el.offsetWidth;
-      setPos((prev) => {
-        let nextTop = prev.top;
-        let nextLeft = prev.left;
+      setPos(() => {
+        let nextTop = top;
+        let nextLeft = left;
         if (nextTop + height > window.innerHeight - VIEWPORT_MARGIN) {
           nextTop = Math.max(
             VIEWPORT_MARGIN,
@@ -87,9 +97,9 @@ export function SmallProfileCard({
         }
         if (nextTop < VIEWPORT_MARGIN) nextTop = VIEWPORT_MARGIN;
         if (nextLeft < VIEWPORT_MARGIN) nextLeft = VIEWPORT_MARGIN;
-        if (nextTop === prev.top && nextLeft === prev.left) return prev;
         return { top: nextTop, left: nextLeft };
       });
+      setVisible(true);
     };
 
     clampToViewport();
@@ -100,42 +110,7 @@ export function SmallProfileCard({
       observer.disconnect();
       window.removeEventListener("resize", clampToViewport);
     };
-  }, [profile.id]);
-
-  useEffect(() => {
-    if (isSelf) {
-      setRestricted(false);
-      setMutualFriends([]);
-      setMutualServers([]);
-      setLoadingMutuals(false);
-      return;
-    }
-    let cancelled = false;
-    setLoadingMutuals(true);
-    setRestricted(false);
-    void (async () => {
-      const { blockedByThem } = await loadIsBlockedBy(profile.id);
-      if (cancelled) return;
-      setRestricted(blockedByThem);
-      if (blockedByThem) {
-        setMutualFriends([]);
-        setMutualServers([]);
-        setLoadingMutuals(false);
-        return;
-      }
-      const [friendsResult, serversResult] = await Promise.all([
-        loadMutualFriends(profile.id),
-        loadMutualServers(profile.id),
-      ]);
-      if (cancelled) return;
-      setMutualFriends(friendsResult.friends);
-      setMutualServers(serversResult.servers);
-      setLoadingMutuals(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [profile.id, isSelf]);
+  }, [top, left, profile.id, isBlocked, isSelf, bio, restricted, mutualFriends.length, mutualServers.length]);
 
   const previewFriends = mutualFriends.slice(0, 3);
   const previewServers = mutualServers.slice(0, 3);
@@ -145,7 +120,12 @@ export function SmallProfileCard({
       ref={cardRef}
       data-profile-popover
       className="fixed z-[80] max-h-[calc(100vh-16px)] w-[300px] overflow-y-auto overflow-x-hidden rounded-lg border border-[#1e1f22] bg-[#111214] shadow-2xl shadow-black/60"
-      style={{ top: pos.top, left: pos.left }}
+      style={{
+        top: pos.top,
+        left: pos.left,
+        visibility: visible ? "visible" : "hidden",
+        pointerEvents: visible ? "auto" : "none",
+      }}
     >
       <div className="relative pb-8">
         <button
@@ -210,7 +190,6 @@ export function SmallProfileCard({
 
         {!isSelf &&
           !restricted &&
-          !loadingMutuals &&
           (mutualServers.length > 0 || mutualFriends.length > 0) && (
           <div className="mt-3 space-y-2">
             {mutualServers.length > 0 && (
@@ -302,7 +281,12 @@ export function SmallProfileCard({
                 <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
                 Message
               </button>
-              <ProfileFriendButton otherUserId={profile.id} size="sm" />
+              <ProfileFriendButton
+                otherUserId={profile.id}
+                size="sm"
+                initialStatus={friendStatus}
+                initialEdgeId={friendEdgeId}
+              />
             </div>
           )}
           {!isSelf && (
