@@ -12,11 +12,18 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useBlockedUsers } from "@/hooks/useBlockedUsers";
-import { ensureDmConversation, type FriendProfile } from "@/lib/friends";
+import {
+  ensureDmConversation,
+  loadFriendshipWith,
+  loadMutualFriends,
+  loadMutualServers,
+  type FriendProfile,
+} from "@/lib/friends";
 import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
 import {
   SmallProfileCard,
   type MutualFocus,
+  type SmallProfileReadyData,
 } from "@/components/profile/SmallProfileCard";
 import { BigProfileModal } from "@/components/profile/BigProfileModal";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
@@ -104,6 +111,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     profile: FriendProfile;
     top: number;
     left: number;
+    ready: SmallProfileReadyData;
   } | null>(null);
   const [big, setBig] = useState<FriendProfile | null>(null);
   const [bigFocus, setBigFocus] = useState<MutualFocus | null>(null);
@@ -130,14 +138,43 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const openSmallProfile = useCallback(
     async (userId: string, anchorEl?: HTMLElement | null) => {
-      // Capture anchor rect before the async fetch so scroll/layout can't move it.
+      // Capture anchor rect before the async work so scroll/layout can't move it.
       const anchorRect = anchorEl?.getBoundingClientRect() ?? null;
-      const profile = await fetchProfile(userId);
+      const isSelf = !!user && user.id === userId;
+
+      // Load everything before opening so the card appears as one finished piece.
+      const [profile, friendsResult, serversResult, friendship] =
+        await Promise.all([
+          fetchProfile(userId),
+          isSelf
+            ? Promise.resolve({ friends: [] as Awaited<
+                ReturnType<typeof loadMutualFriends>
+              >["friends"] })
+            : loadMutualFriends(userId),
+          isSelf
+            ? Promise.resolve({ servers: [] as Awaited<
+                ReturnType<typeof loadMutualServers>
+              >["servers"] })
+            : loadMutualServers(userId),
+          isSelf
+            ? Promise.resolve({ status: "none" as const, edgeId: null })
+            : loadFriendshipWith(userId),
+        ]);
       if (!profile) return;
+
       const pos = clampCardPosition(anchorRect);
-      setSmall({ profile, ...pos });
+      setSmall({
+        profile,
+        ...pos,
+        ready: {
+          mutualFriends: friendsResult.friends,
+          mutualServers: serversResult.servers,
+          friendStatus: friendship.status,
+          friendEdgeId: friendship.edgeId,
+        },
+      });
     },
-    [],
+    [user],
   );
 
   const openBigProfile = useCallback(async (
@@ -246,9 +283,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             onClick={() => setSmall(null)}
           />
           <SmallProfileCard
+            key={small.profile.id}
             profile={small.profile}
             top={small.top}
             left={small.left}
+            ready={small.ready}
             isSelf={!!user && small.profile.id === user.id}
             isBlocked={isBlocked(small.profile.id)}
             onClose={() => setSmall(null)}

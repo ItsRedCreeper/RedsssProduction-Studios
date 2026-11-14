@@ -16,17 +16,24 @@ type ProfileFriendButtonProps = {
   /** Compact = small card; default = big modal */
   size?: "sm" | "md";
   className?: string;
+  /** Skip the loading flash when status is already known. */
+  initialStatus?: FriendStatus;
+  initialEdgeId?: string | null;
 };
 
 export function ProfileFriendButton({
   otherUserId,
   size = "md",
   className = "",
+  initialStatus,
+  initialEdgeId = null,
 }: ProfileFriendButtonProps) {
   const { user } = useCurrentProfile();
   const profileUi = useOptionalProfileUi();
-  const [status, setStatus] = useState<FriendStatus | "loading">("loading");
-  const [edgeId, setEdgeId] = useState<string | null>(null);
+  const [status, setStatus] = useState<FriendStatus | "loading">(
+    initialStatus ?? "loading",
+  );
+  const [edgeId, setEdgeId] = useState<string | null>(initialEdgeId);
   const [busy, setBusy] = useState(false);
   const blocked = profileUi?.isBlocked(otherUserId) ?? false;
 
@@ -34,6 +41,11 @@ export function ProfileFriendButton({
     if (!user || user.id === otherUserId || blocked) {
       setStatus("none");
       setEdgeId(null);
+      return;
+    }
+    if (initialStatus) {
+      setStatus(initialStatus);
+      setEdgeId(initialEdgeId);
       return;
     }
     let cancelled = false;
@@ -47,7 +59,7 @@ export function ProfileFriendButton({
     return () => {
       cancelled = true;
     };
-  }, [user, otherUserId, blocked]);
+  }, [user, otherUserId, blocked, initialStatus, initialEdgeId]);
 
   if (!user || user.id === otherUserId || blocked) return null;
 
