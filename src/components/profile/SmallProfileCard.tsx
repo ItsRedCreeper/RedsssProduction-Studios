@@ -51,51 +51,8 @@ export function SmallProfileCard({
   const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
   const [loadingMutuals, setLoadingMutuals] = useState(!isSelf);
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState({ top, left });
-
-  useEffect(() => {
-    setPos({ top, left });
-  }, [top, left, profile.id]);
-
-  // Keep the popover fully on-screen after Block/mutuals/etc. change its height.
-  useLayoutEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-
-    const clampToViewport = () => {
-      const height = el.offsetHeight;
-      const width = el.offsetWidth;
-      setPos((prev) => {
-        let nextTop = prev.top;
-        let nextLeft = prev.left;
-        if (nextTop + height > window.innerHeight - VIEWPORT_MARGIN) {
-          nextTop = Math.max(
-            VIEWPORT_MARGIN,
-            window.innerHeight - height - VIEWPORT_MARGIN,
-          );
-        }
-        if (nextLeft + width > window.innerWidth - VIEWPORT_MARGIN) {
-          nextLeft = Math.max(
-            VIEWPORT_MARGIN,
-            window.innerWidth - width - VIEWPORT_MARGIN,
-          );
-        }
-        if (nextTop < VIEWPORT_MARGIN) nextTop = VIEWPORT_MARGIN;
-        if (nextLeft < VIEWPORT_MARGIN) nextLeft = VIEWPORT_MARGIN;
-        if (nextTop === prev.top && nextLeft === prev.left) return prev;
-        return { top: nextTop, left: nextLeft };
-      });
-    };
-
-    clampToViewport();
-    const observer = new ResizeObserver(() => clampToViewport());
-    observer.observe(el);
-    window.addEventListener("resize", clampToViewport);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", clampToViewport);
-    };
-  }, [profile.id]);
+  const preferredRef = useRef({ top, left });
+  preferredRef.current = { top, left };
 
   useEffect(() => {
     if (isSelf) {
@@ -121,6 +78,75 @@ export function SmallProfileCard({
     };
   }, [profile.id, isSelf]);
 
+  // Imperative clamp — avoids React state races that re-applied the unclamped top
+  // after Block / mutuals / friend-button content grew the card.
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+
+    const clampToViewport = () => {
+      const preferred = preferredRef.current;
+      const maxHeight = Math.max(
+        120,
+        window.innerHeight - VIEWPORT_MARGIN * 2,
+      );
+      el.style.maxHeight = `${maxHeight}px`;
+
+      const height = el.offsetHeight;
+      const width = el.offsetWidth;
+      let nextTop = preferred.top;
+      let nextLeft = preferred.left;
+
+      // Prefer keeping the bottom edge on-screen as content grows downward.
+      if (nextTop + height > window.innerHeight - VIEWPORT_MARGIN) {
+        nextTop = window.innerHeight - height - VIEWPORT_MARGIN;
+      }
+      if (nextTop < VIEWPORT_MARGIN) nextTop = VIEWPORT_MARGIN;
+
+      if (nextLeft + width > window.innerWidth - VIEWPORT_MARGIN) {
+        nextLeft = window.innerWidth - width - VIEWPORT_MARGIN;
+      }
+      if (nextLeft < VIEWPORT_MARGIN) nextLeft = VIEWPORT_MARGIN;
+
+      el.style.top = `${nextTop}px`;
+      el.style.left = `${nextLeft}px`;
+      el.style.bottom = "auto";
+      el.style.right = "auto";
+    };
+
+    clampToViewport();
+    const raf1 = window.requestAnimationFrame(clampToViewport);
+    const raf2 = window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(clampToViewport),
+    );
+    const resizeObserver = new ResizeObserver(() => clampToViewport());
+    resizeObserver.observe(el);
+    const mutationObserver = new MutationObserver(() => clampToViewport());
+    mutationObserver.observe(el, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    window.addEventListener("resize", clampToViewport);
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener("resize", clampToViewport);
+    };
+  }, [
+    profile.id,
+    top,
+    left,
+    loadingMutuals,
+    isBlocked,
+    isSelf,
+    bio,
+    mutualFriends.length,
+    mutualServers.length,
+  ]);
+
   const previewFriends = mutualFriends.slice(0, 3);
   const previewServers = mutualServers.slice(0, 3);
 
@@ -128,8 +154,8 @@ export function SmallProfileCard({
     <div
       ref={cardRef}
       data-profile-popover
-      className="fixed z-[80] max-h-[calc(100vh-16px)] w-[300px] overflow-y-auto overflow-x-hidden rounded-lg border border-[#1e1f22] bg-[#111214] shadow-2xl shadow-black/60"
-      style={{ top: pos.top, left: pos.left }}
+      className="fixed z-[80] w-[300px] overflow-y-auto overflow-x-hidden rounded-lg border border-[#1e1f22] bg-[#111214] shadow-2xl shadow-black/60"
+      style={{ top, left }}
     >
       <div className="relative pb-8">
         <button
