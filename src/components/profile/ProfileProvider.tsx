@@ -15,8 +15,6 @@ import { useBlockedUsers } from "@/hooks/useBlockedUsers";
 import {
   ensureDmConversation,
   loadFriendshipWith,
-  loadMutualFriends,
-  loadMutualServers,
   type FriendProfile,
 } from "@/lib/friends";
 import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
@@ -142,24 +140,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const anchorRect = anchorEl?.getBoundingClientRect() ?? null;
       const isSelf = !!user && user.id === userId;
 
-      // Load everything before opening so the card appears as one finished piece.
-      const [profile, friendsResult, serversResult, friendship] =
-        await Promise.all([
-          fetchProfile(userId),
-          isSelf
-            ? Promise.resolve({ friends: [] as Awaited<
-                ReturnType<typeof loadMutualFriends>
-              >["friends"] })
-            : loadMutualFriends(userId),
-          isSelf
-            ? Promise.resolve({ servers: [] as Awaited<
-                ReturnType<typeof loadMutualServers>
-              >["servers"] })
-            : loadMutualServers(userId),
-          isSelf
-            ? Promise.resolve({ status: "none" as const, edgeId: null })
-            : loadFriendshipWith(userId),
-        ]);
+      // Open fast: profile + friendship only. Mutuals load inside the card
+      // behind fixed-height placeholders so the popover doesn't grow off-screen.
+      const [profile, friendship] = await Promise.all([
+        fetchProfile(userId),
+        isSelf
+          ? Promise.resolve({ status: "none" as const, edgeId: null })
+          : loadFriendshipWith(userId),
+      ]);
       if (!profile) return;
 
       const pos = clampCardPosition(anchorRect);
@@ -167,8 +155,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         profile,
         ...pos,
         ready: {
-          mutualFriends: friendsResult.friends,
-          mutualServers: serversResult.servers,
           friendStatus: friendship.status,
           friendEdgeId: friendship.edgeId,
         },

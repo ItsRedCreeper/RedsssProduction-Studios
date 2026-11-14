@@ -1,17 +1,19 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Ban, MessageSquare, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { avatarLetter } from "@/lib/avatar";
-import type {
-  FriendProfile,
-  FriendStatus,
-  MutualFriend,
-  MutualServer,
+import {
+  loadMutualFriends,
+  loadMutualServers,
+  type FriendProfile,
+  type FriendStatus,
+  type MutualFriend,
+  type MutualServer,
 } from "@/lib/friends";
 
 export type MutualFocus = "friends" | "servers";
@@ -51,9 +53,21 @@ function clampPopoverPosition(
   return { top: nextTop, left: nextLeft, maxHeight };
 }
 
+/** Same footprint as a mutual servers/friends row while data loads. */
+function MutualRowSkeleton() {
+  return (
+    <div className="flex h-7 items-center gap-2" aria-hidden>
+      <span className="flex -space-x-1.5">
+        <span className="h-6 w-6 animate-pulse rounded-[6px] bg-white/10 ring-2 ring-[#111214]" />
+        <span className="h-6 w-6 animate-pulse rounded-[6px] bg-white/10 ring-2 ring-[#111214]" />
+        <span className="h-6 w-6 animate-pulse rounded-[6px] bg-white/10 ring-2 ring-[#111214]" />
+      </span>
+      <span className="h-3 w-28 animate-pulse rounded bg-white/10" />
+    </div>
+  );
+}
+
 export type SmallProfileReadyData = {
-  mutualFriends: MutualFriend[];
-  mutualServers: MutualServer[];
   friendStatus: FriendStatus;
   friendEdgeId: string | null;
 };
@@ -64,7 +78,6 @@ type SmallProfileCardProps = {
   left: number;
   isSelf: boolean;
   isBlocked?: boolean;
-  /** Preloaded so the card opens at full size in one paint. */
   ready: SmallProfileReadyData;
   onClose: () => void;
   onMessage: () => void;
@@ -89,41 +102,90 @@ export function SmallProfileCard({
   onUnblock,
 }: SmallProfileCardProps) {
   const bio = profile.bio?.trim() || profile.status_text?.trim() || "";
-  const { mutualFriends, mutualServers, friendStatus, friendEdgeId } = ready;
+  const { friendStatus, friendEdgeId } = ready;
+  const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
+  const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
+  const [loadingMutuals, setLoadingMutuals] = useState(!isSelf);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const preferredRef = useRef({ top, left });
+  preferredRef.current = { top, left };
   const [pos, setPos] = useState(() =>
     clampPopoverPosition(top, left, 300, 520),
   );
-  const [visible, setVisible] = useState(false);
 
-  // Measure the fully-rendered card once, clamp, then reveal — no staged loading.
+  useEffect(() => {
+    if (isSelf) {
+      setMutualFriends([]);
+      setMutualServers([]);
+      setLoadingMutuals(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingMutuals(true);
+    void (async () => {
+      const [friendsResult, serversResult] = await Promise.all([
+        loadMutualFriends(profile.id),
+        loadMutualServers(profile.id),
+      ]);
+      if (cancelled) return;
+      setMutualFriends(friendsResult.friends);
+      setMutualServers(serversResult.servers);
+      setLoadingMutuals(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.id, isSelf]);
+
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el) return;
 
     const apply = () => {
+      const preferred = preferredRef.current;
       const next = clampPopoverPosition(
-        top,
-        left,
+        preferred.top,
+        preferred.left,
         el.offsetWidth || 300,
         el.offsetHeight || 520,
       );
-      setPos(next);
-      setVisible(true);
+      setPos((prev) =>
+        prev.top === next.top &&
+        prev.left === next.left &&
+        prev.maxHeight === next.maxHeight
+          ? prev
+          : next,
+      );
     };
 
     apply();
+    const resizeObserver = new ResizeObserver(() => apply());
+    resizeObserver.observe(el);
     const onViewportChange = () => apply();
     window.addEventListener("resize", onViewportChange);
     window.visualViewport?.addEventListener("resize", onViewportChange);
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener("resize", onViewportChange);
       window.visualViewport?.removeEventListener("resize", onViewportChange);
     };
-  }, [top, left, profile.id, isBlocked, isSelf, bio, mutualFriends.length, mutualServers.length]);
+  }, [
+    profile.id,
+    top,
+    left,
+    loadingMutuals,
+    isBlocked,
+    isSelf,
+    bio,
+    mutualFriends.length,
+    mutualServers.length,
+  ]);
 
   const previewFriends = mutualFriends.slice(0, 3);
   const previewServers = mutualServers.slice(0, 3);
+  const showMutualSection =
+    !isSelf &&
+    (loadingMutuals || mutualServers.length > 0 || mutualFriends.length > 0);
 
   return (
     <div
@@ -134,8 +196,6 @@ export function SmallProfileCard({
         top: pos.top,
         left: pos.left,
         maxHeight: pos.maxHeight,
-        visibility: visible ? "visible" : "hidden",
-        pointerEvents: visible ? "auto" : "none",
       }}
     >
       <div className="relative pb-8">
@@ -199,72 +259,81 @@ export function SmallProfileCard({
           <p className="mt-2 line-clamp-2 text-sm text-[#dbdee1]">{bio}</p>
         )}
 
-        {!isSelf && (mutualServers.length > 0 || mutualFriends.length > 0) && (
+        {showMutualSection && (
           <div className="mt-3 space-y-2">
-            {mutualServers.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onViewMutuals("servers")}
-                className="flex w-full items-center gap-2 rounded-md py-0.5 text-left hover:opacity-90"
-                aria-label={`${mutualServers.length} mutual servers`}
-              >
-                <span className="flex -space-x-1.5">
-                  {previewServers.map((server) =>
-                    server.icon_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={server.id}
-                        src={server.icon_url}
-                        alt=""
-                        title={server.name}
-                        className="h-6 w-6 rounded-[6px] object-cover ring-2 ring-[#111214]"
-                      />
-                    ) : (
-                      <span
-                        key={server.id}
-                        title={server.name}
-                        className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#313338] text-[10px] font-bold text-accent ring-2 ring-[#111214]"
-                      >
-                        {avatarLetter(server.name)}
-                      </span>
-                    ),
-                  )}
-                </span>
-                <span className="text-xs font-medium text-[#b5bac1] hover:underline">
-                  {mutualServers.length} Mutual Server
-                  {mutualServers.length === 1 ? "" : "s"}
-                </span>
-              </button>
-            )}
-
-            {mutualFriends.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onViewMutuals("friends")}
-                className="flex w-full items-center gap-2 rounded-md py-0.5 text-left hover:opacity-90"
-                aria-label={`${mutualFriends.length} mutual friends`}
-              >
-                <span className="flex -space-x-1.5">
-                  {previewFriends.map((friend) => (
-                    <span
-                      key={friend.id}
-                      className="rounded-full ring-2 ring-[#111214]"
-                      title={friend.username}
-                    >
-                      <UserAvatar
-                        username={friend.username}
-                        avatarUrl={friend.avatar_url}
-                        size="xs"
-                        className="!h-6 !w-6"
-                      />
+            {loadingMutuals ? (
+              <>
+                <MutualRowSkeleton />
+                <MutualRowSkeleton />
+              </>
+            ) : (
+              <>
+                {mutualServers.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onViewMutuals("servers")}
+                    className="flex h-7 w-full items-center gap-2 rounded-md text-left hover:opacity-90"
+                    aria-label={`${mutualServers.length} mutual servers`}
+                  >
+                    <span className="flex -space-x-1.5">
+                      {previewServers.map((server) =>
+                        server.icon_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={server.id}
+                            src={server.icon_url}
+                            alt=""
+                            title={server.name}
+                            className="h-6 w-6 rounded-[6px] object-cover ring-2 ring-[#111214]"
+                          />
+                        ) : (
+                          <span
+                            key={server.id}
+                            title={server.name}
+                            className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#313338] text-[10px] font-bold text-accent ring-2 ring-[#111214]"
+                          >
+                            {avatarLetter(server.name)}
+                          </span>
+                        ),
+                      )}
                     </span>
-                  ))}
-                </span>
-                <span className="text-xs font-medium text-[#b5bac1] hover:underline">
-                  {mutualFriends.length} Mutual Friend
-                  {mutualFriends.length === 1 ? "" : "s"}
-                </span>
-              </button>
+                    <span className="text-xs font-medium text-[#b5bac1] hover:underline">
+                      {mutualServers.length} Mutual Server
+                      {mutualServers.length === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                )}
+
+                {mutualFriends.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onViewMutuals("friends")}
+                    className="flex h-7 w-full items-center gap-2 rounded-md text-left hover:opacity-90"
+                    aria-label={`${mutualFriends.length} mutual friends`}
+                  >
+                    <span className="flex -space-x-1.5">
+                      {previewFriends.map((friend) => (
+                        <span
+                          key={friend.id}
+                          className="rounded-full ring-2 ring-[#111214]"
+                          title={friend.username}
+                        >
+                          <UserAvatar
+                            username={friend.username}
+                            avatarUrl={friend.avatar_url}
+                            size="xs"
+                            className="!h-6 !w-6"
+                          />
+                        </span>
+                      ))}
+                    </span>
+                    <span className="text-xs font-medium text-[#b5bac1] hover:underline">
+                      {mutualFriends.length} Mutual Friend
+                      {mutualFriends.length === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
