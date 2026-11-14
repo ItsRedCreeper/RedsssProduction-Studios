@@ -186,6 +186,10 @@ export type Database = {
         Args: { target_id: string }
         Returns: undefined
       }
+      is_blocked_by: {
+        Args: { other_id: string }
+        Returns: boolean
+      }
       cleanup_stale_voice_states: {
         Args: { max_age?: string }
         Returns: number

@@ -121,6 +121,46 @@ export async function loadAreUsersBlocked(otherUserId: string) {
   return { blocked: Boolean(data), error: null as string | null };
 }
 
+/** True if otherUserId has blocked the current user (incoming). */
+export async function loadIsBlockedBy(otherUserId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || user.id === otherUserId) {
+    return { blockedByThem: false, error: null as string | null };
+  }
+  const { data, error } = await supabase.rpc("is_blocked_by", {
+    other_id: otherUserId,
+  });
+  if (error) return { blockedByThem: false, error: error.message };
+  return { blockedByThem: Boolean(data), error: null as string | null };
+}
+
+export type BlockRelation = {
+  blockedByMe: boolean;
+  blockedByThem: boolean;
+  either: boolean;
+};
+
+/** Outgoing + incoming block relation for profile / voice UI. */
+export async function loadBlockRelation(otherUserId: string) {
+  const [outgoing, incoming] = await Promise.all([
+    loadIsBlocked(otherUserId),
+    loadIsBlockedBy(otherUserId),
+  ]);
+  const blockedByMe = outgoing.blocked;
+  const blockedByThem = incoming.blockedByThem;
+  return {
+    relation: {
+      blockedByMe,
+      blockedByThem,
+      either: blockedByMe || blockedByThem,
+    } satisfies BlockRelation,
+    error: outgoing.error ?? incoming.error,
+  };
+}
+
 export async function blockUser(targetId: string) {
   const supabase = createClient();
   const { error } = await supabase.rpc("block_user", { target_id: targetId });

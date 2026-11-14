@@ -13,8 +13,10 @@ import {
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import { useBlockedUsers } from "@/hooks/useBlockedUsers";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
 import { useVoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
+import { loadAreUsersBlocked } from "@/lib/blocking";
 import { saveVoiceState } from "@/components/messenger/data";
 import { VoiceMesh } from "@/components/messenger/voice/webrtcMesh";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
@@ -113,9 +115,12 @@ function writeSkipChannels(channels: Set<string>) {
 export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user } = useCurrentProfile();
+  const { blockedIds } = useBlockedUsers();
   const devices = useAudioDevices();
 
   const [connection, setConnection] = useState<VoiceConnection | null>(null);
+  /** Peers who blocked us (incoming); outgoing blocks come from blockedIds. */
+  const [inboundBlockedIds, setInboundBlockedIds] = useState<string[]>([]);
   const [muted, setMuted] = useState(false);
   const [deafened, setDeafened] = useState(false);
   const [muteLinked, setMuteLinked] = useState(false);
@@ -146,6 +151,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     null,
   );
   const meshRef = useRef<VoiceMesh | null>(null);
+  const blockedIdsRef = useRef(blockedIds);
+  const inboundBlockedRef = useRef(inboundBlockedIds);
   const inputDeviceRef = useRef(devices.inputDeviceId);
   const inputVolumeRef = useRef(devices.inputVolume);
   const outputDeviceRef = useRef(devices.outputDeviceId);
@@ -160,6 +167,39 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   mutedRef.current = muted;
   deafenedRef.current = deafened;
   muteLinkedRef.current = muteLinked;
+  blockedIdsRef.current = blockedIds;
+  inboundBlockedRef.current = inboundBlockedIds;
+
+  const audioBlockedPeerIds = useMemo(() => {
+    const ids = new Set(blockedIds);
+    for (const id of inboundBlockedIds) ids.add(id);
+    return ids;
+  }, [blockedIds, inboundBlockedIds]);
+
+  const syncBlockedAudio = useCallback((peerIds: string[] = []) => {
+    const mesh = meshRef.current;
+    const combined = new Set(blockedIdsRef.current);
+    for (const id of inboundBlockedRef.current) combined.add(id);
+    for (const id of peerIds) combined.add(id);
+    mesh?.setBlockedPeerIds(combined);
+  }, []);
+
+  const checkPeerBlock = useCallback(
+    async (peerId: string) => {
+      if (!peerId || peerId === userIdRef.current) return;
+      if (blockedIdsRef.current.includes(peerId)) {
+        syncBlockedAudio();
+        return;
+      }
+      const { blocked } = await loadAreUsersBlocked(peerId);
+      if (!blocked) return;
+      setInboundBlockedIds((prev) => {
+        if (prev.includes(peerId)) return prev;
+        return [...prev, peerId];
+      });
+    },
+    [syncBlockedAudio],
+  );
   userIdRef.current = user?.id ?? null;
   inputDeviceRef.current = devices.inputDeviceId;
   inputVolumeRef.current = devices.inputVolume;
@@ -226,6 +266,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         .select("user_id")
         .eq("channel_id", channelId)
         .neq("user_id", userId);
+      const peerIds = (peers ?? []).map((row) => row.user_id);
       const mesh = new VoiceMesh({
         supabase,
         channelId,
@@ -240,17 +281,26 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             return next;
           });
         },
+        onPeerJoined: (peerId) => {
+          void checkPeerBlock(peerId);
+        },
         onError: (message) => setMicError(message),
       });
       mesh.setMuted(mutedRef.current);
       mesh.setDeafened(deafenedRef.current);
       mesh.setOutputDeviceId(outputDeviceRef.current);
       mesh.setOutputVolume(outputVolumeRef.current);
+      mesh.setBlockedPeerIds(
+        new Set([...blockedIdsRef.current, ...inboundBlockedRef.current]),
+      );
       meshRef.current = mesh;
-      await mesh.start((peers ?? []).map((row) => row.user_id));
+      await mesh.start(peerIds);
       if (streamRef.current) await mesh.setLocalStream(streamRef.current);
+      for (const peerId of peerIds) {
+        void checkPeerBlock(peerId);
+      }
     },
-    [stopMesh],
+    [stopMesh, checkPeerBlock],
   );
 
   const publishSpeaking = useCallback((speaking: boolean) => {
@@ -764,6 +814,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     meshRef.current?.setOutputVolume(devices.outputVolume);
   }, [devices.outputVolume]);
+
+  useEffect(() => {
+    meshRef.current?.setBlockedPeerIds(audioBlockedPeerIds);
+  }, [audioBlockedPeerIds]);
+
+  // Drop inbound-only entries when we leave voice so lists don't grow forever.
+  useEffect(() => {
+    if (connection) return;
+    setInboundBlockedIds([]);
+  }, [connection]);
 
   // Auto-join / restore can start without a user gesture; unlock audio on the next interaction.
   useEffect(() => {

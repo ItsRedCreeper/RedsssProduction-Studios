@@ -8,6 +8,7 @@ import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { avatarLetter } from "@/lib/avatar";
 import type { MutualFocus } from "@/components/profile/SmallProfileCard";
+import { loadIsBlockedBy } from "@/lib/blocking";
 import {
   formatSinceDate,
   loadFriendsSince,
@@ -45,8 +46,9 @@ export function BigProfileModal({
   onBlock,
   onUnblock,
 }: BigProfileModalProps) {
-  const bio = profile.bio?.trim() || "";
-  const statusText = profile.status_text?.trim() || "";
+  const [restricted, setRestricted] = useState(false);
+  const bio = restricted ? "" : profile.bio?.trim() || "";
+  const statusText = restricted ? "" : profile.status_text?.trim() || "";
   const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
   const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
   const [friendsSince, setFriendsSince] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export function BigProfileModal({
     setFriendsSince(null);
     setHighlight(null);
     if (isSelf) {
+      setRestricted(false);
       setMutualFriends([]);
       setMutualServers([]);
       setLoadingMutuals(false);
@@ -72,8 +75,19 @@ export function BigProfileModal({
 
     let cancelled = false;
     setLoadingMutuals(true);
+    setRestricted(false);
 
     void (async () => {
+      const { blockedByThem } = await loadIsBlockedBy(profile.id);
+      if (cancelled) return;
+      setRestricted(blockedByThem);
+      if (blockedByThem) {
+        setMutualFriends([]);
+        setMutualServers([]);
+        setFriendsSince(null);
+        setLoadingMutuals(false);
+        return;
+      }
       const [friendsResult, serversResult, sinceResult] = await Promise.all([
         loadMutualFriends(profile.id),
         loadMutualServers(profile.id),
@@ -92,7 +106,7 @@ export function BigProfileModal({
   }, [profile.id, isSelf]);
 
   useEffect(() => {
-    if (isSelf || loadingMutuals || !focusSection) return;
+    if (isSelf || restricted || loadingMutuals || !focusSection) return;
     const target =
       focusSection === "friends"
         ? friendsSectionRef.current
@@ -109,7 +123,7 @@ export function BigProfileModal({
       window.clearTimeout(timer);
       window.clearTimeout(clear);
     };
-  }, [focusSection, loadingMutuals, isSelf, profile.id]);
+  }, [focusSection, loadingMutuals, isSelf, restricted, profile.id]);
 
   const visibleFriends = showAllFriends
     ? mutualFriends
@@ -180,6 +194,15 @@ export function BigProfileModal({
               >
                 Unblock
               </button>
+            ) : restricted ? (
+              <button
+                type="button"
+                onClick={onBlock}
+                className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-[#f2b8b5] hover:bg-[#4e5058]"
+              >
+                <Ban className="h-4 w-4" strokeWidth={1.75} />
+                Block
+              </button>
             ) : (
               <>
                 <button
@@ -222,8 +245,14 @@ export function BigProfileModal({
                 requests, or interact with you until you unblock them.
               </p>
             )}
+            {!isSelf && !isBlocked && restricted && (
+              <p className="mt-3 rounded-md border border-white/10 bg-[#111214] px-3 py-2 text-sm text-[#b5bac1]">
+                This user has blocked you. About me, mutual friends, and mutual
+                servers are hidden.
+              </p>
+            )}
 
-            {(memberSince || (!isSelf && friendsSince)) && (
+            {(memberSince || (!isSelf && !restricted && friendsSince)) && (
               <div className="mt-4 flex flex-wrap gap-x-8 gap-y-3 border-t border-white/10 pt-4">
                 {memberSince && (
                   <div>
@@ -233,7 +262,7 @@ export function BigProfileModal({
                     <p className="mt-1 text-sm text-[#dbdee1]">{memberSince}</p>
                   </div>
                 )}
-                {!isSelf && friendsSince && (
+                {!isSelf && !restricted && friendsSince && (
                   <div>
                     <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
                       Friends Since
@@ -246,6 +275,7 @@ export function BigProfileModal({
               </div>
             )}
 
+            {!restricted && (
             <div className="mt-4 border-t border-white/10 pt-4">
               <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
                 About Me
@@ -254,8 +284,9 @@ export function BigProfileModal({
                 {bio || "No bio yet."}
               </p>
             </div>
+            )}
 
-            {!isSelf && (
+            {!isSelf && !restricted && (
               <>
                 <div
                   ref={friendsSectionRef}

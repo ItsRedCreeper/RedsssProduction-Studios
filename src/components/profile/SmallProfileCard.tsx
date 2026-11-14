@@ -7,6 +7,7 @@ import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { avatarLetter } from "@/lib/avatar";
+import { loadIsBlockedBy } from "@/lib/blocking";
 import {
   loadMutualFriends,
   loadMutualServers,
@@ -46,7 +47,11 @@ export function SmallProfileCard({
   onBlock,
   onUnblock,
 }: SmallProfileCardProps) {
-  const bio = profile.bio?.trim() || profile.status_text?.trim() || "";
+  const [restricted, setRestricted] = useState(false);
+  const bio =
+    restricted
+      ? ""
+      : profile.bio?.trim() || profile.status_text?.trim() || "";
   const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
   const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
   const [loadingMutuals, setLoadingMutuals] = useState(!isSelf);
@@ -99,6 +104,7 @@ export function SmallProfileCard({
 
   useEffect(() => {
     if (isSelf) {
+      setRestricted(false);
       setMutualFriends([]);
       setMutualServers([]);
       setLoadingMutuals(false);
@@ -106,7 +112,17 @@ export function SmallProfileCard({
     }
     let cancelled = false;
     setLoadingMutuals(true);
+    setRestricted(false);
     void (async () => {
+      const { blockedByThem } = await loadIsBlockedBy(profile.id);
+      if (cancelled) return;
+      setRestricted(blockedByThem);
+      if (blockedByThem) {
+        setMutualFriends([]);
+        setMutualServers([]);
+        setLoadingMutuals(false);
+        return;
+      }
       const [friendsResult, serversResult] = await Promise.all([
         loadMutualFriends(profile.id),
         loadMutualServers(profile.id),
@@ -192,7 +208,10 @@ export function SmallProfileCard({
           <p className="mt-2 line-clamp-2 text-sm text-[#dbdee1]">{bio}</p>
         )}
 
-        {!isSelf && !loadingMutuals && (mutualServers.length > 0 || mutualFriends.length > 0) && (
+        {!isSelf &&
+          !restricted &&
+          !loadingMutuals &&
+          (mutualServers.length > 0 || mutualFriends.length > 0) && (
           <div className="mt-3 space-y-2">
             {mutualServers.length > 0 && (
               <button
@@ -268,7 +287,12 @@ export function SmallProfileCard({
               You have blocked this user.
             </div>
           )}
-          {!isSelf && !isBlocked && (
+          {!isSelf && !isBlocked && restricted && (
+            <div className="rounded-md border border-white/10 bg-[#1e1f22] px-3 py-2 text-xs text-[#b5bac1]">
+              This user has blocked you. Profile details are hidden.
+            </div>
+          )}
+          {!isSelf && !isBlocked && !restricted && (
             <div className="flex gap-2">
               <button
                 type="button"

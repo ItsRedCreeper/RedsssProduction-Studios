@@ -33,6 +33,8 @@ export type VoiceMeshOptions = {
   userId: string;
   onSpeaking?: (userId: string, speaking: boolean) => void;
   onPeerCount?: (count: number) => void;
+  /** Fired when a peer slot is created (hello / offer). */
+  onPeerJoined?: (peerId: string) => void;
   onError?: (message: string) => void;
 };
 
@@ -49,6 +51,8 @@ export class VoiceMesh {
   private deafened = false;
   private outputDeviceId = "";
   private outputVolume = 1;
+  /** Peers with either-direction block — no audio in or out. */
+  private blockedPeerIds = new Set<string>();
   private closed = false;
   private started = false;
 
@@ -106,16 +110,8 @@ export class VoiceMesh {
   async setLocalStream(stream: MediaStream | null) {
     this.localStream = stream;
     if (!stream) {
-      for (const slot of this.peers.values()) {
-        for (const sender of slot.pc.getSenders()) {
-          if (sender.track?.kind === "audio") {
-            try {
-              await sender.replaceTrack(null);
-            } catch {
-              /* ignore */
-            }
-          }
-        }
+      for (const peerId of this.peers.keys()) {
+        await this.applyOutboundToPeer(peerId);
       }
       return;
     }
@@ -123,21 +119,8 @@ export class VoiceMesh {
     const track = stream.getAudioTracks()[0] ?? null;
     if (track) track.enabled = !this.muted;
 
-    for (const slot of this.peers.values()) {
-      const sender = slot.pc.getSenders().find((s) => s.track?.kind === "audio" || !s.track);
-      if (sender) {
-        try {
-          await sender.replaceTrack(track);
-        } catch {
-          /* ignore */
-        }
-      } else if (track) {
-        try {
-          slot.pc.addTrack(track, stream);
-        } catch {
-          /* ignore */
-        }
-      }
+    for (const peerId of this.peers.keys()) {
+      await this.applyOutboundToPeer(peerId);
     }
   }
 
@@ -162,14 +145,60 @@ export class VoiceMesh {
     this.applyRemoteAudio();
   }
 
+  /** Mute remote audio and stop sending mic to these peer user IDs. */
+  setBlockedPeerIds(ids: Iterable<string>) {
+    this.blockedPeerIds = new Set(ids);
+    this.applyRemoteAudio();
+    for (const peerId of this.peers.keys()) {
+      void this.applyOutboundToPeer(peerId);
+    }
+  }
+
+  peerIds() {
+    return [...this.peers.keys()];
+  }
+
   peerCount() {
     return this.peers.size;
   }
 
+  private isAudioBlocked(peerId: string) {
+    return this.blockedPeerIds.has(peerId);
+  }
+
+  private async applyOutboundToPeer(peerId: string) {
+    const slot = this.peers.get(peerId);
+    if (!slot) return;
+    const blocked = this.isAudioBlocked(peerId);
+    const track =
+      !blocked && this.localStream
+        ? (this.localStream.getAudioTracks()[0] ?? null)
+        : null;
+    if (track) track.enabled = !this.muted;
+
+    const sender = slot.pc
+      .getSenders()
+      .find((s) => s.track?.kind === "audio" || !s.track);
+    if (sender) {
+      try {
+        await sender.replaceTrack(track);
+      } catch {
+        /* ignore */
+      }
+    } else if (track && this.localStream) {
+      try {
+        slot.pc.addTrack(track, this.localStream);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   private applyRemoteAudio() {
-    const volume = this.deafened ? 0 : this.outputVolume;
-    for (const slot of this.peers.values()) {
-      slot.audioEl.muted = this.deafened;
+    for (const [peerId, slot] of this.peers) {
+      const blocked = this.isAudioBlocked(peerId) || this.deafened;
+      const volume = blocked ? 0 : this.outputVolume;
+      slot.audioEl.muted = blocked;
       slot.audioEl.volume = volume;
       if (this.outputDeviceId && "setSinkId" in slot.audioEl) {
         void (
@@ -284,9 +313,13 @@ export class VoiceMesh {
     };
     this.peers.set(peerId, slot);
     this.opts.onPeerCount?.(this.peers.size);
+    this.opts.onPeerJoined?.(peerId);
     this.applyRemoteAudio();
 
-    const localTrack = this.localStream?.getAudioTracks()[0];
+    const localTrack =
+      !this.isAudioBlocked(peerId) && this.localStream
+        ? (this.localStream.getAudioTracks()[0] ?? null)
+        : null;
     if (localTrack && this.localStream) {
       localTrack.enabled = !this.muted;
       try {
@@ -295,7 +328,7 @@ export class VoiceMesh {
         /* ignore */
       }
     } else {
-      // Transceiver so we can receive even before mic is ready.
+      // Transceiver so we can receive even before mic is ready (or while blocked).
       try {
         pc.addTransceiver("audio", { direction: "sendrecv" });
       } catch {
