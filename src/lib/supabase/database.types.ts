@@ -168,6 +168,23 @@ export type Database = {
         Args: { other_user_id: string }
         Returns: string
       }
+      get_mutual_friends: {
+        Args: { other_user_id: string }
+        Returns: {
+          id: string
+          username: string
+          avatar_url: string | null
+          status: string
+        }[]
+      }
+      get_mutual_servers: {
+        Args: { other_user_id: string }
+        Returns: {
+          id: string
+          name: string
+          icon_url: string | null
+        }[]
+      }
       create_notification: {
         Args: {
           p_user_id: string;

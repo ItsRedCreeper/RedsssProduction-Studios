@@ -13,7 +13,10 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { ensureDmConversation, type FriendProfile } from "@/lib/friends";
 import { messengerHomePath } from "@/lib/messenger-routes";
-import { SmallProfileCard } from "@/components/profile/SmallProfileCard";
+import {
+  SmallProfileCard,
+  type MutualFocus,
+} from "@/components/profile/SmallProfileCard";
 import { BigProfileModal } from "@/components/profile/BigProfileModal";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 
@@ -23,7 +26,7 @@ type Anchor = { top: number; left: number };
 
 type ProfileContextValue = {
   openSmallProfile: (userId: string, anchorEl?: HTMLElement | null) => void;
-  openBigProfile: (userId: string) => void;
+  openBigProfile: (userId: string, focus?: MutualFocus | null) => void;
   openEditProfile: () => void;
   openFriends: (tab?: FriendsTab) => void;
   closeFriends: () => void;
@@ -58,7 +61,7 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
   const supabase = createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, status, status_text, bio, banner_url")
+    .select("id, username, avatar_url, status, status_text, bio, banner_url, created_at")
     .eq("id", userId)
     .maybeSingle();
   if (!data) return null;
@@ -70,6 +73,7 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
     status_text: data.status_text,
     bio: data.bio,
     banner_url: data.banner_url,
+    created_at: data.created_at,
   };
 }
 
@@ -84,6 +88,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     left: number;
   } | null>(null);
   const [big, setBig] = useState<FriendProfile | null>(null);
+  const [bigFocus, setBigFocus] = useState<MutualFocus | null>(null);
   const [editOpen, setEditOpen] = useState(false);
 
   const messageUser = useCallback(
@@ -109,10 +114,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const openBigProfile = useCallback(async (userId: string) => {
+  const openBigProfile = useCallback(async (
+    userId: string,
+    focus: MutualFocus | null = null,
+  ) => {
     const profile = await fetchProfile(userId);
     if (!profile) return;
     setSmall(null);
+    setBigFocus(focus);
     setBig(profile);
   }, []);
 
@@ -131,6 +140,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
                 status_text: current.status_text,
                 bio: current.bio,
                 banner_url: current.banner_url,
+                created_at: current.created_at,
               }
             : null);
     if (!profile) return;
@@ -197,6 +207,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
               setSmall(null);
               void openBigProfile(id);
             }}
+            onViewMutuals={(section) => {
+              const id = small.profile.id;
+              setSmall(null);
+              void openBigProfile(id, section);
+            }}
           />
         </>
       )}
@@ -205,13 +220,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         <BigProfileModal
           profile={big}
           isSelf={!!user && big.id === user.id}
-          onClose={() => setBig(null)}
+          focusSection={bigFocus}
+          onClose={() => {
+            setBig(null);
+            setBigFocus(null);
+          }}
           onMessage={() => {
             const id = big.id;
             setBig(null);
+            setBigFocus(null);
             void messageUser(id);
           }}
           onEdit={() => setEditOpen(true)}
+          onOpenProfile={(userId) => {
+            void openBigProfile(userId);
+          }}
         />
       )}
 

@@ -411,6 +411,38 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     void refreshThreads();
   }, [user, refreshThreads]);
 
+  // Keep the DM list live: new messages reopen hidden chats for recipients,
+  // and this subscription refreshes the sidebar without a manual reload.
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`dm-inbox:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "dm_messages" },
+        () => {
+          void refreshThreads();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "dm_participants",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          void refreshThreads();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user, refreshThreads]);
+
   const openDm = useCallback(
     async (otherUserId: string) => {
       if (!user || otherUserId === user.id) return null;
@@ -1682,6 +1714,24 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           return right - left;
         }),
     );
+
+    // Notify the other participant and make sure their sidebar can pick it up.
+    const otherId =
+      threads.find((thread) => thread.id === conversationId)?.otherUserId ??
+      activeThread?.otherUserId ??
+      null;
+    if (otherId) {
+      void supabase.rpc("create_notification", {
+        p_user_id: otherId,
+        p_type: "dm_message",
+        p_title: profile?.username
+          ? `Message from ${profile.username}`
+          : "New direct message",
+        p_body: content.slice(0, 120),
+        p_link: messengerDmPath(conversationId),
+      });
+    }
+    void refreshThreads();
     setSending(false);
   }
 

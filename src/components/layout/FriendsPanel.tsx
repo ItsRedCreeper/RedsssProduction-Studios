@@ -26,7 +26,6 @@ import {
   type FriendEdge,
   type FriendProfile,
 } from "@/lib/friends";
-import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import {
   FRIENDS_PANEL_MAX,
   FRIENDS_PANEL_MIN,
@@ -62,7 +61,6 @@ export function FriendsPanel({
   initialTab = "friends",
 }: FriendsPanelProps) {
   const profileUi = useOptionalProfileUi();
-  const { profile } = useCurrentProfile();
   const { width, beginResize } = useFriendsPanelWidth();
   const [tab, setTab] = useState<FriendsTab>(initialTab);
   const [edges, setEdges] = useState<FriendEdge[]>([]);
@@ -180,13 +178,9 @@ export function FriendsPanel({
   }
 
   async function handleAdd(person: FriendProfile) {
-    if (!userId || !profile) return;
+    if (!userId) return;
     setBusyId(person.id);
-    const { error: sendError } = await sendFriendRequest(
-      userId,
-      person.id,
-      profile.username,
-    );
+    const { error: sendError } = await sendFriendRequest(userId, person.id);
     setBusyId(null);
     if (sendError) {
       setError(sendError);

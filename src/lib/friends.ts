@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/client";
-import { messengerHomePath } from "@/lib/messenger-routes";
 import type { Tables } from "@/lib/supabase/database.types";
 
 export type FriendStatus = "none" | "outgoing" | "incoming" | "friends";
@@ -12,6 +11,7 @@ export type FriendProfile = {
   status_text: string | null;
   bio: string | null;
   banner_url: string | null;
+  created_at?: string | null;
 };
 
 export type FriendEdge = Tables<"friends"> & {
@@ -27,6 +27,44 @@ function asProfile(row: Partial<FriendProfile> & { id: string; username: string 
     status_text: row.status_text ?? null,
     bio: row.bio ?? null,
     banner_url: row.banner_url ?? null,
+    created_at: row.created_at ?? null,
+  };
+}
+
+/** Discord-style long date for Member Since / Friends Since. */
+export function formatSinceDate(iso: string | null | undefined) {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+export async function loadFriendsSince(otherUserId: string) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || user.id === otherUserId) {
+    return { friendsSince: null as string | null, error: null as string | null };
+  }
+  const { data, error } = await supabase
+    .from("friends")
+    .select("created_at, user_id, friend_id, status")
+    .eq("status", "accepted")
+    .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+  if (error) return { friendsSince: null as string | null, error: error.message };
+  const match = (data ?? []).find(
+    (row) =>
+      (row.user_id === user.id && row.friend_id === otherUserId) ||
+      (row.user_id === otherUserId && row.friend_id === user.id),
+  );
+  return {
+    friendsSince: match?.created_at ?? null,
+    error: null as string | null,
   };
 }
 
@@ -115,7 +153,7 @@ export async function searchProfiles(query: string, excludeId: string) {
   };
 }
 
-export async function sendFriendRequest(fromUserId: string, toUserId: string, fromUsername: string) {
+export async function sendFriendRequest(fromUserId: string, toUserId: string) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("friends")
@@ -128,14 +166,7 @@ export async function sendFriendRequest(fromUserId: string, toUserId: string, fr
     .single();
   if (error || !data) return { edge: null, error: error?.message ?? "Could not send request." };
 
-  await supabase.rpc("create_notification", {
-    p_user_id: toUserId,
-    p_type: "friend_request",
-    p_title: "Friend request",
-    p_body: `${fromUsername} sent you a friend request.`,
-    p_link: `${messengerHomePath()}?friends=pending`,
-  });
-
+  // Notification comes from DB trigger `friend_request_notify` (includes sender name).
   return { edge: data, error: null as string | null };
 }
 
@@ -167,6 +198,52 @@ export async function ensureDmConversation(otherUserId: string) {
   });
   if (error) return { conversationId: null as string | null, error: error.message };
   return { conversationId: data as string, error: null as string | null };
+}
+
+export type MutualFriend = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  status: string;
+};
+
+export type MutualServer = {
+  id: string;
+  name: string;
+  icon_url: string | null;
+};
+
+export async function loadMutualFriends(otherUserId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("get_mutual_friends", {
+    other_user_id: otherUserId,
+  });
+  if (error) return { friends: [] as MutualFriend[], error: error.message };
+  return {
+    friends: (data ?? []).map((row) => ({
+      id: row.id,
+      username: row.username,
+      avatar_url: row.avatar_url,
+      status: row.status,
+    })),
+    error: null as string | null,
+  };
+}
+
+export async function loadMutualServers(otherUserId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("get_mutual_servers", {
+    other_user_id: otherUserId,
+  });
+  if (error) return { servers: [] as MutualServer[], error: error.message };
+  return {
+    servers: (data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      icon_url: row.icon_url,
+    })),
+    error: null as string | null,
+  };
 }
 
 export async function uploadProfileAsset(
