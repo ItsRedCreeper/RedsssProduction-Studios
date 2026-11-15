@@ -240,12 +240,28 @@ export async function sendFriendRequest(fromUserId: string, toUserId: string) {
   return { edge: data, error: null as string | null };
 }
 
+const DM_INBOX_CHANGED_EVENT = "redsss-dm-inbox-changed";
+
+/** Tell open messenger shells to reload the Home/DM list. */
+export function notifyDmInboxChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(DM_INBOX_CHANGED_EVENT));
+}
+
+export function subscribeDmInboxChanged(handler: () => void) {
+  if (typeof window === "undefined") return () => undefined;
+  window.addEventListener(DM_INBOX_CHANGED_EVENT, handler);
+  return () => window.removeEventListener(DM_INBOX_CHANGED_EVENT, handler);
+}
+
 export async function acceptFriendRequest(requestId: string) {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("accept_friend_request", {
     request_id: requestId,
   });
   if (error) return { conversationId: null as string | null, error: error.message };
+  // RPC creates the shared DM (if missing) and unhides it for both users.
+  notifyDmInboxChanged();
   return { conversationId: data as string, error: null as string | null };
 }
 

@@ -61,6 +61,7 @@ import {
   friendlyBlockDmMessage,
   loadIsBlockedBy,
 } from "@/lib/blocking";
+import { subscribeDmInboxChanged } from "@/lib/friends";
 import type { Tables } from "@/lib/supabase/database.types";
 import type {
   Category,
@@ -469,7 +470,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         },
       )
       .subscribe();
+    const unsubLocal = subscribeDmInboxChanged(() => {
+      void refreshThreads();
+    });
     return () => {
+      unsubLocal();
       void supabase.removeChannel(channel);
     };
   }, [user, refreshThreads]);
