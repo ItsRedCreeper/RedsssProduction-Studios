@@ -779,7 +779,7 @@ export function FriendsPanel({
         title="Remove friend"
         description={
           removeTarget
-            ? `Remove ${removeTarget.other.username} from your friends?`
+            ? `Remove ${removeTarget.other.username} from your friends? Your direct messages with them will stay.`
             : null
         }
         confirmLabel="Remove"

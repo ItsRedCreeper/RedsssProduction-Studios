@@ -326,6 +326,31 @@ export async function removeFriendship(edgeId: string) {
   const { error } = await supabase.from("friends").delete().eq("id", edgeId);
   if (error) return { error: error.message };
 
+  // Keep the shared DM for both people — unfriending is not the same as closing/hiding chat.
+  if (otherId !== user.id) {
+    const { data: mine } = await supabase
+      .from("dm_participants")
+      .select("conversation_id")
+      .eq("user_id", user.id);
+    const mineIds = new Set((mine ?? []).map((part) => part.conversation_id));
+    if (mineIds.size > 0) {
+      const { data: theirs } = await supabase
+        .from("dm_participants")
+        .select("conversation_id")
+        .eq("user_id", otherId)
+        .in("conversation_id", [...mineIds]);
+      const sharedIds = (theirs ?? []).map((part) => part.conversation_id);
+      if (sharedIds.length > 0) {
+        await supabase
+          .from("dm_participants")
+          .update({ hidden: false })
+          .in("conversation_id", sharedIds)
+          .eq("user_id", user.id);
+      }
+    }
+    notifyDmInboxChanged();
+  }
+
   if (row.status === "accepted" && otherId !== user.id) {
     const { data: me } = await supabase
       .from("profiles")
