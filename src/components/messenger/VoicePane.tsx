@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HeadphoneOff, MicOff, PhoneOff, Volume2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
@@ -59,10 +59,11 @@ function gridClass(count: number) {
   return "mx-auto grid-cols-2 md:grid-cols-3 xl:grid-cols-4 max-w-6xl";
 }
 
-function avatarClass(size: "focus" | "grid" | "strip") {
-  if (size === "focus") return "!h-28 !w-28 !text-4xl sm:!h-32 sm:!w-32";
-  if (size === "strip") return "!h-10 !w-10 !text-sm";
-  return "!h-16 !w-16 !text-xl sm:!h-20 sm:!w-20 sm:!text-2xl";
+/** Preferred avatar px — held until the tile is too small, then shrunk to fit. */
+function preferredAvatarPx(size: "focus" | "grid" | "strip") {
+  if (size === "focus") return 128;
+  if (size === "strip") return 40;
+  return 80;
 }
 
 function VoiceTile({
@@ -87,6 +88,34 @@ function VoiceTile({
     ? avatarAccentColor(member?.username || name, member?.banner_color)
     : null;
   const compact = size === "strip";
+  const preferred = preferredAvatarPx(size);
+  const fitRef = useRef<HTMLDivElement | null>(null);
+  const [avatarPx, setAvatarPx] = useState(preferred);
+
+  useEffect(() => {
+    const el = fitRef.current;
+    if (!el || typeof ResizeObserver === "undefined") {
+      setAvatarPx(preferred);
+      return;
+    }
+    const sync = () => {
+      const { width, height } = el.getBoundingClientRect();
+      // Keep clear of the name bar / mute chip so the face never clips.
+      const maxByHeight = Math.max(0, height - (compact ? 22 : 36));
+      const maxByWidth = Math.max(0, width - (compact ? 16 : 24));
+      const next = Math.max(
+        compact ? 20 : 28,
+        Math.min(preferred, maxByHeight, maxByWidth),
+      );
+      setAvatarPx(Math.round(next));
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [preferred, compact]);
+
+  const letterPx = Math.max(compact ? 9 : 11, Math.round(avatarPx * 0.36));
 
   return (
     <button
@@ -127,17 +156,23 @@ function VoiceTile({
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
 
         <div
+          ref={fitRef}
           className={`absolute inset-0 flex items-center justify-center ${
-            compact ? "pb-6" : "pb-9"
+            compact ? "px-2 pb-6 pt-2" : "px-3 pb-9 pt-3"
           }`}
         >
-          <UserAvatar
-            username={name}
-            avatarUrl={member?.avatar_url}
-            size="lg"
-            speaking={false}
-            className={avatarClass(size)}
-          />
+          <span
+            className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full"
+            style={{ width: avatarPx, height: avatarPx, fontSize: letterPx }}
+          >
+            <UserAvatar
+              username={name}
+              avatarUrl={member?.avatar_url}
+              size="lg"
+              speaking={false}
+              className="!h-full !w-full !text-[length:inherit]"
+            />
+          </span>
         </div>
 
         {(state.muted || state.deafened) && (
