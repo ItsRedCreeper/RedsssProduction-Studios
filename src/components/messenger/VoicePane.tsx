@@ -259,126 +259,141 @@ export function VoicePane({
     ? ordered.filter((state) => state.user_id !== focusedState.user_id)
     : [];
 
-  if (!joined) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col bg-[#1e1f22]/40">
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-accent">
-            <Volume2 className="h-7 w-7" strokeWidth={1.75} />
-          </div>
-          <h2 className="text-xl font-semibold text-white">{channelName}</h2>
-          <p className="mt-2 max-w-sm text-sm text-[#949ba4]">
-            You&apos;re viewing this voice channel. Join to connect and see who&apos;s here.
-          </p>
-          <button
-            type="button"
-            onClick={onRejoin}
-            className="mt-6 inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover"
+  const emptyStage = (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-accent">
+        <Volume2 className="h-7 w-7" strokeWidth={1.75} />
+      </div>
+      <h2 className="text-xl font-semibold text-white">{channelName}</h2>
+      <p className="mt-2 max-w-sm text-sm text-[#949ba4]">
+        {joined
+          ? "Setting up your voice tile…"
+          : "No one is in this voice channel yet. Join to be the first."}
+      </p>
+    </div>
+  );
+
+  const stage =
+    ordered.length === 0 ? (
+      emptyStage
+    ) : focusedState ? (
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
+          {/* Keep 16:9 — size from available height so it letterboxes like Discord. */}
+          <div
+            className="w-full max-w-4xl"
+            style={{
+              width: "min(100%, 56rem, calc((100vh - 14rem) * 16 / 9))",
+            }}
           >
-            <Volume2 className="h-4 w-4" strokeWidth={2} />
-            Join Voice
-          </button>
+            <VoiceTile
+              state={focusedState}
+              member={membersById.get(focusedState.user_id)}
+              currentUserId={currentUserId}
+              speaking={
+                joined
+                  ? (speakingUserIds?.has(focusedState.user_id) ?? false)
+                  : false
+              }
+              size="focus"
+              onSelect={() => setFocusedUserId(null)}
+            />
+          </div>
         </div>
+        {stripStates.length > 0 && (
+          <ul className="flex shrink-0 justify-center gap-2 overflow-x-auto pb-1">
+            {stripStates.map((state) => (
+              <li key={state.user_id} className="w-36 shrink-0 sm:w-44">
+                <VoiceTile
+                  state={state}
+                  member={membersById.get(state.user_id)}
+                  currentUserId={currentUserId}
+                  speaking={
+                    joined
+                      ? (speakingUserIds?.has(state.user_id) ?? false)
+                      : false
+                  }
+                  size="strip"
+                  onSelect={() => setFocusedUserId(state.user_id)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    ) : (
+      <div className="flex min-h-0 flex-1 items-center justify-center">
+        <ul className={`grid w-full gap-3 ${gridClass(ordered.length)}`}>
+          {ordered.map((state) => (
+            <li key={state.user_id}>
+              <VoiceTile
+                state={state}
+                member={membersById.get(state.user_id)}
+                currentUserId={currentUserId}
+                speaking={
+                  joined
+                    ? (speakingUserIds?.has(state.user_id) ?? false)
+                    : false
+                }
+                size="grid"
+                onSelect={() => setFocusedUserId(state.user_id)}
+              />
+            </li>
+          ))}
+        </ul>
       </div>
     );
-  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#1e1f22]/40">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6">
-        {ordered.length === 0 ? (
-          <div className="flex min-h-64 flex-1 flex-col items-center justify-center rounded-md border border-dashed border-[#3f4147] bg-[#2b2d31]/40 text-center">
-            <Volume2 className="mb-3 h-8 w-8 text-[#4e5058]" strokeWidth={1.5} />
-            <p className="text-sm text-[#b5bac1]">Setting up your voice tile…</p>
-          </div>
-        ) : focusedState ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="flex min-h-0 flex-1 items-center justify-center">
-              {/* Keep 16:9 — size from available height so it letterboxes like Discord. */}
-              <div
-                className="w-full max-w-4xl"
-                style={{
-                  width: "min(100%, 56rem, calc((100vh - 14rem) * 16 / 9))",
-                }}
-              >
-                <VoiceTile
-                  state={focusedState}
-                  member={membersById.get(focusedState.user_id)}
-                  currentUserId={currentUserId}
-                  speaking={speakingUserIds?.has(focusedState.user_id) ?? false}
-                  size="focus"
-                  onSelect={() => setFocusedUserId(null)}
-                />
-              </div>
-            </div>
-            {stripStates.length > 0 && (
-              <ul className="flex shrink-0 justify-center gap-2 overflow-x-auto pb-1">
-                {stripStates.map((state) => (
-                  <li key={state.user_id} className="w-36 shrink-0 sm:w-44">
-                    <VoiceTile
-                      state={state}
-                      member={membersById.get(state.user_id)}
-                      currentUserId={currentUserId}
-                      speaking={speakingUserIds?.has(state.user_id) ?? false}
-                      size="strip"
-                      onSelect={() => setFocusedUserId(state.user_id)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 items-center justify-center">
-            <ul className={`grid w-full gap-3 ${gridClass(ordered.length)}`}>
-              {ordered.map((state) => (
-                <li key={state.user_id}>
-                  <VoiceTile
-                    state={state}
-                    member={membersById.get(state.user_id)}
-                    currentUserId={currentUserId}
-                    speaking={speakingUserIds?.has(state.user_id) ?? false}
-                    size="grid"
-                    onSelect={() => setFocusedUserId(state.user_id)}
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {stage}
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-t border-black/30 bg-[#292b2f] px-4 py-3">
-        <VoiceChannelControls
-          muted={muted}
-          deafened={deafened}
-          quality={quality}
-          onToggleMute={onToggleMute}
-          onToggleDeafen={onToggleDeafen}
-          onLeave={onLeave}
-          inputDeviceId={inputDeviceId}
-          outputDeviceId={outputDeviceId}
-          inputs={inputs}
-          outputs={outputs}
-          onInputDeviceChange={onInputDeviceChange}
-          onOutputDeviceChange={onOutputDeviceChange}
-          inputVolume={inputVolume}
-          outputVolume={outputVolume}
-          onInputVolumeChange={onInputVolumeChange}
-          onOutputVolumeChange={onOutputVolumeChange}
-          onOpenDeviceMenus={onOpenDeviceMenus}
-          micLevel={micLevel}
-          micError={micError}
-          showLeave={false}
-        />
-        <button
-          type="button"
-          onClick={onLeave}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
-        >
-          <PhoneOff className="h-4 w-4" strokeWidth={2} />
-          Disconnect
-        </button>
+        {joined ? (
+          <>
+            <VoiceChannelControls
+              muted={muted}
+              deafened={deafened}
+              quality={quality}
+              onToggleMute={onToggleMute}
+              onToggleDeafen={onToggleDeafen}
+              onLeave={onLeave}
+              inputDeviceId={inputDeviceId}
+              outputDeviceId={outputDeviceId}
+              inputs={inputs}
+              outputs={outputs}
+              onInputDeviceChange={onInputDeviceChange}
+              onOutputDeviceChange={onOutputDeviceChange}
+              inputVolume={inputVolume}
+              outputVolume={outputVolume}
+              onInputVolumeChange={onInputVolumeChange}
+              onOutputVolumeChange={onOutputVolumeChange}
+              onOpenDeviceMenus={onOpenDeviceMenus}
+              micLevel={micLevel}
+              micError={micError}
+              showLeave={false}
+            />
+            <button
+              type="button"
+              onClick={onLeave}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+            >
+              <PhoneOff className="h-4 w-4" strokeWidth={2} />
+              Disconnect
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onRejoin}
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover"
+          >
+            <Volume2 className="h-4 w-4" strokeWidth={2} />
+            Join Voice
+          </button>
+        )}
       </div>
     </div>
   );
