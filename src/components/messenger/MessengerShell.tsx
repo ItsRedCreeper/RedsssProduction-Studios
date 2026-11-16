@@ -851,9 +851,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const channelId = activeChannelId;
     const supabase = createClient();
     let cancelled = false;
+    // Sync: show loading before first paint of the new channel so scroll-to-bottom
+    // waits for the real message list instead of locking onto stale content.
+    setLoadingChannelMessages(true);
 
     async function load() {
-      setLoadingChannelMessages(true);
       const result = await loadChannelMessages(channelId);
       if (cancelled) return;
       if (result.error) {

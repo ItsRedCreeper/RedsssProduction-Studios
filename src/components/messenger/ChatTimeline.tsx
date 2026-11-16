@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Hash, MessagesSquare } from "lucide-react";
 import { MessageItem } from "@/components/messenger/MessageItem";
 import type { MentionMaps } from "@/lib/mentions";
@@ -29,6 +29,10 @@ type ChatTimelineProps = {
   onTogglePin?: (message: ChatMessage) => void;
 };
 
+function distanceFromBottom(el: HTMLElement) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight;
+}
+
 export function ChatTimeline({
   messages,
   loading,
@@ -51,35 +55,59 @@ export function ChatTimeline({
   onTogglePin,
 }: ChatTimelineProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const scrolledKeyRef = useRef<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const stickToBottomRef = useRef(true);
+  const lastKeyRef = useRef(scrollKey);
+
+  // New channel/DM → always pin to latest until the user scrolls up.
+  if (lastKeyRef.current !== scrollKey) {
+    lastKeyRef.current = scrollKey;
+    stickToBottomRef.current = true;
+  }
+
+  function jumpToLatest() {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    bottomRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
+  }
 
   useLayoutEffect(() => {
     if (loading) return;
-    const el = scrollerRef.current;
-    if (!el) return;
-
-    const key = scrollKey || "default";
-    const isFreshContext = scrolledKeyRef.current !== key;
-    if (isFreshContext) {
-      scrolledKeyRef.current = key;
-      el.scrollTop = el.scrollHeight;
-      // Second paint after images/layout settle.
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      });
-      return;
-    }
-
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distanceFromBottom < 140) {
-      el.scrollTop = el.scrollHeight;
-    }
+    if (!stickToBottomRef.current) return;
+    jumpToLatest();
+    // Layout can settle a frame later (flex, fonts).
+    const frame = requestAnimationFrame(() => {
+      jumpToLatest();
+      requestAnimationFrame(jumpToLatest);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [scrollKey, loading, messages]);
+
+  // Keep pinned to bottom while content height grows (images, wrap, etc.).
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (!stickToBottomRef.current || loading) return;
+      jumpToLatest();
+    });
+    observer.observe(el);
+    const content = el.firstElementChild;
+    if (content) observer.observe(content);
+    return () => observer.disconnect();
+  }, [scrollKey, loading, messages.length]);
 
   return (
     <div
       ref={scrollerRef}
-      className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pb-4 pt-4"
+      onScroll={() => {
+        const el = scrollerRef.current;
+        if (!el) return;
+        // Only unstick when the user clearly scrolls away from the latest.
+        stickToBottomRef.current = distanceFromBottom(el) < 80;
+      }}
+      className="min-h-0 flex-1 overflow-y-auto pb-4 pt-4"
     >
       {loading ? (
         <p className="px-4 text-sm text-muted">Loading messages…</p>
@@ -96,26 +124,33 @@ export function ChatTimeline({
           <p className="mt-2 max-w-lg text-sm text-muted">{emptyBody}</p>
         </div>
       ) : (
-        messages.map((message) => (
-          <MessageItem
-            key={message.id}
-            message={message}
-            isOwn={!!currentUserId && message.user_id === currentUserId}
-            currentUserId={currentUserId}
-            currentUsername={currentUsername}
-            roleNames={roleNames}
-            channelNames={channelNames}
-            mentionMaps={mentionMaps}
-            canDeleteOthers={canDeleteOthers}
-            reactions={reactionMap[message.id] ?? []}
-            onReply={onReply}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onJumpToReply={onJumpToReply}
-            onReact={onReact ? (emoji) => onReact(message.id, emoji) : undefined}
-            onTogglePin={onTogglePin ? () => onTogglePin(message) : undefined}
-          />
-        ))
+        <div className="space-y-0.5">
+          {messages.map((message) => (
+            <MessageItem
+              key={message.id}
+              message={message}
+              isOwn={!!currentUserId && message.user_id === currentUserId}
+              currentUserId={currentUserId}
+              currentUsername={currentUsername}
+              roleNames={roleNames}
+              channelNames={channelNames}
+              mentionMaps={mentionMaps}
+              canDeleteOthers={canDeleteOthers}
+              reactions={reactionMap[message.id] ?? []}
+              onReply={onReply}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onJumpToReply={onJumpToReply}
+              onReact={
+                onReact ? (emoji) => onReact(message.id, emoji) : undefined
+              }
+              onTogglePin={
+                onTogglePin ? () => onTogglePin(message) : undefined
+              }
+            />
+          ))}
+          <div ref={bottomRef} aria-hidden className="h-px w-full" />
+        </div>
       )}
     </div>
   );
