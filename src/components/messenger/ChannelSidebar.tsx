@@ -19,6 +19,7 @@ import type {
   MemberView,
   VoiceState,
 } from "@/components/messenger/types";
+import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 
 type ChannelSidebarProps = {
   serverId: string;
@@ -112,6 +113,7 @@ export function ChannelSidebar({
   onLeave,
   footer,
 }: ChannelSidebarProps) {
+  const profileUi = useOptionalProfileUi();
   const storageKey = `redsss-collapsed-categories:${serverId}`;
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
@@ -217,19 +219,31 @@ export function ChannelSidebar({
               const speaking =
                 connectedHere && speakingUserIds.has(person.user_id);
               return (
-                <li
-                  key={person.user_id}
-                  className="flex items-center gap-2 rounded-md px-2 py-1 text-[13px] text-[#949ba4]"
-                >
-                  <UserAvatar
-                    username={person.username}
-                    avatarUrl={person.avatar_url}
-                    size="sm"
-                    speaking={speaking}
-                    className="!h-6 !w-6 !text-[10px]"
-                  />
-                  <span className="min-w-0 flex-1 truncate">{person.username}</span>
-                  {person.muted && <MicOff className="h-3 w-3 shrink-0" strokeWidth={2} />}
+                <li key={person.user_id}>
+                  <button
+                    type="button"
+                    onClick={(event) =>
+                      void profileUi?.openSmallProfile(
+                        person.user_id,
+                        event.currentTarget,
+                      )
+                    }
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
+                  >
+                    <UserAvatar
+                      username={person.username}
+                      avatarUrl={person.avatar_url}
+                      size="sm"
+                      speaking={speaking}
+                      className="!h-6 !w-6 !text-[10px]"
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      {person.username}
+                    </span>
+                    {person.muted && (
+                      <MicOff className="h-3 w-3 shrink-0" strokeWidth={2} />
+                    )}
+                  </button>
                 </li>
               );
             })}
