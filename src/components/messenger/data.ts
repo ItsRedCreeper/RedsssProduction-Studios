@@ -35,9 +35,15 @@ export function formatTimestamp(iso: string) {
   return `${month} ${day}, ${hours}:${minutes} ${ampm}`;
 }
 
+export type PresenceStatus = "online" | "idle" | "dnd" | "offline" | "invisible";
+
 export function statusLabel(status: string | null | undefined) {
-  if (!status) return "Offline";
-  return status.charAt(0).toUpperCase() + status.slice(1);
+  const value = (status ?? "offline").toLowerCase();
+  if (value === "online") return "Online";
+  if (value === "idle") return "Idle";
+  if (value === "dnd") return "Do Not Disturb";
+  if (value === "invisible") return "Invisible";
+  return "Offline";
 }
 
 export function isPresenceOnline(status: string | null | undefined) {

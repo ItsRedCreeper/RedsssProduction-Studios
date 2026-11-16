@@ -21,13 +21,15 @@ type MemberListProps = {
 function MemberButton({
   member,
   owner,
+  displayName,
   onClick,
 }: {
   member: MemberView;
   owner: boolean;
+  displayName: string;
   onClick: (element: HTMLButtonElement) => void;
 }) {
-  const name = member.nickname || member.username;
+  const custom = member.status_text?.trim();
   return (
     <button
       type="button"
@@ -36,7 +38,7 @@ function MemberButton({
     >
       <span className="relative shrink-0">
         <UserAvatar
-          username={name}
+          username={displayName}
           avatarUrl={member.avatar_url}
           size="sm"
           className="!h-8 !w-8"
@@ -47,7 +49,7 @@ function MemberButton({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm text-[#dbdee1]">{name}</span>
+          <span className="truncate text-sm text-[#dbdee1]">{displayName}</span>
           {owner && (
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-accent">
               Owner
@@ -55,7 +57,7 @@ function MemberButton({
           )}
         </span>
         <span className="block truncate text-[11px] text-[#6d6f78]">
-          {statusLabel(member.status)}
+          {custom || statusLabel(member.status)}
         </span>
       </span>
     </button>
@@ -71,15 +73,20 @@ export function MemberList({
 }: MemberListProps) {
   const profileUi = useOptionalProfileUi();
 
+  const displayNameOf = (member: MemberView) =>
+    profileUi?.nicknameFor(member.user_id) ||
+    member.nickname ||
+    member.username;
+
   const { online, offline } = useMemo(() => {
     const sorted = [...members].sort((a, b) =>
-      (a.nickname || a.username).localeCompare(b.nickname || b.username),
+      displayNameOf(a).localeCompare(displayNameOf(b)),
     );
     return {
       online: sorted.filter((member) => isPresenceOnline(member.status)),
       offline: sorted.filter((member) => !isPresenceOnline(member.status)),
     };
-  }, [members]);
+  }, [members, profileUi?.nicknames]);
 
   function openPopover(member: MemberView, element: HTMLButtonElement) {
     void profileUi?.openSmallProfile(member.user_id, element);
@@ -97,6 +104,7 @@ export function MemberList({
             <li key={member.user_id}>
               <MemberButton
                 member={member}
+                displayName={displayNameOf(member)}
                 owner={member.user_id === ownerId}
                 onClick={(element) => openPopover(member, element)}
               />

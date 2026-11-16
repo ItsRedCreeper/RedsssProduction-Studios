@@ -1,0 +1,164 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import {
+  statusDotClass,
+  statusLabel,
+  type PresenceStatus,
+} from "@/components/messenger/data";
+import { updateOwnPresence } from "@/lib/presence";
+
+const STATUSES: PresenceStatus[] = ["online", "idle", "dnd", "offline"];
+
+type StatusPickerProps = {
+  open: boolean;
+  status: string | null | undefined;
+  statusText: string | null | undefined;
+  onClose: () => void;
+  onSaved?: (next: { status: string; statusText: string | null }) => void;
+  /** Anchor panel above (sidebar) or below (navbar). */
+  placement?: "above" | "below";
+};
+
+export function StatusPicker({
+  open,
+  status,
+  statusText,
+  onClose,
+  onSaved,
+  placement = "above",
+}: StatusPickerProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [draftStatus, setDraftStatus] = useState<PresenceStatus>("online");
+  const [draftText, setDraftText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const value = (status ?? "online").toLowerCase();
+    setDraftStatus(
+      (STATUSES.includes(value as PresenceStatus)
+        ? value
+        : "online") as PresenceStatus,
+    );
+    setDraftText(statusText ?? "");
+    setError(null);
+  }, [open, status, statusText]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) onClose();
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("mousedown", onPointer);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onPointer);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  async function save(nextStatus?: PresenceStatus, clearText = false) {
+    setBusy(true);
+    setError(null);
+    const statusToSave = nextStatus ?? draftStatus;
+    const textToSave = clearText ? null : draftText;
+    const { error: saveError } = await updateOwnPresence({
+      status: statusToSave,
+      statusText: textToSave,
+    });
+    setBusy(false);
+    if (saveError) {
+      setError(saveError);
+      return;
+    }
+    const cleaned = clearText ? null : draftText.trim() || null;
+    setDraftStatus(statusToSave);
+    if (clearText) setDraftText("");
+    onSaved?.({ status: statusToSave, statusText: cleaned });
+  }
+
+  return (
+    <div
+      ref={rootRef}
+      className={`absolute left-0 z-50 w-72 overflow-hidden rounded-md border border-[#1e1f22] bg-[#111214] py-2 shadow-xl shadow-black/50 ${
+        placement === "above" ? "bottom-full mb-2" : "top-full mt-2"
+      }`}
+      role="dialog"
+      aria-label="Set status"
+    >
+      <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+        Status
+      </p>
+      <ul>
+        {STATUSES.map((value) => {
+          const active = draftStatus === value;
+          return (
+            <li key={value}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void save(value)}
+                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm ${
+                  active
+                    ? "bg-accent/15 text-white"
+                    : "text-[#dbdee1] hover:bg-white/5"
+                }`}
+              >
+                <span
+                  className={`h-3 w-3 shrink-0 rounded-full ${statusDotClass(value)}`}
+                />
+                <span className="font-medium">{statusLabel(value)}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="mx-2 my-2 border-t border-white/10" />
+      <div className="px-3 pb-2">
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+          Custom status
+        </label>
+        <input
+          value={draftText}
+          maxLength={128}
+          disabled={busy}
+          onChange={(event) => setDraftText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void save();
+            }
+          }}
+          placeholder="What's on your mind?"
+          className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-accent"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            disabled={busy || (!draftText && !statusText)}
+            onClick={() => void save(undefined, true)}
+            className="text-xs font-medium text-[#949ba4] hover:text-white disabled:opacity-40"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void save()}
+            className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+          >
+            Save
+          </button>
+        </div>
+        {error && <p className="mt-2 text-xs text-accent">{error}</p>}
+      </div>
+    </div>
+  );
+}

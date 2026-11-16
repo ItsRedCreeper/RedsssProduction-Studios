@@ -6,6 +6,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
+import { ProfileActivityLine } from "@/components/profile/ProfileActivityLine";
 import { avatarLetter } from "@/lib/avatar";
 import type {
   FriendProfile,
@@ -33,6 +34,8 @@ type SmallProfileCardProps = {
   left: number;
   isSelf: boolean;
   isBlocked?: boolean;
+  isIgnored?: boolean;
+  displayName?: string;
   /** Preloaded so the card opens at full size in one paint. */
   ready: SmallProfileReadyData;
   onClose: () => void;
@@ -41,6 +44,8 @@ type SmallProfileCardProps = {
   onViewMutuals: (section: MutualFocus) => void;
   onBlock?: () => void;
   onUnblock?: () => void;
+  onIgnore?: () => void;
+  onUnignore?: () => void;
 };
 
 export function SmallProfileCard({
@@ -49,6 +54,8 @@ export function SmallProfileCard({
   left,
   isSelf,
   isBlocked = false,
+  isIgnored = false,
+  displayName,
   ready,
   onClose,
   onMessage,
@@ -56,7 +63,10 @@ export function SmallProfileCard({
   onViewMutuals,
   onBlock,
   onUnblock,
+  onIgnore,
+  onUnignore,
 }: SmallProfileCardProps) {
+  const shownName = displayName || profile.username;
   const {
     mutualFriends,
     mutualServers,
@@ -177,14 +187,23 @@ export function SmallProfileCard({
           className="block w-full text-left"
         >
           <p className="truncate text-base font-semibold text-white">
-            {profile.username}
+            {shownName}
           </p>
+          {displayName && displayName !== profile.username && (
+            <p className="truncate text-[11px] text-[#6d6f78]">
+              @{profile.username}
+            </p>
+          )}
           <p className="truncate text-xs text-[#949ba4]">
             {statusLabel(profile.status)}
+            {profile.status_text?.trim()
+              ? ` · ${profile.status_text.trim()}`
+              : ""}
           </p>
+          {!restricted && <ProfileActivityLine userId={profile.id} />}
         </button>
 
-        {bio && (
+        {bio && bio !== profile.status_text?.trim() && (
           <p className="mt-2 line-clamp-2 text-sm text-[#dbdee1]">{bio}</p>
         )}
 
@@ -291,7 +310,7 @@ export function SmallProfileCard({
             </div>
           )}
           {!isSelf && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {isBlocked ? (
                 <button
                   type="button"
@@ -310,6 +329,24 @@ export function SmallProfileCard({
                   Block
                 </button>
               )}
+              {!isBlocked &&
+                (isIgnored ? (
+                  <button
+                    type="button"
+                    onClick={onUnignore}
+                    className="inline-flex flex-1 items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
+                  >
+                    Unignore
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onIgnore}
+                    className="inline-flex flex-1 items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-[#dbdee1] hover:bg-[#4e5058]"
+                  >
+                    Ignore
+                  </button>
+                ))}
               <button
                 type="button"
                 onClick={onViewProfile}

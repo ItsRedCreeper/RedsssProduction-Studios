@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Ban,
   Check,
+  EyeOff,
   MessageSquare,
   Search,
   UserMinus,
@@ -33,10 +34,15 @@ import {
   type BlockedUser,
 } from "@/lib/blocking";
 import {
+  loadIgnoredUsers,
+  type IgnoredUser,
+} from "@/lib/ignoring";
+import {
   FRIENDS_PANEL_MAX,
   FRIENDS_PANEL_MIN,
   useFriendsPanelWidth,
 } from "@/hooks/useFriendsPanelWidth";
+import { ProfileActivityLine } from "@/components/profile/ProfileActivityLine";
 
 export type FriendListItem = {
   id: string;
@@ -57,6 +63,7 @@ const TABS: { id: FriendsTab; label: string }[] = [
   { id: "friends", label: "Friends" },
   { id: "pending", label: "Pending" },
   { id: "add", label: "Add Friend" },
+  { id: "ignored", label: "Ignored" },
   { id: "blocked", label: "Blocked" },
 ];
 
@@ -105,6 +112,7 @@ export function FriendsPanel({
   const [removeTarget, setRemoveTarget] = useState<FriendEdge | null>(null);
   const [removing, setRemoving] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [ignoredUsers, setIgnoredUsers] = useState<IgnoredUser[]>([]);
   const [seenBlockedIds, setSeenBlockedIds] = useState<Set<string>>(() => new Set());
   /** Search hits who have blocked the current user. */
   const [blockedByThemIds, setBlockedByThemIds] = useState<Set<string>>(
@@ -112,6 +120,7 @@ export function FriendsPanel({
   );
   const [unblockTarget, setUnblockTarget] = useState<BlockedUser | null>(null);
   const [unblocking, setUnblocking] = useState(false);
+  const [unignoreBusyId, setUnignoreBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -140,12 +149,18 @@ export function FriendsPanel({
     if (!userId) {
       setEdges([]);
       setBlockedUsers([]);
+      setIgnoredUsers([]);
       return;
     }
     setLoading(true);
-    const [{ edges: next, error: loadError }, blockedResult] = await Promise.all([
+    const [
+      { edges: next, error: loadError },
+      blockedResult,
+      ignoredResult,
+    ] = await Promise.all([
       loadFriendEdges(userId),
       loadBlockedUsers(),
+      loadIgnoredUsers(),
     ]);
     const blockedIds = new Set(
       (blockedResult.users ?? []).map((person) => person.id),
@@ -153,7 +168,8 @@ export function FriendsPanel({
     // Hide anyone you've blocked from friends/pending lists.
     setEdges(next.filter((edge) => !blockedIds.has(edge.other.id)));
     setBlockedUsers(blockedResult.users);
-    setError(loadError ?? blockedResult.error);
+    setIgnoredUsers(ignoredResult.users);
+    setError(loadError ?? blockedResult.error ?? ignoredResult.error);
     setLoading(false);
   }, [userId]);
 
@@ -177,6 +193,18 @@ export function FriendsPanel({
           schema: "public",
           table: "blocked_users",
           filter: `blocker_id=eq.${userId}`,
+        },
+        () => {
+          void refresh();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "ignored_users",
+          filter: `ignorer_id=eq.${userId}`,
         },
         () => {
           void refresh();
@@ -411,6 +439,9 @@ export function FriendsPanel({
             <p className="mt-0.5 text-xs text-muted">
               {friends.length} friend{friends.length === 1 ? "" : "s"}
               {incoming.length > 0 ? ` · ${incoming.length} pending` : ""}
+              {ignoredUsers.length > 0
+                ? ` · ${ignoredUsers.length} ignored`
+                : ""}
               {blockedUsers.length > 0
                 ? ` · ${blockedUsers.length} blocked`
                 : ""}
@@ -508,11 +539,14 @@ export function FriendsPanel({
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-medium text-foreground">
-                          {edge.other.username}
+                          {profileUi?.nicknameFor(edge.other.id) ||
+                            edge.other.username}
                         </span>
                         <span className="block truncate text-xs text-muted">
-                          {statusLabel(edge.other.status)}
+                          {edge.other.status_text?.trim() ||
+                            statusLabel(edge.other.status)}
                         </span>
+                        <ProfileActivityLine userId={edge.other.id} />
                       </span>
                     </button>
                     <button
@@ -758,6 +792,69 @@ export function FriendsPanel({
                 })}
               </ul>
             </div>
+          )}
+
+          {tab === "ignored" && (
+            <ul>
+              {loading && (
+                <li className="px-3 py-6 text-center text-sm text-muted">
+                  Loading ignored users…
+                </li>
+              )}
+              {!loading && ignoredUsers.length === 0 && (
+                <li className="px-3 py-6 text-center text-sm text-muted">
+                  No ignored users.
+                </li>
+              )}
+              {!loading &&
+                ignoredUsers.map((person) => (
+                  <li
+                    key={person.id}
+                    className="mb-1 flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-surface-hover"
+                  >
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      onClick={() => profileUi?.openBigProfile(person.id)}
+                    >
+                      <span className="relative shrink-0">
+                        <UserAvatar
+                          username={person.username}
+                          avatarUrl={person.avatar_url}
+                          size="md"
+                        />
+                        <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface p-0.5 text-[#949ba4]">
+                          <EyeOff className="h-3 w-3" strokeWidth={2} />
+                        </span>
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {profileUi?.nicknameFor(person.id) || person.username}
+                        </span>
+                        <span className="block truncate text-xs text-muted">
+                          Ignored
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={unignoreBusyId === person.id}
+                      onClick={() => {
+                        if (!profileUi) return;
+                        setUnignoreBusyId(person.id);
+                        void profileUi.unignoreUser(person.id).then((result) => {
+                          setUnignoreBusyId(null);
+                          if (result.error) setError(result.error);
+                          else void refresh();
+                        });
+                      }}
+                      className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058] disabled:opacity-50"
+                    >
+                      Unignore
+                    </button>
+                  </li>
+                ))}
+            </ul>
           )}
 
           {tab === "blocked" && (

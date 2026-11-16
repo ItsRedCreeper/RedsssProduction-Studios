@@ -7,7 +7,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Compass, Search, Sparkles } from "lucide-react";
+import { Compass, Eye, Search, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import {
@@ -15,6 +15,7 @@ import {
   serverInitialsClass,
 } from "@/lib/server-initials";
 import { ResizableSidebar } from "@/components/messenger/ResizableSidebar";
+import { ServerPreviewModal } from "@/components/messenger/ServerPreviewModal";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type DiscoverPaneProps = {
@@ -45,6 +46,9 @@ export function DiscoverPane({
   const [loading, setLoading] = useState(true);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewServer, setPreviewServer] = useState<Tables<"servers"> | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -282,12 +286,22 @@ export function DiscoverPane({
                       <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm text-[#b5bac1]">
                         {server.description || "No description yet."}
                       </p>
-                      <div className="mt-4">
+                      <div className="mt-4 flex gap-2">
+                        {!joined && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewServer(server)}
+                            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-[#4e5058] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5c5e66]"
+                          >
+                            <Eye className="h-4 w-4" strokeWidth={1.75} />
+                            Preview
+                          </button>
+                        )}
                         {joined ? (
                           <button
                             type="button"
                             onClick={() => onOpenServer(server.id)}
-                            className="inline-flex w-full items-center justify-center rounded-md bg-[#4e5058] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5c5e66]"
+                            className="inline-flex flex-1 items-center justify-center rounded-md bg-[#4e5058] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5c5e66]"
                           >
                             Open
                           </button>
@@ -296,12 +310,17 @@ export function DiscoverPane({
                             type="button"
                             disabled={joiningId === server.id}
                             onClick={() => void joinServer(server.id)}
-                            className="inline-flex w-full items-center justify-center rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+                            className="inline-flex flex-1 items-center justify-center rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                           >
                             {joiningId === server.id ? "Joining…" : "Join Server"}
                           </button>
                         )}
                       </div>
+                      {!joined && (
+                        <span className="mt-2 inline-flex self-start rounded bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+                          Preview available
+                        </span>
+                      )}
                     </div>
                   </li>
                 );
@@ -310,6 +329,21 @@ export function DiscoverPane({
           )}
         </div>
       </section>
+
+      {previewServer && (
+        <ServerPreviewModal
+          server={previewServer}
+          joining={joiningId === previewServer.id}
+          onClose={() => setPreviewServer(null)}
+          onJoin={() => {
+            const id = previewServer.id;
+            void (async () => {
+              await joinServer(id);
+              setPreviewServer(null);
+            })();
+          }}
+        />
+      )}
     </div>
   );
 }

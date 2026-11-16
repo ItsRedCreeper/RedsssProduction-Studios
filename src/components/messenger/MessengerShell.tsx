@@ -48,6 +48,8 @@ import {
   VOICE_CHAT_MIN,
 } from "@/hooks/useVoiceChatSidebarWidth";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
+import { UserPresenceBar } from "@/components/messenger/UserPresenceBar";
+import { ActivityTracker } from "@/components/messenger/ActivityTracker";
 import {
   dmRowsToMessages,
   fetchLastMessageMap,
@@ -158,10 +160,22 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const { user, profile } = useCurrentProfile();
   const profileUi = useOptionalProfileUi();
   const blockedIds = profileUi?.blockedIds ?? EMPTY_BLOCKED_IDS;
+  const ignoredIds = profileUi?.ignoredIds ?? EMPTY_BLOCKED_IDS;
   const isBlocked = useCallback(
     (userId: string | null | undefined) =>
       !!userId && blockedIds.includes(userId),
     [blockedIds],
+  );
+  const isIgnored = useCallback(
+    (userId: string | null | undefined) =>
+      !!userId && ignoredIds.includes(userId),
+    [ignoredIds],
+  );
+  /** Block or ignore — hide messages / typing / notifications content. */
+  const isMessageHidden = useCallback(
+    (userId: string | null | undefined) =>
+      isBlocked(userId) || isIgnored(userId),
+    [isBlocked, isIgnored],
   );
   const voice = useVoiceSession();
 
@@ -1156,6 +1170,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         };
         const userId = data.userId;
         if (!userId || userId === selfId) return;
+        if (blockedIds.includes(userId) || ignoredIds.includes(userId)) return;
         if (data.stop) {
           setTypingUsers((prev) => {
             if (!prev[userId]) return prev;
@@ -1195,7 +1210,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       typingChannelRef.current = null;
       void supabase.removeChannel(channel);
     };
-  }, [activeChannelId, activeChannel?.type, user]);
+  }, [activeChannelId, activeChannel?.type, user, blockedIds, ignoredIds]);
 
   useEffect(() => {
     if (!pinsOpen || !activeChannelId || activeChannel?.type !== "text") return;
@@ -1330,13 +1345,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     [channels],
   );
 
-  // Drop live typing from people you just blocked.
+  // Drop live typing from people you just blocked or ignored.
   useEffect(() => {
     setTypingUsers((prev) => {
       let changed = false;
       const next: typeof prev = {};
       for (const [userId, info] of Object.entries(prev)) {
-        if (isBlocked(userId)) {
+        if (isMessageHidden(userId)) {
           changed = true;
           continue;
         }
@@ -1344,13 +1359,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       }
       return changed ? next : prev;
     });
-  }, [blockedIds, isBlocked]);
+  }, [blockedIds, ignoredIds, isMessageHidden]);
 
   const typingPeople = useMemo<TypingPerson[]>(() => {
     const now = Date.now();
     return Object.entries(typingUsers)
       .filter(
-        ([userId, info]) => info.until > now && !isBlocked(userId),
+        ([userId, info]) => info.until > now && !isMessageHidden(userId),
       )
       .map(([userId, info]) => {
         const member = membersById.get(userId);
@@ -1362,7 +1377,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       })
       // Stable order so avatar stacks don't jump while people keep typing.
       .sort((a, b) => a.username.localeCompare(b.username));
-  }, [typingUsers, membersById, isBlocked]);
+  }, [typingUsers, membersById, isMessageHidden]);
 
   const typingChannelRef = useRef<ReturnType<
     ReturnType<typeof createClient>["channel"]
@@ -1445,18 +1460,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   ]);
 
   const unblockedMessages = useMemo(
-    () => messages.filter((message) => !isBlocked(message.user_id)),
-    [messages, isBlocked],
+    () => messages.filter((message) => !isMessageHidden(message.user_id)),
+    [messages, isMessageHidden],
   );
   const unblockedDmMessages = useMemo(
-    () => dmMessages.filter((message) => !isBlocked(message.user_id)),
-    [dmMessages, isBlocked],
+    () => dmMessages.filter((message) => !isMessageHidden(message.user_id)),
+    [dmMessages, isMessageHidden],
   );
 
   const pinList = useMemo(() => {
     const map = new Map<string, ChatMessage>();
     for (const message of pinnedExtra) {
-      if (message.pinned && !isBlocked(message.user_id)) {
+      if (message.pinned && !isMessageHidden(message.user_id)) {
         map.set(message.id, message);
       }
     }
@@ -1466,7 +1481,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return [...map.values()].sort(
       (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
     );
-  }, [unblockedMessages, pinnedExtra, isBlocked]);
+  }, [unblockedMessages, pinnedExtra, isMessageHidden]);
 
   const searchNeedle = searchQuery.trim().toLowerCase();
   const visibleMessages = searchNeedle
@@ -2146,7 +2161,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const waitingForChannel =
     channelPending || (pane === "server" && !activeChannel && channels.length > 0);
   const headerTitle = dmMode
-    ? activeThread?.username ?? "Direct Message"
+    ? (activeThread
+        ? profileUi?.nicknameFor(activeThread.otherUserId) ||
+          activeThread.username
+        : "Direct Message")
     : homeEmpty
       ? "Direct Messages"
       : activeChannel?.name ??
@@ -2211,6 +2229,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     />
   ) : null;
 
+  const sidebarFooter = (
+    <>
+      {voiceFooter}
+      <UserPresenceBar />
+    </>
+  );
+
   return (
     <div className="flex h-[calc(100dvh-3.5rem-2.75rem)] min-h-[28rem] min-w-0 overflow-hidden border-t border-black/40 md:h-[calc(100dvh-3.5rem)]">
       <ServerRail
@@ -2229,9 +2254,26 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         onDiscover={selectDiscover}
       />
 
+      <ActivityTracker
+        pane={pane}
+        discoverMode={discoverMode}
+        activeServer={activeServer}
+        activeChannel={activeChannel}
+        activeThread={activeThread}
+        inVoice={!!connection}
+        voiceServerName={connection?.serverName ?? null}
+        voiceServerId={connection?.serverId ?? null}
+        voiceServerPublic={
+          connection
+            ? (servers.find((s) => s.id === connection.serverId)?.is_public ??
+              false)
+            : false
+        }
+      />
+
       {discoverMode ? (
         <DiscoverPane
-          footer={voiceFooter}
+          footer={sidebarFooter}
           sidebarWidth={sidebarWidth}
           onSidebarResizeStart={beginResize}
           onJoined={(serverId) => {
@@ -2255,7 +2297,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             loadingThreads={loadingThreads}
             onSelectThread={selectThread}
             onCloseThread={(threadId) => void closeThread(threadId)}
-            footer={voiceFooter}
+            footer={sidebarFooter}
           />
         ) : activeServer ? (
           <ChannelSidebar
@@ -2279,7 +2321,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             onCreateCategory={openCreateCategory}
             onRenameCategory={renameCategory}
             onLeave={() => setLeaveOpen(true)}
-            footer={voiceFooter}
+            footer={sidebarFooter}
           />
         ) : pane === "server" && (loadingServers || channelPending) ? (
           <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
@@ -2287,7 +2329,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               Loading…
             </div>
             <div className="flex-1" />
-            {voiceFooter}
+            {sidebarFooter}
           </aside>
         ) : (
           <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
@@ -2297,7 +2339,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             <p className="flex-1 px-4 py-4 text-sm text-[#949ba4]">
               Create a server or open Home for direct messages.
             </p>
-            {voiceFooter}
+            {sidebarFooter}
           </aside>
         )}
       </ResizableSidebar>
@@ -2553,10 +2595,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                         : `Message #${activeChannel?.name ?? "channel"}`
                 }
                 draft={draft}
-                replyAuthor={replyTo ? replyTo.profiles?.username ?? "user" : null}
+                replyAuthor={
+                  replyTo
+                    ? isMessageHidden(replyTo.user_id)
+                      ? "Blocked message"
+                      : (replyTo.profiles?.username ?? "user")
+                    : null
+                }
                 replyContent={
                   replyTo
-                    ? displayMentionText(replyTo.content, mentionMaps)
+                    ? isMessageHidden(replyTo.user_id)
+                      ? "Blocked message"
+                      : displayMentionText(replyTo.content, mentionMaps)
                     : null
                 }
                 pendingFileName={textMode ? pendingFile?.name ?? null : null}
@@ -2658,11 +2708,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 }
                 draft={draft}
                 replyAuthor={
-                  replyTo ? replyTo.profiles?.username ?? "user" : null
+                  replyTo
+                    ? isMessageHidden(replyTo.user_id)
+                      ? "Blocked message"
+                      : (replyTo.profiles?.username ?? "user")
+                    : null
                 }
                 replyContent={
                   replyTo
-                    ? displayMentionText(replyTo.content, mentionMaps)
+                    ? isMessageHidden(replyTo.user_id)
+                      ? "Blocked message"
+                      : displayMentionText(replyTo.content, mentionMaps)
                     : null
                 }
                 pendingFileName={pendingFile?.name ?? null}

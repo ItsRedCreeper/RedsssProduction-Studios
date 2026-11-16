@@ -12,10 +12,13 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useBlockedUsers } from "@/hooks/useBlockedUsers";
+import { useIgnoredUsers } from "@/hooks/useIgnoredUsers";
+import { useFriendNicknames } from "@/hooks/useFriendNicknames";
 import {
   friendlyBlockDmMessage,
   loadIsBlockedBy,
 } from "@/lib/blocking";
+import type { NicknameMap } from "@/lib/nicknames";
 import {
   ensureDmConversation,
   loadFriendshipWith,
@@ -35,7 +38,7 @@ import { BigProfileModal } from "@/components/profile/BigProfileModal";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
-export type FriendsTab = "friends" | "pending" | "add" | "blocked";
+export type FriendsTab = "friends" | "pending" | "add" | "blocked" | "ignored";
 
 type Anchor = { top: number; left: number };
 
@@ -53,6 +56,16 @@ type ProfileContextValue = {
   blockedIds: string[];
   requestBlock: (userId: string, username: string) => void;
   unblockUser: (userId: string) => Promise<{ error: string | null }>;
+  isIgnored: (userId: string | null | undefined) => boolean;
+  ignoredIds: string[];
+  requestIgnore: (userId: string, username: string) => void;
+  unignoreUser: (userId: string) => Promise<{ error: string | null }>;
+  nicknames: NicknameMap;
+  nicknameFor: (userId: string | null | undefined) => string | null;
+  setNickname: (
+    friendId: string,
+    nickname: string,
+  ) => Promise<{ error: string | null }>;
 };
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -109,6 +122,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     blockUser,
     unblockUser: unblockUserFn,
   } = useBlockedUsers();
+  const {
+    ignoredIds,
+    isIgnored,
+    ignoreUser: ignoreUserFn,
+    unignoreUser: unignoreUserFn,
+  } = useIgnoredUsers();
+  const {
+    nicknames,
+    nicknameFor,
+    setNickname,
+  } = useFriendNicknames();
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [friendsTab, setFriendsTab] = useState<FriendsTab>("friends");
   const [small, setSmall] = useState<{
@@ -125,6 +149,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     username: string;
   } | null>(null);
   const [blocking, setBlocking] = useState(false);
+  const [ignoreTarget, setIgnoreTarget] = useState<{
+    id: string;
+    username: string;
+  } | null>(null);
+  const [ignoring, setIgnoring] = useState(false);
   const [messageNotice, setMessageNotice] = useState<string | null>(null);
 
   const messageUser = useCallback(
@@ -255,6 +284,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setBlockTarget({ id: userId, username });
   }, [user]);
 
+  const requestIgnore = useCallback((userId: string, username: string) => {
+    if (!user || userId === user.id) return;
+    setIgnoreTarget({ id: userId, username });
+  }, [user]);
+
   const confirmBlock = useCallback(async () => {
     if (!blockTarget) return;
     setBlocking(true);
@@ -268,6 +302,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setBigFocus(null);
     setEditOpen(false);
   }, [blockTarget, blockUser]);
+
+  const confirmIgnore = useCallback(async () => {
+    if (!ignoreTarget) return;
+    setIgnoring(true);
+    const { error } = await ignoreUserFn(ignoreTarget.id);
+    setIgnoring(false);
+    if (error) return;
+    setIgnoreTarget(null);
+  }, [ignoreTarget, ignoreUserFn]);
 
   const value = useMemo<ProfileContextValue>(
     () => ({
@@ -284,6 +327,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       blockedIds,
       requestBlock,
       unblockUser: unblockUserFn,
+      isIgnored,
+      ignoredIds,
+      requestIgnore,
+      unignoreUser: unignoreUserFn,
+      nicknames,
+      nicknameFor,
+      setNickname,
     }),
     [
       openSmallProfile,
@@ -298,6 +348,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       blockedIds,
       requestBlock,
       unblockUserFn,
+      isIgnored,
+      ignoredIds,
+      requestIgnore,
+      unignoreUserFn,
+      nicknames,
+      nicknameFor,
+      setNickname,
     ],
   );
 
@@ -341,6 +398,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
               requestBlock(small.profile.id, small.profile.username)
             }
             onUnblock={() => void unblockUserFn(small.profile.id)}
+            isIgnored={isIgnored(small.profile.id)}
+            displayName={
+              nicknameFor(small.profile.id) || small.profile.username
+            }
+            onIgnore={() =>
+              requestIgnore(small.profile.id, small.profile.username)
+            }
+            onUnignore={() => void unignoreUserFn(small.profile.id)}
           />
         </>
       )}
@@ -350,6 +415,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           profile={big}
           isSelf={!!user && big.id === user.id}
           isBlocked={isBlocked(big.id)}
+          isIgnored={isIgnored(big.id)}
+          displayName={nicknameFor(big.id) || big.username}
+          nickname={nicknameFor(big.id)}
           focusSection={bigFocus}
           onClose={() => {
             setBig(null);
@@ -367,6 +435,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           }}
           onBlock={() => requestBlock(big.id, big.username)}
           onUnblock={() => void unblockUserFn(big.id)}
+          onIgnore={() => requestIgnore(big.id, big.username)}
+          onUnignore={() => void unignoreUserFn(big.id)}
+          onSaveNickname={(nickname) => setNickname(big.id, nickname)}
         />
       )}
 
@@ -398,6 +469,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           if (!blocking) setBlockTarget(null);
         }}
         onConfirm={() => void confirmBlock()}
+      />
+
+      <ConfirmModal
+        open={!!ignoreTarget}
+        title={
+          ignoreTarget ? `Ignore ${ignoreTarget.username}?` : "Ignore user?"
+        }
+        description="You won’t see their messages or get notifications from them. You can unignore them later."
+        confirmLabel="Ignore"
+        cancelLabel="Cancel"
+        busy={ignoring}
+        onCancel={() => {
+          if (!ignoring) setIgnoreTarget(null);
+        }}
+        onConfirm={() => void confirmIgnore()}
       />
 
       <ConfirmModal

@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { statusDotClass } from "@/components/messenger/data";
 import type { DmThread } from "@/components/messenger/types";
+import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 
 type HomeSidebarProps = {
   threads: DmThread[];
@@ -23,6 +24,8 @@ export function HomeSidebar({
   onCloseThread,
   footer,
 }: HomeSidebarProps) {
+  const profileUi = useOptionalProfileUi();
+
   return (
     <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
       <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-[15px] font-semibold text-white shadow-sm shadow-black/20">
@@ -39,6 +42,8 @@ export function HomeSidebar({
           <ul className="space-y-0.5">
             {threads.map((thread) => {
               const active = thread.id === activeThreadId;
+              const name =
+                profileUi?.nicknameFor(thread.otherUserId) || thread.username;
               return (
                 <li key={thread.id} className="group/thread relative">
                   <button
@@ -52,7 +57,7 @@ export function HomeSidebar({
                   >
                     <span className="relative shrink-0">
                       <UserAvatar
-                        username={thread.username}
+                        username={name}
                         avatarUrl={thread.avatar_url}
                         size="sm"
                         className="!h-8 !w-8"
@@ -63,7 +68,7 @@ export function HomeSidebar({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">
-                        {thread.username}
+                        {name}
                       </span>
                       <span className="block truncate text-[11px] text-[#6d6f78]">
                         {thread.preview || "No messages yet"}
@@ -74,7 +79,7 @@ export function HomeSidebar({
                     <button
                       type="button"
                       title="Close DM"
-                      aria-label={`Close DM with ${thread.username}`}
+                      aria-label={`Close DM with ${name}`}
                       onClick={(event) => {
                         event.stopPropagation();
                         onCloseThread(thread.id);

@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Ban, ChevronDown, ChevronUp, MessageSquare, Pencil, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Ban,
+  ChevronDown,
+  ChevronUp,
+  MessageSquare,
+  Pencil,
+  X,
+} from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
+import { StatusPicker } from "@/components/profile/StatusPicker";
+import { ProfileActivityLine } from "@/components/profile/ProfileActivityLine";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { avatarLetter } from "@/lib/avatar";
 import type { MutualFocus } from "@/components/profile/SmallProfileCard";
@@ -18,13 +28,23 @@ import {
   type MutualFriend,
   type MutualServer,
 } from "@/lib/friends";
+import { createClient } from "@/lib/supabase/client";
+import {
+  messengerChannelPath,
+  messengerServerPath,
+  recallServerChannel,
+} from "@/lib/messenger-routes";
 
 const VISIBLE_LIMIT = 6;
+const NICKNAME_MAX = 32;
 
 type BigProfileModalProps = {
   profile: FriendProfile;
   isSelf: boolean;
   isBlocked?: boolean;
+  isIgnored?: boolean;
+  displayName?: string;
+  nickname?: string | null;
   focusSection?: MutualFocus | null;
   onClose: () => void;
   onMessage: () => void;
@@ -32,12 +52,18 @@ type BigProfileModalProps = {
   onOpenProfile?: (userId: string) => void;
   onBlock?: () => void;
   onUnblock?: () => void;
+  onIgnore?: () => void;
+  onUnignore?: () => void;
+  onSaveNickname?: (nickname: string) => Promise<{ error: string | null }>;
 };
 
 export function BigProfileModal({
   profile,
   isSelf,
   isBlocked = false,
+  isIgnored = false,
+  displayName,
+  nickname = null,
   focusSection = null,
   onClose,
   onMessage,
@@ -45,10 +71,15 @@ export function BigProfileModal({
   onOpenProfile,
   onBlock,
   onUnblock,
+  onIgnore,
+  onUnignore,
+  onSaveNickname,
 }: BigProfileModalProps) {
+  const router = useRouter();
   const [restricted, setRestricted] = useState(false);
   const bio = restricted ? "" : profile.bio?.trim() || "";
   const statusText = restricted ? "" : profile.status_text?.trim() || "";
+  const shownName = displayName || profile.username;
   const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
   const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
   const [friendsSince, setFriendsSince] = useState<string | null>(null);
@@ -56,9 +87,21 @@ export function BigProfileModal({
   const [showAllFriends, setShowAllFriends] = useState(false);
   const [showAllServers, setShowAllServers] = useState(false);
   const [highlight, setHighlight] = useState<MutualFocus | null>(null);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [editingNick, setEditingNick] = useState(false);
+  const [nickDraft, setNickDraft] = useState(nickname ?? "");
+  const [nickBusy, setNickBusy] = useState(false);
+  const [nickError, setNickError] = useState<string | null>(null);
+  const [jumpBusyId, setJumpBusyId] = useState<string | null>(null);
   const friendsSectionRef = useRef<HTMLDivElement | null>(null);
   const serversSectionRef = useRef<HTMLDivElement | null>(null);
   const memberSince = formatSinceDate(profile.created_at);
+
+  useEffect(() => {
+    setNickDraft(nickname ?? "");
+    setEditingNick(false);
+    setNickError(null);
+  }, [nickname, profile.id]);
 
   useEffect(() => {
     setShowAllFriends(false);
@@ -132,6 +175,45 @@ export function BigProfileModal({
     ? mutualServers
     : mutualServers.slice(0, VISIBLE_LIMIT);
 
+  async function jumpToMutualServer(serverId: string) {
+    setJumpBusyId(serverId);
+    onClose();
+    const recalled = recallServerChannel(serverId);
+    if (recalled) {
+      router.push(messengerChannelPath(serverId, recalled));
+      setJumpBusyId(null);
+      return;
+    }
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("channels")
+      .select("id, name, type, position")
+      .eq("server_id", serverId)
+      .eq("type", "text")
+      .order("position", { ascending: true });
+    const channels = data ?? [];
+    const general = channels.find(
+      (channel) => channel.name.toLowerCase() === "general",
+    );
+    const first = general ?? channels[0];
+    if (first) router.push(messengerChannelPath(serverId, first.id));
+    else router.push(messengerServerPath(serverId));
+    setJumpBusyId(null);
+  }
+
+  async function saveNickname() {
+    if (!onSaveNickname) return;
+    setNickBusy(true);
+    setNickError(null);
+    const { error } = await onSaveNickname(nickDraft.trim());
+    setNickBusy(false);
+    if (error) {
+      setNickError(error);
+      return;
+    }
+    setEditingNick(false);
+  }
+
   return (
     <div
       className="fixed inset-0 z-[85] flex items-center justify-center p-4"
@@ -178,14 +260,36 @@ export function BigProfileModal({
 
           <div className="absolute bottom-1 right-5 flex flex-wrap items-center justify-end gap-2">
             {isSelf ? (
-              <button
-                type="button"
-                onClick={onEdit}
-                className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
-              >
-                <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                Edit Profile
-              </button>
+              <>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setStatusOpen((open) => !open)}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
+                  >
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${statusDotClass(profile.status)}`}
+                    />
+                    Status
+                  </button>
+                  <StatusPicker
+                    open={statusOpen}
+                    status={profile.status}
+                    statusText={profile.status_text}
+                    placement="below"
+                    onClose={() => setStatusOpen(false)}
+                    onSaved={() => setStatusOpen(false)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+                >
+                  <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                  Edit Profile
+                </button>
+              </>
             ) : isBlocked ? (
               <button
                 type="button"
@@ -213,6 +317,23 @@ export function BigProfileModal({
                   <Ban className="h-4 w-4" strokeWidth={1.75} />
                   Block
                 </button>
+                {isIgnored ? (
+                  <button
+                    type="button"
+                    onClick={onUnignore}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
+                  >
+                    Unignore
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onIgnore}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-[#dbdee1] hover:bg-[#4e5058]"
+                  >
+                    Ignore
+                  </button>
+                )}
                 <ProfileFriendButton
                   otherUserId={profile.id}
                   initialBlockedByThem={restricted}
@@ -235,13 +356,98 @@ export function BigProfileModal({
             <h2
               id="big-profile-title"
               className="text-2xl font-bold tracking-tight text-white"
+              title={
+                shownName !== profile.username
+                  ? `@${profile.username}`
+                  : undefined
+              }
             >
-              {profile.username}
+              {shownName}
             </h2>
+            {shownName !== profile.username && (
+              <p className="mt-0.5 text-sm text-[#6d6f78]">@{profile.username}</p>
+            )}
             <p className="mt-1 text-sm text-[#949ba4]">
               {statusLabel(profile.status)}
               {statusText ? ` · ${statusText}` : ""}
             </p>
+            {!restricted && (
+              <ProfileActivityLine userId={profile.id} className="mt-1" />
+            )}
+            {!isSelf && !restricted && onSaveNickname && (
+              <div className="mt-3 border-t border-white/10 pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+                    Nickname
+                  </h3>
+                  {!editingNick && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNickDraft(nickname ?? "");
+                        setEditingNick(true);
+                      }}
+                      className="text-xs font-medium text-[#949ba4] hover:text-white"
+                    >
+                      Edit Nickname
+                    </button>
+                  )}
+                </div>
+                {editingNick ? (
+                  <div className="mt-2 space-y-2">
+                    <input
+                      value={nickDraft}
+                      maxLength={NICKNAME_MAX}
+                      onChange={(event) => setNickDraft(event.target.value)}
+                      placeholder="Add a nickname"
+                      className="w-full rounded-md border border-white/10 bg-[#111214] px-3 py-2 text-sm text-white outline-none focus:border-accent"
+                    />
+                    {nickError && (
+                      <p className="text-xs text-accent">{nickError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={nickBusy}
+                        onClick={() => void saveNickname()}
+                        className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        disabled={nickBusy}
+                        onClick={() => {
+                          setNickDraft("");
+                          void onSaveNickname("").then(() =>
+                            setEditingNick(false),
+                          );
+                        }}
+                        className="rounded-md bg-[#3f4147] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058] disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        disabled={nickBusy}
+                        onClick={() => {
+                          setEditingNick(false);
+                          setNickDraft(nickname ?? "");
+                          setNickError(null);
+                        }}
+                        className="rounded-md px-3 py-1.5 text-xs font-medium text-[#949ba4] hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-[#dbdee1]">
+                    {nickname?.trim() || "No nickname set"}
+                  </p>
+                )}
+              </div>
+            )}
             {!isSelf && isBlocked && (
               <p className="mt-3 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-[#f2b8b5]">
                 You have blocked this user. They cannot message you, send friend
@@ -383,25 +589,30 @@ export function BigProfileModal({
                     <>
                       <ul className="mt-2 space-y-1">
                         {visibleServers.map((server) => (
-                          <li
-                            key={server.id}
-                            className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5"
-                          >
-                            {server.icon_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={server.icon_url}
-                                alt=""
-                                className="h-8 w-8 shrink-0 rounded-md object-cover"
-                              />
-                            ) : (
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#313338] text-xs font-bold text-accent">
-                                {avatarLetter(server.name)}
+                          <li key={server.id}>
+                            <button
+                              type="button"
+                              disabled={jumpBusyId === server.id}
+                              onClick={() => void jumpToMutualServer(server.id)}
+                              className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-white/5 disabled:opacity-60"
+                              title={`Open ${server.name}`}
+                            >
+                              {server.icon_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={server.icon_url}
+                                  alt=""
+                                  className="h-8 w-8 shrink-0 rounded-md object-cover"
+                                />
+                              ) : (
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#313338] text-xs font-bold text-accent">
+                                  {avatarLetter(server.name)}
+                                </span>
+                              )}
+                              <span className="truncate text-sm text-[#dbdee1] group-hover:text-white">
+                                {server.name}
                               </span>
-                            )}
-                            <span className="truncate text-sm text-[#dbdee1]">
-                              {server.name}
-                            </span>
+                            </button>
                           </li>
                         ))}
                       </ul>

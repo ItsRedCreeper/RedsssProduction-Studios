@@ -55,6 +55,62 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["blocked_users"]["Insert"]>
         Relationships: []
       }
+      ignored_users: {
+        Row: {
+          id: string
+          ignorer_id: string
+          ignored_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          ignorer_id: string
+          ignored_id: string
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["ignored_users"]["Insert"]>
+        Relationships: []
+      }
+      friend_nicknames: {
+        Row: {
+          id: string
+          user_id: string
+          friend_id: string
+          nickname: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          friend_id: string
+          nickname: string
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["friend_nicknames"]["Insert"]>
+        Relationships: []
+      }
+      user_activity: {
+        Row: {
+          user_id: string
+          activity_type: string
+          context_id: string | null
+          context_name: string | null
+          context_extra: string | null
+          is_public_context: boolean
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          activity_type?: string
+          context_id?: string | null
+          context_name?: string | null
+          context_extra?: string | null
+          is_public_context?: boolean
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_activity"]["Insert"]>
+        Relationships: []
+      }
       friends: {
         Row: { id: string; user_id: string; friend_id: string; status: string; created_at: string }
         Insert: { id?: string; user_id: string; friend_id: string; status: string; created_at?: string }
@@ -236,6 +292,28 @@ export type Database = {
       }
       unblock_user: {
         Args: { target_id: string }
+        Returns: undefined
+      }
+      ignore_user: {
+        Args: { target_id: string }
+        Returns: undefined
+      }
+      unignore_user: {
+        Args: { target_id: string }
+        Returns: undefined
+      }
+      set_friend_nickname: {
+        Args: { friend_id: string; nickname: string }
+        Returns: undefined
+      }
+      set_user_activity: {
+        Args: {
+          p_activity_type: string
+          p_context_id?: string | null
+          p_context_name?: string | null
+          p_context_extra?: string | null
+          p_is_public?: boolean
+        }
         Returns: undefined
       }
     }

@@ -79,6 +79,9 @@ export function MessageItem({
   const replyAuthor = reply?.profiles?.username ?? "Unknown";
   const replyBlocked =
     !!reply && (profileUi?.blockedIds?.includes(reply.user_id) ?? false);
+  const replyIgnored =
+    !!reply && (profileUi?.ignoredIds?.includes(reply.user_id) ?? false);
+  const replyHidden = replyBlocked || replyIgnored;
   const showToolbar = !message.optimistic && !editing;
 
   function openAuthorProfile(element: HTMLElement) {
@@ -145,14 +148,16 @@ export function MessageItem({
 
       <div className="min-w-0 flex-1 py-0.5 pr-2">
         {reply && (
-          replyBlocked ? (
+          replyHidden ? (
             <div className="mb-1 flex max-w-full items-center gap-1.5 text-left">
               <span
                 className="mb-1 ml-2 mr-0.5 h-2.5 w-7 shrink-0 rounded-tl-md border-l-2 border-t-2 border-[#4e5058]"
                 aria-hidden
               />
               <span className="min-w-0 truncate text-xs italic text-[#949ba4]">
-                Original message was sent by a blocked user.
+                {replyBlocked
+                  ? "Original message was sent by a blocked user."
+                  : "Original message is hidden."}
               </span>
             </div>
           ) : (
