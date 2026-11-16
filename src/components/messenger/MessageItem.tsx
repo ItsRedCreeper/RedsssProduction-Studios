@@ -77,6 +77,8 @@ export function MessageItem({
   const author = message.profiles?.username ?? "Unknown";
   const reply = message.reply_to;
   const replyAuthor = reply?.profiles?.username ?? "Unknown";
+  const replyBlocked =
+    !!reply && (profileUi?.blockedIds?.includes(reply.user_id) ?? false);
   const showToolbar = !message.optimistic && !editing;
 
   function openAuthorProfile(element: HTMLElement) {
@@ -143,30 +145,42 @@ export function MessageItem({
 
       <div className="min-w-0 flex-1 py-0.5 pr-2">
         {reply && (
-          <button
-            type="button"
-            onClick={() => onJumpToReply?.(reply.id)}
-            className="mb-1 flex max-w-full items-center gap-1.5 text-left"
-          >
-            <span
-              className="mb-1 ml-2 mr-0.5 h-2.5 w-7 shrink-0 rounded-tl-md border-l-2 border-t-2 border-[#4e5058]"
-              aria-hidden
-            />
-            <UserAvatar
-              username={replyAuthor}
-              avatarUrl={reply.profiles?.avatar_url}
-              size="sm"
-              className="!h-4 !w-4 !text-[9px]"
-            />
-            <span className="shrink-0 text-xs font-medium text-accent hover:underline">
-              {replyAuthor}
-            </span>
-            <span className="min-w-0 truncate text-xs text-muted">
-              {reply.content
-                ? displayMentionText(reply.content, mentionMaps)
-                : "Attachment"}
-            </span>
-          </button>
+          replyBlocked ? (
+            <div className="mb-1 flex max-w-full items-center gap-1.5 text-left">
+              <span
+                className="mb-1 ml-2 mr-0.5 h-2.5 w-7 shrink-0 rounded-tl-md border-l-2 border-t-2 border-[#4e5058]"
+                aria-hidden
+              />
+              <span className="min-w-0 truncate text-xs italic text-[#949ba4]">
+                Original message was sent by a blocked user.
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onJumpToReply?.(reply.id)}
+              className="mb-1 flex max-w-full items-center gap-1.5 text-left"
+            >
+              <span
+                className="mb-1 ml-2 mr-0.5 h-2.5 w-7 shrink-0 rounded-tl-md border-l-2 border-t-2 border-[#4e5058]"
+                aria-hidden
+              />
+              <UserAvatar
+                username={replyAuthor}
+                avatarUrl={reply.profiles?.avatar_url}
+                size="sm"
+                className="!h-4 !w-4 !text-[9px]"
+              />
+              <span className="shrink-0 text-xs font-medium text-accent hover:underline">
+                {replyAuthor}
+              </span>
+              <span className="min-w-0 truncate text-xs text-muted">
+                {reply.content
+                  ? displayMentionText(reply.content, mentionMaps)
+                  : "Attachment"}
+              </span>
+            </button>
+          )
         )}
 
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">

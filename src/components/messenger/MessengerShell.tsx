@@ -1330,10 +1330,28 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     [channels],
   );
 
+  // Drop live typing from people you just blocked.
+  useEffect(() => {
+    setTypingUsers((prev) => {
+      let changed = false;
+      const next: typeof prev = {};
+      for (const [userId, info] of Object.entries(prev)) {
+        if (isBlocked(userId)) {
+          changed = true;
+          continue;
+        }
+        next[userId] = info;
+      }
+      return changed ? next : prev;
+    });
+  }, [blockedIds, isBlocked]);
+
   const typingPeople = useMemo<TypingPerson[]>(() => {
     const now = Date.now();
     return Object.entries(typingUsers)
-      .filter(([, info]) => info.until > now)
+      .filter(
+        ([userId, info]) => info.until > now && !isBlocked(userId),
+      )
       .map(([userId, info]) => {
         const member = membersById.get(userId);
         return {
@@ -1344,7 +1362,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       })
       // Stable order so avatar stacks don't jump while people keep typing.
       .sort((a, b) => a.username.localeCompare(b.username));
-  }, [typingUsers, membersById]);
+  }, [typingUsers, membersById, isBlocked]);
 
   const typingChannelRef = useRef<ReturnType<
     ReturnType<typeof createClient>["channel"]
