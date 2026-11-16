@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { Hash, MessagesSquare } from "lucide-react";
 import { MessageItem } from "@/components/messenger/MessageItem";
 import type { MentionMaps } from "@/lib/mentions";
@@ -12,6 +12,8 @@ type ChatTimelineProps = {
   emptyTitle: string;
   emptyBody: string;
   emptyIcon: "hash" | "dm";
+  /** Changes when switching channel/DM — forces jump to latest. */
+  scrollKey?: string;
   currentUserId: string | null;
   currentUsername?: string | null;
   roleNames?: string[];
@@ -33,6 +35,7 @@ export function ChatTimeline({
   emptyTitle,
   emptyBody,
   emptyIcon,
+  scrollKey = "",
   currentUserId,
   currentUsername,
   roleNames,
@@ -47,14 +50,37 @@ export function ChatTimeline({
   onReact,
   onTogglePin,
 }: ChatTimelineProps) {
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const scrolledKeyRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  useLayoutEffect(() => {
+    if (loading) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    const key = scrollKey || "default";
+    const isFreshContext = scrolledKeyRef.current !== key;
+    if (isFreshContext) {
+      scrolledKeyRef.current = key;
+      el.scrollTop = el.scrollHeight;
+      // Second paint after images/layout settle.
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+      return;
+    }
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 140) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [scrollKey, loading, messages]);
 
   return (
-    <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pb-4 pt-4">
+    <div
+      ref={scrollerRef}
+      className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pb-4 pt-4"
+    >
       {loading ? (
         <p className="px-4 text-sm text-muted">Loading messages…</p>
       ) : messages.length === 0 ? (
@@ -91,7 +117,6 @@ export function ChatTimeline({
           />
         ))
       )}
-      <div ref={bottomRef} />
     </div>
   );
 }

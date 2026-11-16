@@ -61,7 +61,11 @@ import {
   upsertReaction,
 } from "@/components/messenger/data";
 import { can, mergeRolePermissions, PERMISSIONS } from "@/lib/permissions";
-import { encodeMentions, type MentionMaps } from "@/lib/mentions";
+import {
+  displayMentionText,
+  encodeMentions,
+  type MentionMaps,
+} from "@/lib/mentions";
 import {
   friendlyBlockDmMessage,
   loadIsBlockedBy,
@@ -903,6 +907,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             } as ChatMessage);
           setMessages((prev) => mergeIncoming(prev, nextMessage));
           setLastMessageAt((prev) => ({ ...prev, [channelId]: nextMessage.created_at }));
+          // Message sent → drop that user's typing indicator immediately.
+          if (nextMessage.user_id && nextMessage.user_id !== userIdRef.current) {
+            setTypingUsers((prev) => {
+              if (!prev[nextMessage.user_id]) return prev;
+              const next = { ...prev };
+              delete next[nextMessage.user_id];
+              return next;
+            });
+          }
         },
       )
       .on(
@@ -1137,13 +1150,24 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           userId?: string;
           username?: string;
           avatarUrl?: string | null;
+          stop?: boolean;
         };
         const userId = data.userId;
         if (!userId || userId === selfId) return;
+        if (data.stop) {
+          setTypingUsers((prev) => {
+            if (!prev[userId]) return prev;
+            const next = { ...prev };
+            delete next[userId];
+            return next;
+          });
+          return;
+        }
         setTypingUsers((prev) => ({
           ...prev,
           [userId]: {
-            until: Date.now() + 3500,
+            // Short hang — stops clear immediately via `stop` / new messages.
+            until: Date.now() + 1800,
             username: data.username || prev[userId]?.username || "Someone",
             avatarUrl:
               data.avatarUrl ?? prev[userId]?.avatarUrl ?? null,
@@ -1163,7 +1187,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         }
         return changed ? next : prev;
       });
-    }, 1000);
+    }, 250);
     return () => {
       window.clearInterval(tick);
       typingChannelRef.current = null;
@@ -1331,7 +1355,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     if (!userId || !channel) return;
     const now = Date.now();
     // Throttle so multi-user typing stays responsive without flooding Realtime.
-    if (now - lastTypingSentRef.current < 1200) return;
+    if (now - lastTypingSentRef.current < 900) return;
     lastTypingSentRef.current = now;
     void channel.send({
       type: "broadcast",
@@ -1340,6 +1364,24 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         userId,
         username: profile?.username ?? "Someone",
         avatarUrl: profile?.avatar_url ?? null,
+        stop: false,
+      },
+    });
+  }, [user?.id, profile?.username, profile?.avatar_url]);
+
+  const publishTypingStop = useCallback(() => {
+    const userId = user?.id;
+    const channel = typingChannelRef.current;
+    if (!userId || !channel) return;
+    lastTypingSentRef.current = 0;
+    void channel.send({
+      type: "broadcast",
+      event: "typing",
+      payload: {
+        userId,
+        username: profile?.username ?? "Someone",
+        avatarUrl: profile?.avatar_url ?? null,
+        stop: true,
       },
     });
   }, [user?.id, profile?.username, profile?.avatar_url]);
@@ -1553,7 +1595,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   function jumpToMessage(messageId: string) {
-    const element = document.getElementById(`message-${messageId}`);
+    const nodes = document.querySelectorAll<HTMLElement>(
+      `[data-message-id="${CSS.escape(messageId)}"]`,
+    );
+    // Prefer a visible node (voice chat had duplicate mobile/desktop trees).
+    const element =
+      [...nodes].find((node) => node.getClientRects().length > 0) ??
+      nodes[0] ??
+      null;
     if (!element) {
       setToast("That message isn't in the loaded history.");
       return;
@@ -1633,6 +1682,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setReplyTo(null);
     setPendingFile(null);
     setError(null);
+    publishTypingStop();
     setSending(true);
     setMessages((prev) => [...prev, optimistic]);
 
@@ -1770,6 +1820,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setDraft("");
     setReplyTo(null);
     setError(null);
+    publishTypingStop();
     setSending(true);
     setDmMessages((prev) => [...prev, optimistic]);
 
@@ -2378,6 +2429,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   ? "No loaded messages match that search."
                   : `This is the beginning of your conversation with ${activeThread?.username ?? "this user"}.`
               }
+              scrollKey={activeConversationId ?? ""}
               currentUserId={user?.id ?? null}
               reactionMap={{}}
               onReply={setReplyTo}
@@ -2402,6 +2454,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   ? "Search only checks messages already loaded in this channel."
                   : `This is the start of the #${activeChannel?.name ?? "channel"} channel.`
               }
+              scrollKey={activeChannelId ?? ""}
               currentUserId={user?.id ?? null}
               currentUsername={profile?.username ?? null}
               roleNames={roleNames}
@@ -2481,7 +2534,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 }
                 draft={draft}
                 replyAuthor={replyTo ? replyTo.profiles?.username ?? "user" : null}
-                replyContent={replyTo?.content ?? null}
+                replyContent={
+                  replyTo
+                    ? displayMentionText(replyTo.content, mentionMaps)
+                    : null
+                }
                 pendingFileName={textMode ? pendingFile?.name ?? null : null}
                 sending={sending}
                 allowAttach={textMode && canSendMessages}
@@ -2493,6 +2550,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onFile={chooseFile}
                 onClearFile={() => setPendingFile(null)}
                 onTyping={textMode ? publishTyping : undefined}
+                onTypingStop={textMode ? publishTypingStop : undefined}
                 onSubmit={() => {
                   if (dmMode) void sendDm();
                   else void sendChannel();
@@ -2527,129 +2585,82 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           } absolute inset-y-0 right-0 z-20 shadow-2xl shadow-black/40 lg:static lg:shadow-none`}
         />
         {voiceMode && voiceChatOpen && (
-          <>
-            <aside
-              className="absolute inset-y-0 right-0 z-20 flex flex-col border-l border-black/30 bg-[#2b2d31] shadow-2xl shadow-black/40 sm:hidden"
-              style={{ width: `min(100%, ${voiceChatWidth}px)` }}
+          <aside
+            className="absolute inset-y-0 right-0 z-20 flex flex-col border-l border-black/30 bg-[#2b2d31] shadow-2xl shadow-black/40 sm:relative sm:z-auto sm:shadow-none"
+            style={{ width: `min(100%, ${voiceChatWidth}px)` }}
+          >
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize voice chat"
+              aria-valuemin={VOICE_CHAT_MIN}
+              aria-valuemax={VOICE_CHAT_MAX}
+              aria-valuenow={voiceChatWidth}
+              onPointerDown={beginVoiceChatResize}
+              className="group absolute inset-y-0 -left-1 z-30 hidden w-2 cursor-ew-resize touch-none sm:block"
             >
-              <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
-                Voice Chat
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col">
-                <ChatTimeline
-                  messages={visibleMessages}
-                  loading={loadingChannelMessages}
-                  emptyIcon="hash"
-                  emptyTitle={`Welcome to ${activeChannel?.name ?? "voice"} chat`}
-                  emptyBody="This chat is for people in this voice channel. Messages stay with the channel."
-                  currentUserId={user?.id ?? null}
-                  currentUsername={profile?.username ?? null}
-                  roleNames={roleNames}
-                  channelNames={channelNames}
-                  mentionMaps={mentionMaps}
-                  canDeleteOthers={canManageMessages}
-                  reactionMap={reactionMap}
-                  onReply={setReplyTo}
-                  onEdit={editChannel}
-                  onDelete={deleteChannel}
-                  onJumpToReply={jumpToMessage}
-                  onReact={(messageId, emoji) =>
-                    void toggleReaction(messageId, emoji)
-                  }
-                  onTogglePin={(message) => void togglePin(message)}
-                />
-                <MessageComposer
-                  placeholder={
-                    !canSendMessages
-                      ? "You don't have permission to send messages"
-                      : replyTo
-                        ? `Reply to @${replyTo.profiles?.username ?? "user"}`
-                        : `Message ${activeChannel?.name ?? "voice"}`
-                  }
-                  draft={draft}
-                  replyAuthor={
-                    replyTo ? replyTo.profiles?.username ?? "user" : null
-                  }
-                  replyContent={replyTo?.content ?? null}
-                  pendingFileName={pendingFile?.name ?? null}
-                  sending={sending}
-                  allowAttach={canSendMessages}
-                  disabled={!user || !canSendMessages}
-                  mentionSuggestions={mentionSuggestions}
-                  typingPeople={typingPeople}
-                  onDraft={setDraft}
-                  onCancelReply={() => setReplyTo(null)}
-                  onFile={chooseFile}
-                  onClearFile={() => setPendingFile(null)}
-                  onTyping={publishTyping}
-                  onSubmit={() => void sendChannel()}
-                />
-              </div>
-            </aside>
-            <ResizableSidebar
-              width={voiceChatWidth}
-              onResizeStart={beginVoiceChatResize}
-              side="right"
-              minWidth={VOICE_CHAT_MIN}
-              maxWidth={VOICE_CHAT_MAX}
-              label="Resize voice chat"
-              className="border-l border-black/30"
-            >
-              <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
-                Voice Chat
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col">
-                <ChatTimeline
-                  messages={visibleMessages}
-                  loading={loadingChannelMessages}
-                  emptyIcon="hash"
-                  emptyTitle={`Welcome to ${activeChannel?.name ?? "voice"} chat`}
-                  emptyBody="This chat is for people in this voice channel. Messages stay with the channel."
-                  currentUserId={user?.id ?? null}
-                  currentUsername={profile?.username ?? null}
-                  roleNames={roleNames}
-                  channelNames={channelNames}
-                  mentionMaps={mentionMaps}
-                  canDeleteOthers={canManageMessages}
-                  reactionMap={reactionMap}
-                  onReply={setReplyTo}
-                  onEdit={editChannel}
-                  onDelete={deleteChannel}
-                  onJumpToReply={jumpToMessage}
-                  onReact={(messageId, emoji) =>
-                    void toggleReaction(messageId, emoji)
-                  }
-                  onTogglePin={(message) => void togglePin(message)}
-                />
-                <MessageComposer
-                  placeholder={
-                    !canSendMessages
-                      ? "You don't have permission to send messages"
-                      : replyTo
-                        ? `Reply to @${replyTo.profiles?.username ?? "user"}`
-                        : `Message ${activeChannel?.name ?? "voice"}`
-                  }
-                  draft={draft}
-                  replyAuthor={
-                    replyTo ? replyTo.profiles?.username ?? "user" : null
-                  }
-                  replyContent={replyTo?.content ?? null}
-                  pendingFileName={pendingFile?.name ?? null}
-                  sending={sending}
-                  allowAttach={canSendMessages}
-                  disabled={!user || !canSendMessages}
-                  mentionSuggestions={mentionSuggestions}
-                  typingPeople={typingPeople}
-                  onDraft={setDraft}
-                  onCancelReply={() => setReplyTo(null)}
-                  onFile={chooseFile}
-                  onClearFile={() => setPendingFile(null)}
-                  onTyping={publishTyping}
-                  onSubmit={() => void sendChannel()}
-                />
-              </div>
-            </ResizableSidebar>
-          </>
+              <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
+            </div>
+            <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
+              Voice Chat
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <ChatTimeline
+                messages={visibleMessages}
+                loading={loadingChannelMessages}
+                emptyIcon="hash"
+                emptyTitle={`Welcome to ${activeChannel?.name ?? "voice"} chat`}
+                emptyBody="This chat is for people in this voice channel. Messages stay with the channel."
+                scrollKey={`voice:${activeChannelId ?? ""}`}
+                currentUserId={user?.id ?? null}
+                currentUsername={profile?.username ?? null}
+                roleNames={roleNames}
+                channelNames={channelNames}
+                mentionMaps={mentionMaps}
+                canDeleteOthers={canManageMessages}
+                reactionMap={reactionMap}
+                onReply={setReplyTo}
+                onEdit={editChannel}
+                onDelete={deleteChannel}
+                onJumpToReply={jumpToMessage}
+                onReact={(messageId, emoji) =>
+                  void toggleReaction(messageId, emoji)
+                }
+                onTogglePin={(message) => void togglePin(message)}
+              />
+              <MessageComposer
+                placeholder={
+                  !canSendMessages
+                    ? "You don't have permission to send messages"
+                    : replyTo
+                      ? `Reply to @${replyTo.profiles?.username ?? "user"}`
+                      : `Message ${activeChannel?.name ?? "voice"}`
+                }
+                draft={draft}
+                replyAuthor={
+                  replyTo ? replyTo.profiles?.username ?? "user" : null
+                }
+                replyContent={
+                  replyTo
+                    ? displayMentionText(replyTo.content, mentionMaps)
+                    : null
+                }
+                pendingFileName={pendingFile?.name ?? null}
+                sending={sending}
+                allowAttach={canSendMessages}
+                disabled={!user || !canSendMessages}
+                mentionSuggestions={mentionSuggestions}
+                typingPeople={typingPeople}
+                onDraft={setDraft}
+                onCancelReply={() => setReplyTo(null)}
+                onFile={chooseFile}
+                onClearFile={() => setPendingFile(null)}
+                onTyping={publishTyping}
+                onTypingStop={publishTypingStop}
+                onSubmit={() => void sendChannel()}
+              />
+            </div>
+          </aside>
         )}
       </div>
       </>

@@ -77,4 +77,15 @@ export function extractMentionRoleIds(content: string): string[] {
   return [...ids];
 }
 
+/** Turn stored `<@id>` / `<@&id>` / `<#id>` tokens into readable @Name / #channel text. */
+export function displayMentionText(content: string, maps?: MentionMaps | null): string {
+  if (!content) return content;
+  return content.replace(TOKEN_RE, (_match, roleId: string, userId: string, channelId: string) => {
+    if (roleId) return `@${maps?.rolesById[roleId]?.name ?? "unknown-role"}`;
+    if (userId) return `@${maps?.usersById[userId]?.username ?? "Unknown user"}`;
+    if (channelId) return `#${maps?.channelsById[channelId]?.name ?? "unknown-channel"}`;
+    return _match;
+  });
+}
+
 export { TOKEN_RE as MENTION_TOKEN_RE };

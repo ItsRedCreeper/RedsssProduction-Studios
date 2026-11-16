@@ -18,7 +18,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { formatTimestamp } from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
-import type { MentionMaps } from "@/lib/mentions";
+import { displayMentionText, type MentionMaps } from "@/lib/mentions";
 import {
   QUICK_REACTIONS,
   type ChatMessage,
@@ -123,6 +123,7 @@ export function MessageItem({
   return (
     <article
       id={`message-${message.id}`}
+      data-message-id={message.id}
       className={`group relative flex gap-4 px-4 py-0.5 transition-colors hover:bg-white/[0.03] ${
         message.optimistic ? "opacity-70" : ""
       } ${message.failed ? "bg-accent-muted/40" : ""}`}
@@ -161,7 +162,9 @@ export function MessageItem({
               {replyAuthor}
             </span>
             <span className="min-w-0 truncate text-xs text-muted">
-              {reply.content || "Attachment"}
+              {reply.content
+                ? displayMentionText(reply.content, mentionMaps)
+                : "Attachment"}
             </span>
           </button>
         )}

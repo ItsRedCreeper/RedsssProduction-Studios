@@ -30,6 +30,8 @@ type MessageComposerProps = {
   onClearFile: () => void;
   onSubmit: () => void;
   onTyping?: () => void;
+  /** Fired shortly after keystrokes pause, and before send. */
+  onTypingStop?: () => void;
 };
 
 export function MessageComposer({
@@ -49,11 +51,41 @@ export function MessageComposer({
   onClearFile,
   onSubmit,
   onTyping,
+  onTypingStop,
 }: MessageComposerProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const typingStopTimer = useRef<number | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const replying = !!replyAuthor;
+
+  useEffect(() => {
+    return () => {
+      if (typingStopTimer.current != null) {
+        window.clearTimeout(typingStopTimer.current);
+      }
+    };
+  }, []);
+
+  function bumpTyping() {
+    onTyping?.();
+    if (typingStopTimer.current != null) {
+      window.clearTimeout(typingStopTimer.current);
+    }
+    // After ~1.1s of no keys, tell peers we stopped (Discord-ish).
+    typingStopTimer.current = window.setTimeout(() => {
+      typingStopTimer.current = null;
+      onTypingStop?.();
+    }, 1100);
+  }
+
+  function clearTypingSoon() {
+    if (typingStopTimer.current != null) {
+      window.clearTimeout(typingStopTimer.current);
+      typingStopTimer.current = null;
+    }
+    onTypingStop?.();
+  }
 
   const mentionQuery = useMemo(() => {
     const cursor = inputRef.current?.selectionStart ?? draft.length;
@@ -111,6 +143,7 @@ export function MessageComposer({
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    clearTypingSoon();
     onSubmit();
   }
 
@@ -225,7 +258,8 @@ export function MessageComposer({
             value={draft}
             onChange={(event) => {
               onDraft(event.target.value);
-              onTyping?.();
+              if (event.target.value.trim()) bumpTyping();
+              else clearTypingSoon();
             }}
             onKeyDown={(event) => {
               if (filteredMentions.length === 0) return;
