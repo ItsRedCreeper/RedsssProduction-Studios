@@ -106,6 +106,10 @@ export function FriendsPanel({
   const [removing, setRemoving] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [seenBlockedIds, setSeenBlockedIds] = useState<Set<string>>(() => new Set());
+  /** Search hits who have blocked the current user. */
+  const [blockedByThemIds, setBlockedByThemIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [unblockTarget, setUnblockTarget] = useState<BlockedUser | null>(null);
   const [unblocking, setUnblocking] = useState(false);
 
@@ -189,6 +193,7 @@ export function FriendsPanel({
     const q = query.trim();
     if (q.length < 1) {
       setResults([]);
+      setBlockedByThemIds(new Set());
       return;
     }
     let cancelled = false;
@@ -199,6 +204,16 @@ export function FriendsPanel({
         if (cancelled) return;
         setResults(next);
         if (searchError) setError(searchError);
+        const blockedChecks = await Promise.all(
+          next.map(async (person) => {
+            const { blockedByThem } = await loadIsBlockedBy(person.id);
+            return blockedByThem ? person.id : null;
+          }),
+        );
+        if (cancelled) return;
+        setBlockedByThemIds(
+          new Set(blockedChecks.filter((id): id is string => !!id)),
+        );
         setSearching(false);
       })();
     }, 250);
@@ -304,13 +319,25 @@ export function FriendsPanel({
       setError("Unblock this user before sending a friend request.");
       return;
     }
+    if (blockedByThemIds.has(person.id)) {
+      setError("This user has blocked you.");
+      return;
+    }
+    const { blockedByThem } = await loadIsBlockedBy(person.id);
+    if (blockedByThem) {
+      setBlockedByThemIds((prev) => new Set(prev).add(person.id));
+      setError("This user has blocked you.");
+      return;
+    }
     setBusyId(person.id);
     const { error: sendError } = await sendFriendRequest(userId, person.id);
     setBusyId(null);
     if (sendError) {
+      const lower = sendError.toLowerCase();
       setError(
-        sendError.includes("violates row-level security")
-          ? "You can't send a friend request to this user."
+        lower.includes("violates row-level security") ||
+          lower.includes("blocked")
+          ? "This user has blocked you."
           : sendError,
       );
       return;
@@ -636,6 +663,7 @@ export function FriendsPanel({
               <ul>
                 {results.map((person) => {
                   const blocked = profileUi?.isBlocked(person.id) ?? false;
+                  const blockedByThem = blockedByThemIds.has(person.id);
                   const rel = userId
                     ? relationshipFor(userId, person.id, edges)
                     : { status: "none" as const, edge: null };
@@ -659,7 +687,11 @@ export function FriendsPanel({
                             {person.username}
                           </span>
                           <span className="block truncate text-xs text-muted">
-                            {blocked ? "Blocked" : statusLabel(person.status)}
+                            {blocked
+                              ? "Blocked"
+                              : blockedByThem
+                                ? "Blocked you"
+                                : statusLabel(person.status)}
                           </span>
                         </span>
                       </button>
@@ -675,6 +707,16 @@ export function FriendsPanel({
                           className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058]"
                         >
                           Unblock
+                        </button>
+                      ) : blockedByThem ? (
+                        <button
+                          type="button"
+                          disabled
+                          title="This user has blocked you"
+                          className="inline-flex cursor-not-allowed items-center gap-1 rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-[#f2b8b5] opacity-90"
+                        >
+                          <Ban className="h-3.5 w-3.5" strokeWidth={2} />
+                          They Blocked You
                         </button>
                       ) : (
                         <>

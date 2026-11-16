@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, UserPlus } from "lucide-react";
+import { Ban, Check, UserPlus } from "lucide-react";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
+import { loadIsBlockedBy } from "@/lib/blocking";
 import {
   acceptFriendRequest,
   loadFriendshipWith,
@@ -19,6 +20,8 @@ type ProfileFriendButtonProps = {
   /** Skip the loading flash when status is already known. */
   initialStatus?: FriendStatus;
   initialEdgeId?: string | null;
+  /** When known up front (e.g. restricted profile), skip the blocked-by fetch. */
+  initialBlockedByThem?: boolean;
 };
 
 export function ProfileFriendButton({
@@ -27,6 +30,7 @@ export function ProfileFriendButton({
   className = "",
   initialStatus,
   initialEdgeId = null,
+  initialBlockedByThem,
 }: ProfileFriendButtonProps) {
   const { user } = useCurrentProfile();
   const profileUi = useOptionalProfileUi();
@@ -35,31 +39,61 @@ export function ProfileFriendButton({
   );
   const [edgeId, setEdgeId] = useState<string | null>(initialEdgeId);
   const [busy, setBusy] = useState(false);
+  const [blockedByThem, setBlockedByThem] = useState(
+    initialBlockedByThem ?? false,
+  );
+  const [relationReady, setRelationReady] = useState(
+    initialBlockedByThem !== undefined && !!initialStatus,
+  );
   const blocked = profileUi?.isBlocked(otherUserId) ?? false;
 
   useEffect(() => {
     if (!user || user.id === otherUserId || blocked) {
       setStatus("none");
       setEdgeId(null);
-      return;
-    }
-    if (initialStatus) {
-      setStatus(initialStatus);
-      setEdgeId(initialEdgeId);
+      setBlockedByThem(false);
+      setRelationReady(true);
       return;
     }
     let cancelled = false;
-    setStatus("loading");
+    setRelationReady(false);
     void (async () => {
+      const blockedResult =
+        initialBlockedByThem !== undefined
+          ? { blockedByThem: initialBlockedByThem }
+          : await loadIsBlockedBy(otherUserId);
+      if (cancelled) return;
+      setBlockedByThem(blockedResult.blockedByThem);
+      if (blockedResult.blockedByThem) {
+        setStatus("none");
+        setEdgeId(null);
+        setRelationReady(true);
+        return;
+      }
+      if (initialStatus) {
+        setStatus(initialStatus);
+        setEdgeId(initialEdgeId);
+        setRelationReady(true);
+        return;
+      }
+      setStatus("loading");
       const result = await loadFriendshipWith(otherUserId);
       if (cancelled) return;
       setStatus(result.status);
       setEdgeId(result.edgeId);
+      setRelationReady(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [user, otherUserId, blocked, initialStatus, initialEdgeId]);
+  }, [
+    user,
+    otherUserId,
+    blocked,
+    initialStatus,
+    initialEdgeId,
+    initialBlockedByThem,
+  ]);
 
   if (!user || user.id === otherUserId || blocked) return null;
 
@@ -70,7 +104,7 @@ export function ProfileFriendButton({
       : "inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors";
 
   async function handleAdd() {
-    if (!user || busy) return;
+    if (!user || busy || blockedByThem) return;
     setBusy(true);
     const { error } = await sendFriendRequest(user.id, otherUserId);
     setBusy(false);
@@ -79,7 +113,7 @@ export function ProfileFriendButton({
   }
 
   async function handleAccept() {
-    if (!edgeId || busy) return;
+    if (!edgeId || busy || blockedByThem) return;
     setBusy(true);
     const { error } = await acceptFriendRequest(edgeId);
     setBusy(false);
@@ -87,7 +121,7 @@ export function ProfileFriendButton({
     setStatus("friends");
   }
 
-  if (status === "loading") {
+  if (!relationReady || status === "loading") {
     return (
       <button
         type="button"
@@ -95,6 +129,20 @@ export function ProfileFriendButton({
         className={`${base} bg-[#3f4147] text-[#949ba4] opacity-70 ${className}`}
       >
         …
+      </button>
+    );
+  }
+
+  if (blockedByThem) {
+    return (
+      <button
+        type="button"
+        disabled
+        title="This user has blocked you"
+        className={`${base} cursor-not-allowed bg-[#3f4147] text-[#f2b8b5] opacity-90 ${className}`}
+      >
+        <Ban className="h-4 w-4" strokeWidth={1.75} />
+        {compact ? "Blocked You" : "They Blocked You"}
       </button>
     );
   }

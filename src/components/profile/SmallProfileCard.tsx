@@ -286,6 +286,7 @@ export function SmallProfileCard({
                 size="sm"
                 initialStatus={friendStatus}
                 initialEdgeId={friendEdgeId}
+                initialBlockedByThem={restricted}
               />
             </div>
           )}

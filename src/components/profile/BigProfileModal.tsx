@@ -213,7 +213,10 @@ export function BigProfileModal({
                   <Ban className="h-4 w-4" strokeWidth={1.75} />
                   Block
                 </button>
-                <ProfileFriendButton otherUserId={profile.id} />
+                <ProfileFriendButton
+                  otherUserId={profile.id}
+                  initialBlockedByThem={restricted}
+                />
                 <button
                   type="button"
                   onClick={onMessage}
