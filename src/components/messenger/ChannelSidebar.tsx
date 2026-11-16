@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
-  ChevronRight,
   Hash,
   MicOff,
   Pencil,
@@ -362,11 +361,12 @@ export function ChannelSidebar({
                           : undefined
                       }
                     >
-                      {isCollapsed ? (
-                        <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2.5} />
-                      ) : (
-                        <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={2.5} />
-                      )}
+                      <ChevronDown
+                        className={`h-3 w-3 shrink-0 transition-transform duration-200 ${
+                          isCollapsed ? "-rotate-90" : "rotate-0"
+                        }`}
+                        strokeWidth={2.5}
+                      />
                       <span className="truncate">{section.name}</span>
                     </button>
                   )}

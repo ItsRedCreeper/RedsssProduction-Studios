@@ -405,7 +405,14 @@ export function VoiceChannelControls({
             aria-expanded={panelOpen === "input" || devicePicker === "input"}
             aria-haspopup="menu"
           >
-            <ChevronDown className="h-3 w-3" strokeWidth={2.5} />
+            <ChevronDown
+              className={`h-3 w-3 transition-transform duration-200 ${
+                panelOpen === "input" || devicePicker === "input"
+                  ? "rotate-180"
+                  : "rotate-0"
+              }`}
+              strokeWidth={2.5}
+            />
           </button>
         )}
       </div>
@@ -444,7 +451,14 @@ export function VoiceChannelControls({
             aria-expanded={panelOpen === "output" || devicePicker === "output"}
             aria-haspopup="menu"
           >
-            <ChevronDown className="h-3 w-3" strokeWidth={2.5} />
+            <ChevronDown
+              className={`h-3 w-3 transition-transform duration-200 ${
+                panelOpen === "output" || devicePicker === "output"
+                  ? "rotate-180"
+                  : "rotate-0"
+              }`}
+              strokeWidth={2.5}
+            />
           </button>
         )}
       </div>

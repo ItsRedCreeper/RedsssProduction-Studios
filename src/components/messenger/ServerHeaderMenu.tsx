@@ -48,8 +48,8 @@ export function ServerHeaderMenu({
             {serverName}
           </span>
           <ChevronDown
-            className={`h-4 w-4 shrink-0 text-[#b5bac1] transition-transform ${
-              open ? "rotate-180" : ""
+            className={`h-4 w-4 shrink-0 text-[#b5bac1] transition-transform duration-200 ${
+              open ? "rotate-180" : "rotate-0"
             }`}
             strokeWidth={2}
           />
