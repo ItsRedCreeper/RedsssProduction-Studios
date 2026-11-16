@@ -7,6 +7,15 @@ import { avatarAccentColor } from "@/lib/avatar";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import type { MemberView, VoiceState } from "@/components/messenger/types";
 
+/** Discord lists voice members A→Z by nickname/username and keeps that order stable. */
+function voiceDisplayName(
+  state: VoiceState,
+  membersById: Map<string, MemberView>,
+) {
+  const member = membersById.get(state.user_id);
+  return member?.nickname || member?.username || "Unknown";
+}
+
 type DeviceOption = {
   deviceId: string;
   label: string;
@@ -90,15 +99,13 @@ export function VoicePane({
   micLevel,
   micError,
 }: VoicePaneProps) {
-  const ordered = [...participants].sort((a, b) => {
-    if (a.user_id === currentUserId) return -1;
-    if (b.user_id === currentUserId) return 1;
-    const left = membersById.get(a.user_id);
-    const right = membersById.get(b.user_id);
-    const leftName = left?.nickname || left?.username || "";
-    const rightName = right?.nickname || right?.username || "";
-    return leftName.localeCompare(rightName);
-  });
+  const ordered = [...participants].sort((a, b) =>
+    voiceDisplayName(a, membersById).localeCompare(
+      voiceDisplayName(b, membersById),
+      undefined,
+      { sensitivity: "base" },
+    ),
+  );
 
   if (!joined) {
     return (
@@ -160,10 +167,13 @@ export function VoicePane({
               const name = member?.nickname || member?.username || "Unknown";
               const isSelf = state.user_id === currentUserId;
               const speaking = speakingUserIds?.has(state.user_id) ?? false;
-              const accent = avatarAccentColor(
-                member?.username || name,
-                member?.banner_color,
-              );
+              const hasPhoto = !!member?.avatar_url;
+              const accent = hasPhoto
+                ? avatarAccentColor(
+                    member?.username || name,
+                    member?.banner_color,
+                  )
+                : null;
               return (
                 <li
                   key={state.user_id}
@@ -175,24 +185,26 @@ export function VoicePane({
                         : "ring-transparent"
                   }`}
                 >
-                  <div className="relative min-h-0 flex-1 bg-[#1e1f22]">
-                    {/* Soft color wash matching avatar / banner accent */}
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        background: `radial-gradient(ellipse 70% 60% at 50% 42%, ${accent}55 0%, ${accent}22 42%, #1e1f22 72%)`,
-                      }}
-                    />
-                    {/* Blurred avatar atmosphere when a photo exists */}
-                    {member?.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={member.avatar_url}
-                        alt=""
-                        aria-hidden
-                        className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl"
-                      />
-                    ) : null}
+                  <div className="relative min-h-0 flex-1 bg-[#2b2d31]">
+                    {hasPhoto ? (
+                      <>
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            background: `radial-gradient(ellipse 70% 60% at 50% 42%, ${accent}40 0%, ${accent}18 42%, #1e1f22 72%)`,
+                          }}
+                        />
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={member!.avatar_url!}
+                          alt=""
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl"
+                        />
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 bg-[#2b2d31]" />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
 
                     <div className="absolute inset-0 flex items-center justify-center pb-9">

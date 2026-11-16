@@ -165,6 +165,7 @@ export function ChannelSidebar({
   }
 
   function occupants(channelId: string) {
+    // Discord: alphabetical by display name, stable (not join/speak order).
     return voiceStates
       .filter((state) => state.channel_id === channelId)
       .map((state) => {
@@ -175,7 +176,10 @@ export function ChannelSidebar({
           avatar_url: member?.avatar_url ?? null,
           muted: state.muted || state.deafened,
         };
-      });
+      })
+      .sort((a, b) =>
+        a.username.localeCompare(b.username, undefined, { sensitivity: "base" }),
+      );
   }
 
   async function commitRename(categoryId: string) {
