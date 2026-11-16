@@ -48,7 +48,6 @@ import {
   VOICE_CHAT_MIN,
 } from "@/hooks/useVoiceChatSidebarWidth";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
-import { UserPresenceBar } from "@/components/messenger/UserPresenceBar";
 import { ActivityTracker } from "@/components/messenger/ActivityTracker";
 import {
   dmRowsToMessages,
@@ -2229,12 +2228,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     />
   ) : null;
 
-  const sidebarFooter = (
-    <>
-      {voiceFooter}
-      <UserPresenceBar />
-    </>
-  );
+  const sidebarFooter = voiceFooter;
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem-2.75rem)] min-h-[28rem] min-w-0 overflow-hidden border-t border-black/40 md:h-[calc(100dvh-3.5rem)]">
