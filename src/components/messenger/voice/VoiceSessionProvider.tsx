@@ -140,9 +140,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const userIdRef = useRef<string | null>(user?.id ?? null);
 
   const streamRef = useRef<MediaStream | null>(null);
+  /** Raw getUserMedia capture — never sent to peers; feeds the gain graph. */
+  const rawStreamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const silentGainRef = useRef<GainNode | null>(null);
+  /** Scales outbound mic before WebRTC; driven by input volume slider. */
+  const inputGainRef = useRef<GainNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const speakingLocalRef = useRef(false);
   const speakingUntilRef = useRef(0);
@@ -235,14 +239,21 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
       analyserRef.current = null;
       silentGainRef.current = null;
+      inputGainRef.current = null;
       if (audioCtxRef.current) {
         void audioCtxRef.current.close().catch(() => undefined);
         audioCtxRef.current = null;
       }
-      if (!opts?.keepStream && streamRef.current) {
-        for (const track of streamRef.current.getTracks()) track.stop();
-        streamRef.current = null;
-        void meshRef.current?.setLocalStream(null);
+      if (!opts?.keepStream) {
+        if (rawStreamRef.current) {
+          for (const track of rawStreamRef.current.getTracks()) track.stop();
+          rawStreamRef.current = null;
+        }
+        if (streamRef.current) {
+          for (const track of streamRef.current.getTracks()) track.stop();
+          streamRef.current = null;
+          void meshRef.current?.setLocalStream(null);
+        }
       }
       clearLocalSpeakingState();
     },
@@ -376,15 +387,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         for (const track of stream.getTracks()) track.stop();
         return;
       }
-      streamRef.current = stream;
-      const outbound = stream.getAudioTracks()[0];
-      if (outbound) outbound.enabled = !mutedRef.current;
-      void meshRef.current?.setLocalStream(stream);
-      const trackLabel = outbound?.label ?? "microphone";
+      rawStreamRef.current = stream;
+      const captureTrack = stream.getAudioTracks()[0];
+      const trackLabel = captureTrack?.label ?? "microphone";
       const AudioContextCtor =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextCtor) {
+        for (const track of stream.getTracks()) track.stop();
+        rawStreamRef.current = null;
         setMicError("Web Audio is unavailable.");
         return;
       }
@@ -396,9 +407,22 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (gen !== monitorGenRef.current) {
         void ctx.close().catch(() => undefined);
         for (const track of stream.getTracks()) track.stop();
+        rawStreamRef.current = null;
         return;
       }
       const source = ctx.createMediaStreamSource(stream);
+      // Gain scales what peers hear; slider previously only affected the local meter.
+      const inputGain = ctx.createGain();
+      inputGain.gain.value = inputVolumeRef.current;
+      inputGainRef.current = inputGain;
+      const outboundDest = ctx.createMediaStreamDestination();
+      source.connect(inputGain);
+      inputGain.connect(outboundDest);
+      const outboundStream = outboundDest.stream;
+      streamRef.current = outboundStream;
+      const outbound = outboundStream.getAudioTracks()[0];
+      if (outbound) outbound.enabled = !mutedRef.current;
+      void meshRef.current?.setLocalStream(outboundStream);
       // ScriptProcessor reads real PCM samples — more reliable than AnalyserNode alone.
       const processor = ctx.createScriptProcessor(2048, 1, 1);
       const silent = ctx.createGain();
@@ -814,6 +838,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     meshRef.current?.setOutputVolume(devices.outputVolume);
   }, [devices.outputVolume]);
+
+  useEffect(() => {
+    const gain = inputGainRef.current;
+    if (!gain) return;
+    gain.gain.value = Math.min(1, Math.max(0, devices.inputVolume));
+  }, [devices.inputVolume]);
 
   useEffect(() => {
     meshRef.current?.setBlockedPeerIds(audioBlockedPeerIds);
