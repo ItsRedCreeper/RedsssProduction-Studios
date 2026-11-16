@@ -42,6 +42,11 @@ import {
   VOICE_STALE_AFTER_MS,
 } from "@/components/messenger/voice/VoiceSessionProvider";
 import { useMessengerSidebarWidth } from "@/hooks/useMessengerSidebarWidth";
+import {
+  useVoiceChatSidebarWidth,
+  VOICE_CHAT_MAX,
+  VOICE_CHAT_MIN,
+} from "@/hooks/useVoiceChatSidebarWidth";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import {
   dmRowsToMessages,
@@ -264,6 +269,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const deafened = voice.deafened;
   const displayName = profile?.username ?? "You";
   const { width: sidebarWidth, beginResize } = useMessengerSidebarWidth();
+  const {
+    width: voiceChatWidth,
+    beginResize: beginVoiceChatResize,
+  } = useVoiceChatSidebarWidth();
   const connectedHere =
     !!connection &&
     !!activeChannel &&
@@ -2163,7 +2172,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         />
       ) : (
       <>
-      <ResizableSidebar width={sidebarWidth} onResizeStart={beginResize}>
+      <ResizableSidebar
+        width={sidebarWidth}
+        onResizeStart={beginResize}
+        label="Resize channel sidebar"
+      >
         {pane === "home" ? (
           <HomeSidebar
             threads={visibleThreads}
@@ -2514,57 +2527,129 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           } absolute inset-y-0 right-0 z-20 shadow-2xl shadow-black/40 lg:static lg:shadow-none`}
         />
         {voiceMode && voiceChatOpen && (
-          <aside className="absolute inset-y-0 right-0 z-20 flex w-[min(100%,22rem)] flex-col border-l border-black/30 bg-[#2b2d31] shadow-2xl shadow-black/40 lg:static lg:w-80 lg:shadow-none">
-            <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
-              Voice Chat
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col">
-              <ChatTimeline
-                messages={visibleMessages}
-                loading={loadingChannelMessages}
-                emptyIcon="hash"
-                emptyTitle={`Welcome to ${activeChannel?.name ?? "voice"} chat`}
-                emptyBody="This chat is for people in this voice channel. Messages stay with the channel."
-                currentUserId={user?.id ?? null}
-                currentUsername={profile?.username ?? null}
-                roleNames={roleNames}
-                channelNames={channelNames}
-                mentionMaps={mentionMaps}
-                canDeleteOthers={canManageMessages}
-                reactionMap={reactionMap}
-                onReply={setReplyTo}
-                onEdit={editChannel}
-                onDelete={deleteChannel}
-                onJumpToReply={jumpToMessage}
-                onReact={(messageId, emoji) => void toggleReaction(messageId, emoji)}
-                onTogglePin={(message) => void togglePin(message)}
-              />
-              <MessageComposer
-                placeholder={
-                  !canSendMessages
-                    ? "You don't have permission to send messages"
-                    : replyTo
-                      ? `Reply to @${replyTo.profiles?.username ?? "user"}`
-                      : `Message ${activeChannel?.name ?? "voice"}`
-                }
-                draft={draft}
-                replyAuthor={replyTo ? replyTo.profiles?.username ?? "user" : null}
-                replyContent={replyTo?.content ?? null}
-                pendingFileName={pendingFile?.name ?? null}
-                sending={sending}
-                allowAttach={canSendMessages}
-                disabled={!user || !canSendMessages}
-                mentionSuggestions={mentionSuggestions}
-                typingPeople={typingPeople}
-                onDraft={setDraft}
-                onCancelReply={() => setReplyTo(null)}
-                onFile={chooseFile}
-                onClearFile={() => setPendingFile(null)}
-                onTyping={publishTyping}
-                onSubmit={() => void sendChannel()}
-              />
-            </div>
-          </aside>
+          <>
+            <aside
+              className="absolute inset-y-0 right-0 z-20 flex flex-col border-l border-black/30 bg-[#2b2d31] shadow-2xl shadow-black/40 sm:hidden"
+              style={{ width: `min(100%, ${voiceChatWidth}px)` }}
+            >
+              <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
+                Voice Chat
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col">
+                <ChatTimeline
+                  messages={visibleMessages}
+                  loading={loadingChannelMessages}
+                  emptyIcon="hash"
+                  emptyTitle={`Welcome to ${activeChannel?.name ?? "voice"} chat`}
+                  emptyBody="This chat is for people in this voice channel. Messages stay with the channel."
+                  currentUserId={user?.id ?? null}
+                  currentUsername={profile?.username ?? null}
+                  roleNames={roleNames}
+                  channelNames={channelNames}
+                  mentionMaps={mentionMaps}
+                  canDeleteOthers={canManageMessages}
+                  reactionMap={reactionMap}
+                  onReply={setReplyTo}
+                  onEdit={editChannel}
+                  onDelete={deleteChannel}
+                  onJumpToReply={jumpToMessage}
+                  onReact={(messageId, emoji) =>
+                    void toggleReaction(messageId, emoji)
+                  }
+                  onTogglePin={(message) => void togglePin(message)}
+                />
+                <MessageComposer
+                  placeholder={
+                    !canSendMessages
+                      ? "You don't have permission to send messages"
+                      : replyTo
+                        ? `Reply to @${replyTo.profiles?.username ?? "user"}`
+                        : `Message ${activeChannel?.name ?? "voice"}`
+                  }
+                  draft={draft}
+                  replyAuthor={
+                    replyTo ? replyTo.profiles?.username ?? "user" : null
+                  }
+                  replyContent={replyTo?.content ?? null}
+                  pendingFileName={pendingFile?.name ?? null}
+                  sending={sending}
+                  allowAttach={canSendMessages}
+                  disabled={!user || !canSendMessages}
+                  mentionSuggestions={mentionSuggestions}
+                  typingPeople={typingPeople}
+                  onDraft={setDraft}
+                  onCancelReply={() => setReplyTo(null)}
+                  onFile={chooseFile}
+                  onClearFile={() => setPendingFile(null)}
+                  onTyping={publishTyping}
+                  onSubmit={() => void sendChannel()}
+                />
+              </div>
+            </aside>
+            <ResizableSidebar
+              width={voiceChatWidth}
+              onResizeStart={beginVoiceChatResize}
+              side="right"
+              minWidth={VOICE_CHAT_MIN}
+              maxWidth={VOICE_CHAT_MAX}
+              label="Resize voice chat"
+              className="border-l border-black/30"
+            >
+              <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
+                Voice Chat
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col">
+                <ChatTimeline
+                  messages={visibleMessages}
+                  loading={loadingChannelMessages}
+                  emptyIcon="hash"
+                  emptyTitle={`Welcome to ${activeChannel?.name ?? "voice"} chat`}
+                  emptyBody="This chat is for people in this voice channel. Messages stay with the channel."
+                  currentUserId={user?.id ?? null}
+                  currentUsername={profile?.username ?? null}
+                  roleNames={roleNames}
+                  channelNames={channelNames}
+                  mentionMaps={mentionMaps}
+                  canDeleteOthers={canManageMessages}
+                  reactionMap={reactionMap}
+                  onReply={setReplyTo}
+                  onEdit={editChannel}
+                  onDelete={deleteChannel}
+                  onJumpToReply={jumpToMessage}
+                  onReact={(messageId, emoji) =>
+                    void toggleReaction(messageId, emoji)
+                  }
+                  onTogglePin={(message) => void togglePin(message)}
+                />
+                <MessageComposer
+                  placeholder={
+                    !canSendMessages
+                      ? "You don't have permission to send messages"
+                      : replyTo
+                        ? `Reply to @${replyTo.profiles?.username ?? "user"}`
+                        : `Message ${activeChannel?.name ?? "voice"}`
+                  }
+                  draft={draft}
+                  replyAuthor={
+                    replyTo ? replyTo.profiles?.username ?? "user" : null
+                  }
+                  replyContent={replyTo?.content ?? null}
+                  pendingFileName={pendingFile?.name ?? null}
+                  sending={sending}
+                  allowAttach={canSendMessages}
+                  disabled={!user || !canSendMessages}
+                  mentionSuggestions={mentionSuggestions}
+                  typingPeople={typingPeople}
+                  onDraft={setDraft}
+                  onCancelReply={() => setReplyTo(null)}
+                  onFile={chooseFile}
+                  onClearFile={() => setPendingFile(null)}
+                  onTyping={publishTyping}
+                  onSubmit={() => void sendChannel()}
+                />
+              </div>
+            </ResizableSidebar>
+          </>
         )}
       </div>
       </>

@@ -7,6 +7,11 @@ type ResizableSidebarProps = {
   onResizeStart: (event: PointerEvent<HTMLElement>) => void;
   children: ReactNode;
   className?: string;
+  /** Which side of the main content this panel sits on (resize handle faces inward). */
+  side?: "left" | "right";
+  minWidth?: number;
+  maxWidth?: number;
+  label?: string;
 };
 
 export function ResizableSidebar({
@@ -14,7 +19,13 @@ export function ResizableSidebar({
   onResizeStart,
   children,
   className = "",
+  side = "left",
+  minWidth = 180,
+  maxWidth = 420,
+  label = "Resize sidebar",
 }: ResizableSidebarProps) {
+  const handleSide = side === "left" ? "right" : "left";
+
   return (
     <div
       className={`relative hidden h-full shrink-0 sm:block ${className}`}
@@ -26,12 +37,14 @@ export function ResizableSidebar({
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize channel sidebar"
-        aria-valuemin={180}
-        aria-valuemax={420}
+        aria-label={label}
+        aria-valuemin={minWidth}
+        aria-valuemax={maxWidth}
         aria-valuenow={width}
         onPointerDown={onResizeStart}
-        className="group absolute inset-y-0 -right-1 z-30 w-2 cursor-ew-resize touch-none"
+        className={`group absolute inset-y-0 z-30 w-2 cursor-ew-resize touch-none ${
+          handleSide === "right" ? "-right-1" : "-left-1"
+        }`}
       >
         <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
       </div>

@@ -277,49 +277,50 @@ export function VoicePane({
     ordered.length === 0 ? (
       emptyStage
     ) : focusedState ? (
-      <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <div className="flex min-h-0 flex-1 items-center justify-center">
-          {/* Keep 16:9 — size from available height so it letterboxes like Discord. */}
-          <div
-            className="w-full max-w-4xl"
-            style={{
-              width: "min(100%, 56rem, calc((100vh - 14rem) * 16 / 9))",
-            }}
-          >
-            <VoiceTile
-              state={focusedState}
-              member={membersById.get(focusedState.user_id)}
-              currentUserId={currentUserId}
-              speaking={
-                joined
-                  ? (speakingUserIds?.has(focusedState.user_id) ?? false)
-                  : false
-              }
-              size="focus"
-              onSelect={() => setFocusedUserId(null)}
-            />
-          </div>
+      // Filmstrip sits under the focused tile (not the viewport bottom), like Discord.
+      <div className="flex min-h-0 flex-1 items-center justify-center">
+        <div
+          className="flex w-full max-w-4xl flex-col gap-2"
+          style={{
+            width: "min(100%, 56rem, calc((100vh - 14rem) * 16 / 9))",
+          }}
+        >
+          <VoiceTile
+            state={focusedState}
+            member={membersById.get(focusedState.user_id)}
+            currentUserId={currentUserId}
+            speaking={
+              joined
+                ? (speakingUserIds?.has(focusedState.user_id) ?? false)
+                : false
+            }
+            size="focus"
+            onSelect={() => setFocusedUserId(null)}
+          />
+          {stripStates.length > 0 && (
+            <ul className="flex w-full justify-center gap-2 overflow-x-auto">
+              {stripStates.map((state) => (
+                <li
+                  key={state.user_id}
+                  className="w-[30%] min-w-[7.5rem] max-w-[11rem] shrink-0"
+                >
+                  <VoiceTile
+                    state={state}
+                    member={membersById.get(state.user_id)}
+                    currentUserId={currentUserId}
+                    speaking={
+                      joined
+                        ? (speakingUserIds?.has(state.user_id) ?? false)
+                        : false
+                    }
+                    size="strip"
+                    onSelect={() => setFocusedUserId(state.user_id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-        {stripStates.length > 0 && (
-          <ul className="flex shrink-0 justify-center gap-2 overflow-x-auto pb-1">
-            {stripStates.map((state) => (
-              <li key={state.user_id} className="w-36 shrink-0 sm:w-44">
-                <VoiceTile
-                  state={state}
-                  member={membersById.get(state.user_id)}
-                  currentUserId={currentUserId}
-                  speaking={
-                    joined
-                      ? (speakingUserIds?.has(state.user_id) ?? false)
-                      : false
-                  }
-                  size="strip"
-                  onSelect={() => setFocusedUserId(state.user_id)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
     ) : (
       <div className="flex min-h-0 flex-1 items-center justify-center">
