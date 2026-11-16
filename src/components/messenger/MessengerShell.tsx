@@ -200,6 +200,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [createChannelCategoryId, setCreateChannelCategoryId] = useState<string | null>(null);
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(true);
+  /** Discord-style voice channel chat; closed by default. */
+  const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [pinsOpen, setPinsOpen] = useState(false);
@@ -246,6 +248,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const textMode = pane === "server" && activeChannel?.type === "text";
   const voiceMode = pane === "server" && activeChannel?.type === "voice";
   const dmMode = pane === "home" && !!activeConversationId;
+
+  // Voice channels use chat (not the member list); close chat when leaving voice.
+  useEffect(() => {
+    if (!voiceMode) setVoiceChatOpen(false);
+  }, [voiceMode, activeChannelId]);
   const homeEmpty = pane === "home" && !activeConversationId;
   const discoverMode = discover || pane === "discover";
   const channelPending =
@@ -826,13 +833,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [activeServerId]);
 
   useEffect(() => {
-    if (!activeChannelId || !activeChannel || activeChannel.type === "voice") {
-      if (activeChannel?.type === "voice") {
-        setMessages([]);
-        setReactions([]);
-      }
-      return;
-    }
+    if (!activeChannelId || !activeChannel) return;
+    // Voice channels keep their own text chat (Discord voice chat sidebar).
     const channelId = activeChannelId;
     const supabase = createClient();
     let cancelled = false;
@@ -1107,7 +1109,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [user, pane, activeChannelId, activeChannel?.type, activeLast]);
 
   useEffect(() => {
-    if (!activeChannelId || activeChannel?.type !== "text" || !user) {
+    if (
+      !activeChannelId ||
+      !user ||
+      (activeChannel?.type !== "text" && activeChannel?.type !== "voice")
+    ) {
       setTypingUsers({});
       typingChannelRef.current = null;
       return;
@@ -1550,7 +1556,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   async function sendChannel() {
-    if (!user || !activeChannelId || activeChannel?.type !== "text" || sending) return;
+    if (
+      !user ||
+      !activeChannelId ||
+      !activeChannel ||
+      (activeChannel.type !== "text" && activeChannel.type !== "voice") ||
+      sending
+    ) {
+      return;
+    }
     if (!canSendMessages) {
       setError("You don't have permission to send messages.");
       return;
@@ -2227,12 +2241,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             searchOpen={searchOpen}
             pinsOpen={pinsOpen}
             membersOpen={membersOpen}
+            chatOpen={voiceChatOpen}
+            showSearch={textMode || dmMode}
             showPins={textMode}
-            showMembers={pane === "server" && !!activeServer}
+            showMembers={textMode && !!activeServer}
+            showChat={voiceMode}
             pinCount={pinList.length}
             onToggleSearch={() => setSearchOpen((open) => !open)}
             onTogglePins={() => setPinsOpen((open) => !open)}
             onToggleMembers={() => setMembersOpen((open) => !open)}
+            onToggleChat={() => setVoiceChatOpen((open) => !open)}
           />
 
           {searchOpen && (
@@ -2470,12 +2488,20 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             ))}
         </section>
 
-        {pane === "server" && membersOpen && (
+        {textMode && membersOpen && (
           <button
             type="button"
             className="absolute inset-0 z-10 bg-black/40 lg:hidden"
             aria-label="Close members"
             onClick={() => setMembersOpen(false)}
+          />
+        )}
+        {voiceMode && voiceChatOpen && (
+          <button
+            type="button"
+            className="absolute inset-0 z-10 bg-black/40 lg:hidden"
+            aria-label="Close voice chat"
+            onClick={() => setVoiceChatOpen(false)}
           />
         )}
         <MemberList
@@ -2484,9 +2510,62 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           currentUserId={user?.id ?? null}
           onMessage={startDm}
           className={`${
-            pane === "server" && membersOpen ? "flex" : "hidden"
+            textMode && membersOpen ? "flex" : "hidden"
           } absolute inset-y-0 right-0 z-20 shadow-2xl shadow-black/40 lg:static lg:shadow-none`}
         />
+        {voiceMode && voiceChatOpen && (
+          <aside className="absolute inset-y-0 right-0 z-20 flex w-[min(100%,22rem)] flex-col border-l border-black/30 bg-[#2b2d31] shadow-2xl shadow-black/40 lg:static lg:w-80 lg:shadow-none">
+            <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
+              Voice Chat
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <ChatTimeline
+                messages={visibleMessages}
+                loading={loadingChannelMessages}
+                emptyIcon="hash"
+                emptyTitle={`Welcome to ${activeChannel?.name ?? "voice"} chat`}
+                emptyBody="This chat is for people in this voice channel. Messages stay with the channel."
+                currentUserId={user?.id ?? null}
+                currentUsername={profile?.username ?? null}
+                roleNames={roleNames}
+                channelNames={channelNames}
+                mentionMaps={mentionMaps}
+                canDeleteOthers={canManageMessages}
+                reactionMap={reactionMap}
+                onReply={setReplyTo}
+                onEdit={editChannel}
+                onDelete={deleteChannel}
+                onJumpToReply={jumpToMessage}
+                onReact={(messageId, emoji) => void toggleReaction(messageId, emoji)}
+                onTogglePin={(message) => void togglePin(message)}
+              />
+              <MessageComposer
+                placeholder={
+                  !canSendMessages
+                    ? "You don't have permission to send messages"
+                    : replyTo
+                      ? `Reply to @${replyTo.profiles?.username ?? "user"}`
+                      : `Message ${activeChannel?.name ?? "voice"}`
+                }
+                draft={draft}
+                replyAuthor={replyTo ? replyTo.profiles?.username ?? "user" : null}
+                replyContent={replyTo?.content ?? null}
+                pendingFileName={pendingFile?.name ?? null}
+                sending={sending}
+                allowAttach={canSendMessages}
+                disabled={!user || !canSendMessages}
+                mentionSuggestions={mentionSuggestions}
+                typingPeople={typingPeople}
+                onDraft={setDraft}
+                onCancelReply={() => setReplyTo(null)}
+                onFile={chooseFile}
+                onClearFile={() => setPendingFile(null)}
+                onTyping={publishTyping}
+                onSubmit={() => void sendChannel()}
+              />
+            </div>
+          </aside>
+        )}
       </div>
       </>
       )}

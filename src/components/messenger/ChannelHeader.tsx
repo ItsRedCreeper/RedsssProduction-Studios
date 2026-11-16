@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Pin, Search, Users } from "lucide-react";
+import { MessageSquare, Pin, Search, Users } from "lucide-react";
 
 type ChannelHeaderProps = {
   icon: ReactNode;
@@ -10,13 +10,16 @@ type ChannelHeaderProps = {
   searchOpen: boolean;
   pinsOpen: boolean;
   membersOpen: boolean;
+  chatOpen?: boolean;
   showSearch?: boolean;
   showPins?: boolean;
   showMembers?: boolean;
+  showChat?: boolean;
   pinCount?: number;
   onToggleSearch: () => void;
   onTogglePins: () => void;
   onToggleMembers: () => void;
+  onToggleChat?: () => void;
 };
 
 function toolClass(active: boolean) {
@@ -34,13 +37,16 @@ export function ChannelHeader({
   searchOpen,
   pinsOpen,
   membersOpen,
+  chatOpen = false,
   showSearch = true,
   showPins = true,
   showMembers = true,
+  showChat = false,
   pinCount = 0,
   onToggleSearch,
   onTogglePins,
   onToggleMembers,
+  onToggleChat,
 }: ChannelHeaderProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/30 px-4 shadow-sm shadow-black/20">
@@ -86,6 +92,18 @@ export function ChannelHeader({
                 {pinCount > 9 ? "9+" : pinCount}
               </span>
             )}
+          </button>
+        )}
+        {showChat && (
+          <button
+            type="button"
+            className={toolClass(chatOpen)}
+            aria-label="Voice chat"
+            title="Voice chat"
+            aria-pressed={chatOpen}
+            onClick={onToggleChat}
+          >
+            <MessageSquare className="h-5 w-5" strokeWidth={1.75} />
           </button>
         )}
         {showMembers && (

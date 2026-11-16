@@ -52,25 +52,17 @@ type VoicePaneProps = {
 };
 
 function gridClass(count: number) {
-  if (count <= 1) return "grid-cols-1 max-w-md mx-auto";
-  if (count === 2) return "grid-cols-1 sm:grid-cols-2";
-  if (count <= 4) return "grid-cols-2";
-  if (count <= 6) return "grid-cols-2 lg:grid-cols-3";
-  return "grid-cols-2 md:grid-cols-3 xl:grid-cols-4";
+  if (count <= 1) return "mx-auto grid-cols-1 max-w-3xl";
+  if (count === 2) return "mx-auto grid-cols-1 sm:grid-cols-2 max-w-5xl";
+  if (count <= 4) return "mx-auto grid-cols-2 max-w-5xl";
+  if (count <= 6) return "mx-auto grid-cols-2 lg:grid-cols-3 max-w-6xl";
+  return "mx-auto grid-cols-2 md:grid-cols-3 xl:grid-cols-4 max-w-6xl";
 }
 
-function tileHeight(count: number, focused: boolean) {
-  if (focused) return "min-h-[min(100%,28rem)] h-full";
-  if (count <= 1) return "min-h-[18rem] sm:min-h-[22rem]";
-  if (count <= 4) return "min-h-[12rem] sm:min-h-[14rem]";
-  return "min-h-[10rem] sm:min-h-[11rem]";
-}
-
-/** Discord-like centered avatar size for the voice grid. */
-function avatarClass(count: number, focused: boolean) {
-  if (focused || count <= 1) return "!h-28 !w-28 !text-4xl sm:!h-36 sm:!w-36 sm:!text-5xl";
-  if (count <= 4) return "!h-20 !w-20 !text-2xl sm:!h-24 sm:!w-24";
-  return "!h-16 !w-16 !text-xl";
+function avatarClass(size: "focus" | "grid" | "strip") {
+  if (size === "focus") return "!h-28 !w-28 !text-4xl sm:!h-32 sm:!w-32";
+  if (size === "strip") return "!h-10 !w-10 !text-sm";
+  return "!h-16 !w-16 !text-xl sm:!h-20 sm:!w-20 sm:!text-2xl";
 }
 
 function VoiceTile({
@@ -78,16 +70,14 @@ function VoiceTile({
   member,
   currentUserId,
   speaking,
-  tileCount,
-  focused,
+  size,
   onSelect,
 }: {
   state: VoiceState;
   member: MemberView | undefined;
   currentUserId: string | null;
   speaking: boolean;
-  tileCount: number;
-  focused: boolean;
+  size: "focus" | "grid" | "strip";
   onSelect: () => void;
 }) {
   const name = member?.nickname || member?.username || "Unknown";
@@ -96,77 +86,99 @@ function VoiceTile({
   const accent = hasPhoto
     ? avatarAccentColor(member?.username || name, member?.banner_color)
     : null;
+  const compact = size === "strip";
 
   return (
-    <li className={focused ? "h-full min-h-0" : undefined}>
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-pressed={focused}
-        aria-label={
-          focused
-            ? `Exit focus on ${name}`
-            : `Focus ${name} in the voice grid`
-        }
-        title={focused ? "Click to show everyone" : "Click to focus"}
-        className={`relative flex w-full ${tileHeight(tileCount, focused)} flex-col overflow-hidden rounded-md bg-[#1e1f22] text-left ring-2 transition-[box-shadow,transform] duration-200 hover:brightness-110 ${
-          speaking
-            ? "ring-[#23a559]"
-            : isSelf
-              ? "ring-accent/40"
-              : "ring-transparent hover:ring-white/10"
-        }`}
-      >
-        <div className="relative min-h-0 flex-1 bg-[#2b2d31]">
-          {hasPhoto ? (
-            <>
-              <div
-                className="absolute inset-0"
-                style={{
-                  background: `radial-gradient(ellipse 70% 60% at 50% 42%, ${accent}40 0%, ${accent}18 42%, #1e1f22 72%)`,
-                }}
-              />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={member!.avatar_url!}
-                alt=""
-                aria-hidden
-                className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl"
-              />
-            </>
-          ) : (
-            <div className="absolute inset-0 bg-[#2b2d31]" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-
-          <div className="absolute inset-0 flex items-center justify-center pb-9">
-            <UserAvatar
-              username={name}
-              avatarUrl={member?.avatar_url}
-              size="lg"
-              speaking={false}
-              className={avatarClass(tileCount, focused)}
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={
+        size === "focus"
+          ? `Exit focus on ${name}`
+          : `Focus ${name} in the voice grid`
+      }
+      title={size === "focus" ? "Click to show everyone" : "Click to focus"}
+      className={`relative aspect-video w-full overflow-hidden rounded-md bg-[#1e1f22] text-left ring-2 transition-[box-shadow,filter] duration-200 hover:brightness-110 ${
+        speaking
+          ? "ring-[#23a559]"
+          : isSelf
+            ? "ring-accent/40"
+            : "ring-transparent hover:ring-white/10"
+      }`}
+    >
+      <div className="absolute inset-0 bg-[#2b2d31]">
+        {hasPhoto ? (
+          <>
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `radial-gradient(ellipse 70% 60% at 50% 42%, ${accent}40 0%, ${accent}18 42%, #1e1f22 72%)`,
+              }}
             />
-          </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={member!.avatar_url!}
+              alt=""
+              aria-hidden
+              className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl"
+            />
+          </>
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
 
-          {(state.muted || state.deafened) && (
-            <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#1e1f22]/90 text-accent ring-2 ring-black/40">
-              {state.deafened ? (
-                <HeadphoneOff className="h-4 w-4" strokeWidth={2} />
-              ) : (
-                <MicOff className="h-4 w-4" strokeWidth={2} />
-              )}
-            </span>
-          )}
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-2">
-            <p className="min-w-0 truncate text-sm font-semibold text-white drop-shadow">
-              {name}
-              {isSelf ? (
-                <span className="ml-1 text-[11px] font-normal text-[#dbdee1]">
-                  (You)
-                </span>
-              ) : null}
-            </p>
+        <div
+          className={`absolute inset-0 flex items-center justify-center ${
+            compact ? "pb-6" : "pb-9"
+          }`}
+        >
+          <UserAvatar
+            username={name}
+            avatarUrl={member?.avatar_url}
+            size="lg"
+            speaking={false}
+            className={avatarClass(size)}
+          />
+        </div>
+
+        {(state.muted || state.deafened) && (
+          <span
+            className={`absolute flex items-center justify-center rounded-full bg-[#1e1f22]/90 text-accent ring-2 ring-black/40 ${
+              compact
+                ? "right-1.5 top-1.5 h-6 w-6"
+                : "right-3 top-3 h-8 w-8"
+            }`}
+          >
+            {state.deafened ? (
+              <HeadphoneOff
+                className={compact ? "h-3 w-3" : "h-4 w-4"}
+                strokeWidth={2}
+              />
+            ) : (
+              <MicOff
+                className={compact ? "h-3 w-3" : "h-4 w-4"}
+                strokeWidth={2}
+              />
+            )}
+          </span>
+        )}
+        <div
+          className={`absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 ${
+            compact ? "px-2 py-1.5" : "px-3 py-2"
+          }`}
+        >
+          <p
+            className={`min-w-0 truncate font-semibold text-white drop-shadow ${
+              compact ? "text-[11px]" : "text-sm"
+            }`}
+          >
+            {name}
+            {isSelf ? (
+              <span className="ml-1 text-[10px] font-normal text-[#dbdee1]">
+                (You)
+              </span>
+            ) : null}
+          </p>
+          {!compact && (
             <div className="flex shrink-0 items-center gap-1.5 text-[#dbdee1]">
               {(state.muted || state.deafened) && (
                 <MicOff className="h-3.5 w-3.5" strokeWidth={2} />
@@ -175,10 +187,10 @@ function VoiceTile({
                 <HeadphoneOff className="h-3.5 w-3.5" strokeWidth={2} />
               )}
             </div>
-          </div>
+          )}
         </div>
-      </button>
-    </li>
+      </div>
+    </button>
   );
 }
 
@@ -220,7 +232,6 @@ export function VoicePane({
     ),
   );
 
-  // Drop focus if that user left voice, or you left the channel view.
   useEffect(() => {
     if (!joined) {
       setFocusedUserId(null);
@@ -232,7 +243,6 @@ export function VoicePane({
     }
   }, [focusedUserId, joined, ordered]);
 
-  // Escape returns to the grid (Discord-ish).
   useEffect(() => {
     if (!focusedUserId) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -243,8 +253,11 @@ export function VoicePane({
   }, [focusedUserId]);
 
   const focusedState = focusedUserId
-    ? ordered.find((state) => state.user_id === focusedUserId) ?? null
+    ? (ordered.find((state) => state.user_id === focusedUserId) ?? null)
     : null;
+  const stripStates = focusedState
+    ? ordered.filter((state) => state.user_id !== focusedState.user_id)
+    : [];
 
   if (!joined) {
     return (
@@ -273,61 +286,65 @@ export function VoicePane({
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#1e1f22]/40">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-md bg-[#2b2d31] text-accent">
-              <Volume2 className="h-5 w-5" strokeWidth={1.75} />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-white">{channelName}</h2>
-              <p className="text-sm text-[#949ba4]">
-                {ordered.length === 0
-                  ? "Connecting to voice…"
-                  : focusedState
-                    ? "Focused view — click again or press Esc for grid"
-                    : ordered.length === 1
-                      ? "Only you are here"
-                      : `${ordered.length} connected`}
-              </p>
-            </div>
-          </div>
-        </div>
-
         {ordered.length === 0 ? (
-          <div className="flex min-h-64 flex-col items-center justify-center rounded-md border border-dashed border-[#3f4147] bg-[#2b2d31]/40 text-center">
+          <div className="flex min-h-64 flex-1 flex-col items-center justify-center rounded-md border border-dashed border-[#3f4147] bg-[#2b2d31]/40 text-center">
             <Volume2 className="mb-3 h-8 w-8 text-[#4e5058]" strokeWidth={1.5} />
             <p className="text-sm text-[#b5bac1]">Setting up your voice tile…</p>
-            <p className="mt-1 max-w-sm text-xs text-muted">
-              Live audio is still a stub — presence, mute, and speaking rings are live.
-            </p>
           </div>
         ) : focusedState ? (
-          <ul className="grid min-h-0 flex-1 grid-cols-1">
-            <VoiceTile
-              state={focusedState}
-              member={membersById.get(focusedState.user_id)}
-              currentUserId={currentUserId}
-              speaking={speakingUserIds?.has(focusedState.user_id) ?? false}
-              tileCount={1}
-              focused
-              onSelect={() => setFocusedUserId(null)}
-            />
-          </ul>
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              {/* Keep 16:9 — size from available height so it letterboxes like Discord. */}
+              <div
+                className="w-full max-w-4xl"
+                style={{
+                  width: "min(100%, 56rem, calc((100vh - 14rem) * 16 / 9))",
+                }}
+              >
+                <VoiceTile
+                  state={focusedState}
+                  member={membersById.get(focusedState.user_id)}
+                  currentUserId={currentUserId}
+                  speaking={speakingUserIds?.has(focusedState.user_id) ?? false}
+                  size="focus"
+                  onSelect={() => setFocusedUserId(null)}
+                />
+              </div>
+            </div>
+            {stripStates.length > 0 && (
+              <ul className="flex shrink-0 justify-center gap-2 overflow-x-auto pb-1">
+                {stripStates.map((state) => (
+                  <li key={state.user_id} className="w-36 shrink-0 sm:w-44">
+                    <VoiceTile
+                      state={state}
+                      member={membersById.get(state.user_id)}
+                      currentUserId={currentUserId}
+                      speaking={speakingUserIds?.has(state.user_id) ?? false}
+                      size="strip"
+                      onSelect={() => setFocusedUserId(state.user_id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ) : (
-          <ul className={`grid gap-3 ${gridClass(ordered.length)}`}>
-            {ordered.map((state) => (
-              <VoiceTile
-                key={state.user_id}
-                state={state}
-                member={membersById.get(state.user_id)}
-                currentUserId={currentUserId}
-                speaking={speakingUserIds?.has(state.user_id) ?? false}
-                tileCount={ordered.length}
-                focused={false}
-                onSelect={() => setFocusedUserId(state.user_id)}
-              />
-            ))}
-          </ul>
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <ul className={`grid w-full gap-3 ${gridClass(ordered.length)}`}>
+              {ordered.map((state) => (
+                <li key={state.user_id}>
+                  <VoiceTile
+                    state={state}
+                    member={membersById.get(state.user_id)}
+                    currentUserId={currentUserId}
+                    speaking={speakingUserIds?.has(state.user_id) ?? false}
+                    size="grid"
+                    onSelect={() => setFocusedUserId(state.user_id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
