@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { HeadphoneOff, MicOff, PhoneOff, Volume2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
@@ -58,17 +59,127 @@ function gridClass(count: number) {
   return "grid-cols-2 md:grid-cols-3 xl:grid-cols-4";
 }
 
-function tileHeight(count: number) {
+function tileHeight(count: number, focused: boolean) {
+  if (focused) return "min-h-[min(100%,28rem)] h-full";
   if (count <= 1) return "min-h-[18rem] sm:min-h-[22rem]";
   if (count <= 4) return "min-h-[12rem] sm:min-h-[14rem]";
   return "min-h-[10rem] sm:min-h-[11rem]";
 }
 
 /** Discord-like centered avatar size for the voice grid. */
-function avatarClass(count: number) {
-  if (count <= 1) return "!h-28 !w-28 !text-4xl sm:!h-32 sm:!w-32";
+function avatarClass(count: number, focused: boolean) {
+  if (focused || count <= 1) return "!h-28 !w-28 !text-4xl sm:!h-36 sm:!w-36 sm:!text-5xl";
   if (count <= 4) return "!h-20 !w-20 !text-2xl sm:!h-24 sm:!w-24";
   return "!h-16 !w-16 !text-xl";
+}
+
+function VoiceTile({
+  state,
+  member,
+  currentUserId,
+  speaking,
+  tileCount,
+  focused,
+  onSelect,
+}: {
+  state: VoiceState;
+  member: MemberView | undefined;
+  currentUserId: string | null;
+  speaking: boolean;
+  tileCount: number;
+  focused: boolean;
+  onSelect: () => void;
+}) {
+  const name = member?.nickname || member?.username || "Unknown";
+  const isSelf = state.user_id === currentUserId;
+  const hasPhoto = !!member?.avatar_url;
+  const accent = hasPhoto
+    ? avatarAccentColor(member?.username || name, member?.banner_color)
+    : null;
+
+  return (
+    <li className={focused ? "h-full min-h-0" : undefined}>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-pressed={focused}
+        aria-label={
+          focused
+            ? `Exit focus on ${name}`
+            : `Focus ${name} in the voice grid`
+        }
+        title={focused ? "Click to show everyone" : "Click to focus"}
+        className={`relative flex w-full ${tileHeight(tileCount, focused)} flex-col overflow-hidden rounded-md bg-[#1e1f22] text-left ring-2 transition-[box-shadow,transform] duration-200 hover:brightness-110 ${
+          speaking
+            ? "ring-[#23a559]"
+            : isSelf
+              ? "ring-accent/40"
+              : "ring-transparent hover:ring-white/10"
+        }`}
+      >
+        <div className="relative min-h-0 flex-1 bg-[#2b2d31]">
+          {hasPhoto ? (
+            <>
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `radial-gradient(ellipse 70% 60% at 50% 42%, ${accent}40 0%, ${accent}18 42%, #1e1f22 72%)`,
+                }}
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={member!.avatar_url!}
+                alt=""
+                aria-hidden
+                className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl"
+              />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-[#2b2d31]" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+
+          <div className="absolute inset-0 flex items-center justify-center pb-9">
+            <UserAvatar
+              username={name}
+              avatarUrl={member?.avatar_url}
+              size="lg"
+              speaking={false}
+              className={avatarClass(tileCount, focused)}
+            />
+          </div>
+
+          {(state.muted || state.deafened) && (
+            <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#1e1f22]/90 text-accent ring-2 ring-black/40">
+              {state.deafened ? (
+                <HeadphoneOff className="h-4 w-4" strokeWidth={2} />
+              ) : (
+                <MicOff className="h-4 w-4" strokeWidth={2} />
+              )}
+            </span>
+          )}
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-2">
+            <p className="min-w-0 truncate text-sm font-semibold text-white drop-shadow">
+              {name}
+              {isSelf ? (
+                <span className="ml-1 text-[11px] font-normal text-[#dbdee1]">
+                  (You)
+                </span>
+              ) : null}
+            </p>
+            <div className="flex shrink-0 items-center gap-1.5 text-[#dbdee1]">
+              {(state.muted || state.deafened) && (
+                <MicOff className="h-3.5 w-3.5" strokeWidth={2} />
+              )}
+              {state.deafened && (
+                <HeadphoneOff className="h-3.5 w-3.5" strokeWidth={2} />
+              )}
+            </div>
+          </div>
+        </div>
+      </button>
+    </li>
+  );
 }
 
 export function VoicePane({
@@ -99,6 +210,8 @@ export function VoicePane({
   micLevel,
   micError,
 }: VoicePaneProps) {
+  const [focusedUserId, setFocusedUserId] = useState<string | null>(null);
+
   const ordered = [...participants].sort((a, b) =>
     voiceDisplayName(a, membersById).localeCompare(
       voiceDisplayName(b, membersById),
@@ -106,6 +219,32 @@ export function VoicePane({
       { sensitivity: "base" },
     ),
   );
+
+  // Drop focus if that user left voice, or you left the channel view.
+  useEffect(() => {
+    if (!joined) {
+      setFocusedUserId(null);
+      return;
+    }
+    if (!focusedUserId) return;
+    if (!ordered.some((state) => state.user_id === focusedUserId)) {
+      setFocusedUserId(null);
+    }
+  }, [focusedUserId, joined, ordered]);
+
+  // Escape returns to the grid (Discord-ish).
+  useEffect(() => {
+    if (!focusedUserId) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setFocusedUserId(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [focusedUserId]);
+
+  const focusedState = focusedUserId
+    ? ordered.find((state) => state.user_id === focusedUserId) ?? null
+    : null;
 
   if (!joined) {
     return (
@@ -133,7 +272,7 @@ export function VoicePane({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#1e1f22]/40">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-md bg-[#2b2d31] text-accent">
@@ -144,9 +283,11 @@ export function VoicePane({
               <p className="text-sm text-[#949ba4]">
                 {ordered.length === 0
                   ? "Connecting to voice…"
-                  : ordered.length === 1
-                    ? "Only you are here"
-                    : `${ordered.length} connected`}
+                  : focusedState
+                    ? "Focused view — click again or press Esc for grid"
+                    : ordered.length === 1
+                      ? "Only you are here"
+                      : `${ordered.length} connected`}
               </p>
             </div>
           </div>
@@ -160,94 +301,32 @@ export function VoicePane({
               Live audio is still a stub — presence, mute, and speaking rings are live.
             </p>
           </div>
+        ) : focusedState ? (
+          <ul className="grid min-h-0 flex-1 grid-cols-1">
+            <VoiceTile
+              state={focusedState}
+              member={membersById.get(focusedState.user_id)}
+              currentUserId={currentUserId}
+              speaking={speakingUserIds?.has(focusedState.user_id) ?? false}
+              tileCount={1}
+              focused
+              onSelect={() => setFocusedUserId(null)}
+            />
+          </ul>
         ) : (
           <ul className={`grid gap-3 ${gridClass(ordered.length)}`}>
-            {ordered.map((state) => {
-              const member = membersById.get(state.user_id);
-              const name = member?.nickname || member?.username || "Unknown";
-              const isSelf = state.user_id === currentUserId;
-              const speaking = speakingUserIds?.has(state.user_id) ?? false;
-              const hasPhoto = !!member?.avatar_url;
-              const accent = hasPhoto
-                ? avatarAccentColor(
-                    member?.username || name,
-                    member?.banner_color,
-                  )
-                : null;
-              return (
-                <li
-                  key={state.user_id}
-                  className={`relative flex ${tileHeight(ordered.length)} flex-col overflow-hidden rounded-md bg-[#1e1f22] ring-2 ${
-                    speaking
-                      ? "ring-[#23a559]"
-                      : isSelf
-                        ? "ring-accent/40"
-                        : "ring-transparent"
-                  }`}
-                >
-                  <div className="relative min-h-0 flex-1 bg-[#2b2d31]">
-                    {hasPhoto ? (
-                      <>
-                        <div
-                          className="absolute inset-0"
-                          style={{
-                            background: `radial-gradient(ellipse 70% 60% at 50% 42%, ${accent}40 0%, ${accent}18 42%, #1e1f22 72%)`,
-                          }}
-                        />
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={member!.avatar_url!}
-                          alt=""
-                          aria-hidden
-                          className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl"
-                        />
-                      </>
-                    ) : (
-                      <div className="absolute inset-0 bg-[#2b2d31]" />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-
-                    <div className="absolute inset-0 flex items-center justify-center pb-9">
-                      <UserAvatar
-                        username={name}
-                        avatarUrl={member?.avatar_url}
-                        size="lg"
-                        speaking={false}
-                        className={avatarClass(ordered.length)}
-                      />
-                    </div>
-
-                    {(state.muted || state.deafened) && (
-                      <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#1e1f22]/90 text-accent ring-2 ring-black/40">
-                        {state.deafened ? (
-                          <HeadphoneOff className="h-4 w-4" strokeWidth={2} />
-                        ) : (
-                          <MicOff className="h-4 w-4" strokeWidth={2} />
-                        )}
-                      </span>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-2">
-                      <p className="min-w-0 truncate text-sm font-semibold text-white drop-shadow">
-                        {name}
-                        {isSelf ? (
-                          <span className="ml-1 text-[11px] font-normal text-[#dbdee1]">
-                            (You)
-                          </span>
-                        ) : null}
-                      </p>
-                      <div className="flex shrink-0 items-center gap-1.5 text-[#dbdee1]">
-                        {(state.muted || state.deafened) && (
-                          <MicOff className="h-3.5 w-3.5" strokeWidth={2} />
-                        )}
-                        {state.deafened && (
-                          <HeadphoneOff className="h-3.5 w-3.5" strokeWidth={2} />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
+            {ordered.map((state) => (
+              <VoiceTile
+                key={state.user_id}
+                state={state}
+                member={membersById.get(state.user_id)}
+                currentUserId={currentUserId}
+                speaking={speakingUserIds?.has(state.user_id) ?? false}
+                tileCount={ordered.length}
+                focused={false}
+                onSelect={() => setFocusedUserId(state.user_id)}
+              />
+            ))}
           </ul>
         )}
       </div>
