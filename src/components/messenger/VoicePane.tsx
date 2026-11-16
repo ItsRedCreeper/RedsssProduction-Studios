@@ -259,6 +259,64 @@ export function VoicePane({
     ? ordered.filter((state) => state.user_id !== focusedState.user_id)
     : [];
 
+  // Preview before joining: title + stacked avatars + count + Join (centered, not docked).
+  if (!joined) {
+    const preview = ordered.slice(0, 5);
+    const count = ordered.length;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-[#1e1f22]/40 px-6 py-10">
+        <div className="flex max-w-sm flex-col items-center text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-accent">
+            <Volume2 className="h-7 w-7" strokeWidth={1.75} />
+          </div>
+          <h2 className="text-xl font-semibold text-white">{channelName}</h2>
+
+          {count > 0 ? (
+            <div className="mt-4 flex flex-col items-center gap-2">
+              <span className="flex -space-x-1.5" aria-hidden>
+                {preview.map((state) => {
+                  const member = membersById.get(state.user_id);
+                  const name =
+                    member?.nickname || member?.username || "Unknown";
+                  return (
+                    <span
+                      key={state.user_id}
+                      className="rounded-full ring-2 ring-[#1e1f22]"
+                      title={name}
+                    >
+                      <UserAvatar
+                        username={name}
+                        avatarUrl={member?.avatar_url}
+                        size="sm"
+                        className="!h-8 !w-8 !text-[11px]"
+                      />
+                    </span>
+                  );
+                })}
+              </span>
+              <p className="text-sm font-medium text-[#b5bac1]">
+                {count} {count === 1 ? "person" : "people"} in voice
+              </p>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-[#949ba4]">
+              No one is in this voice channel yet.
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={onRejoin}
+            className="mt-6 inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover"
+          >
+            <Volume2 className="h-4 w-4" strokeWidth={2} />
+            Join Voice
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const emptyStage = (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-accent">
@@ -266,9 +324,7 @@ export function VoicePane({
       </div>
       <h2 className="text-xl font-semibold text-white">{channelName}</h2>
       <p className="mt-2 max-w-sm text-sm text-[#949ba4]">
-        {joined
-          ? "Setting up your voice tile…"
-          : "No one is in this voice channel yet. Join to be the first."}
+        Setting up your voice tile…
       </p>
     </div>
   );
@@ -352,49 +408,36 @@ export function VoicePane({
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-t border-black/30 bg-[#292b2f] px-4 py-3">
-        {joined ? (
-          <>
-            <VoiceChannelControls
-              muted={muted}
-              deafened={deafened}
-              quality={quality}
-              onToggleMute={onToggleMute}
-              onToggleDeafen={onToggleDeafen}
-              onLeave={onLeave}
-              inputDeviceId={inputDeviceId}
-              outputDeviceId={outputDeviceId}
-              inputs={inputs}
-              outputs={outputs}
-              onInputDeviceChange={onInputDeviceChange}
-              onOutputDeviceChange={onOutputDeviceChange}
-              inputVolume={inputVolume}
-              outputVolume={outputVolume}
-              onInputVolumeChange={onInputVolumeChange}
-              onOutputVolumeChange={onOutputVolumeChange}
-              onOpenDeviceMenus={onOpenDeviceMenus}
-              micLevel={micLevel}
-              micError={micError}
-              showLeave={false}
-            />
-            <button
-              type="button"
-              onClick={onLeave}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
-            >
-              <PhoneOff className="h-4 w-4" strokeWidth={2} />
-              Disconnect
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={onRejoin}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover"
-          >
-            <Volume2 className="h-4 w-4" strokeWidth={2} />
-            Join Voice
-          </button>
-        )}
+        <VoiceChannelControls
+          muted={muted}
+          deafened={deafened}
+          quality={quality}
+          onToggleMute={onToggleMute}
+          onToggleDeafen={onToggleDeafen}
+          onLeave={onLeave}
+          inputDeviceId={inputDeviceId}
+          outputDeviceId={outputDeviceId}
+          inputs={inputs}
+          outputs={outputs}
+          onInputDeviceChange={onInputDeviceChange}
+          onOutputDeviceChange={onOutputDeviceChange}
+          inputVolume={inputVolume}
+          outputVolume={outputVolume}
+          onInputVolumeChange={onInputVolumeChange}
+          onOutputVolumeChange={onOutputVolumeChange}
+          onOpenDeviceMenus={onOpenDeviceMenus}
+          micLevel={micLevel}
+          micError={micError}
+          showLeave={false}
+        />
+        <button
+          type="button"
+          onClick={onLeave}
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+        >
+          <PhoneOff className="h-4 w-4" strokeWidth={2} />
+          Disconnect
+        </button>
       </div>
     </div>
   );
