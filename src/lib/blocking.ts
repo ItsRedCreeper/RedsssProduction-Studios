@@ -172,6 +172,13 @@ export function friendlyBlockDmMessage(error: string | null | undefined) {
   ) {
     return "This user has blocked you.";
   }
+  // Real blocks still fail INSERT via RLS; keep the copy friendly instead of raw policy text.
+  if (
+    lower.includes("row-level security") &&
+    lower.includes("dm_messages")
+  ) {
+    return "You can't message this user right now.";
+  }
   return null;
 }
 
