@@ -200,8 +200,7 @@ export function VoicePane({
                         username={name}
                         avatarUrl={member?.avatar_url}
                         size="lg"
-                        speaking={speaking}
-                        fallbackColor={accent}
+                        speaking={false}
                         className={avatarClass(ordered.length)}
                       />
                     </div>
