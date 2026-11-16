@@ -3,6 +3,7 @@
 import { HeadphoneOff, MicOff, PhoneOff, Volume2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
+import { avatarAccentColor } from "@/lib/avatar";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import type { MemberView, VoiceState } from "@/components/messenger/types";
 
@@ -52,6 +53,13 @@ function tileHeight(count: number) {
   if (count <= 1) return "min-h-[18rem] sm:min-h-[22rem]";
   if (count <= 4) return "min-h-[12rem] sm:min-h-[14rem]";
   return "min-h-[10rem] sm:min-h-[11rem]";
+}
+
+/** Discord-like centered avatar size for the voice grid. */
+function avatarClass(count: number) {
+  if (count <= 1) return "!h-28 !w-28 !text-4xl sm:!h-32 sm:!w-32";
+  if (count <= 4) return "!h-20 !w-20 !text-2xl sm:!h-24 sm:!w-24";
+  return "!h-16 !w-16 !text-xl";
 }
 
 export function VoicePane({
@@ -152,6 +160,10 @@ export function VoicePane({
               const name = member?.nickname || member?.username || "Unknown";
               const isSelf = state.user_id === currentUserId;
               const speaking = speakingUserIds?.has(state.user_id) ?? false;
+              const accent = avatarAccentColor(
+                member?.username || name,
+                member?.banner_color,
+              );
               return (
                 <li
                   key={state.user_id}
@@ -159,30 +171,41 @@ export function VoicePane({
                     speaking
                       ? "ring-[#23a559]"
                       : isSelf
-                        ? "ring-accent/50"
+                        ? "ring-accent/40"
                         : "ring-transparent"
                   }`}
                 >
-                  <div className="relative min-h-0 flex-1 bg-[#2b2d31]">
+                  <div className="relative min-h-0 flex-1 bg-[#1e1f22]">
+                    {/* Soft color wash matching avatar / banner accent */}
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background: `radial-gradient(ellipse 70% 60% at 50% 42%, ${accent}55 0%, ${accent}22 42%, #1e1f22 72%)`,
+                      }}
+                    />
+                    {/* Blurred avatar atmosphere when a photo exists */}
                     {member?.avatar_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={member.avatar_url}
                         alt=""
-                        className="absolute inset-0 h-full w-full object-cover"
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl"
                       />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center bg-[#2b2d31]">
-                        <UserAvatar
-                          username={name}
-                          avatarUrl={null}
-                          size="lg"
-                          speaking={false}
-                          className="!h-24 !w-24 !text-3xl"
-                        />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                    ) : null}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+
+                    <div className="absolute inset-0 flex items-center justify-center pb-9">
+                      <UserAvatar
+                        username={name}
+                        avatarUrl={member?.avatar_url}
+                        size="lg"
+                        speaking={speaking}
+                        fallbackColor={accent}
+                        className={avatarClass(ordered.length)}
+                      />
+                    </div>
+
                     {(state.muted || state.deafened) && (
                       <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-[#1e1f22]/90 text-accent ring-2 ring-black/40">
                         {state.deafened ? (

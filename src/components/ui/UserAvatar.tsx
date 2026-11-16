@@ -7,6 +7,8 @@ type UserAvatarProps = {
   className?: string;
   /** Discord-style green speaking ring */
   speaking?: boolean;
+  /** Solid fill for letter fallback (e.g. voice tiles). */
+  fallbackColor?: string | null;
 };
 
 const sizeClasses = {
@@ -22,6 +24,7 @@ export function UserAvatar({
   size = "md",
   className = "",
   speaking = false,
+  fallbackColor = null,
 }: UserAvatarProps) {
   // Solid green ring for the navbar speaking indicator.
   const speakingClass = speaking
@@ -41,7 +44,10 @@ export function UserAvatar({
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full bg-surface-raised font-bold text-accent ${sizeClasses[size]} ${speakingClass} ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold ${
+        fallbackColor ? "text-white" : "bg-surface-raised text-accent"
+      } ${sizeClasses[size]} ${speakingClass} ${className}`}
+      style={fallbackColor ? { backgroundColor: fallbackColor } : undefined}
       aria-hidden
     >
       {avatarLetter(username)}
