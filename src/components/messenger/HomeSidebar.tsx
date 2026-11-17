@@ -3,17 +3,18 @@
 import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { statusDotClass } from "@/components/messenger/data";
 import type { DmThread } from "@/components/messenger/types";
+import { StatusPresenceBadge } from "@/components/messenger/StatusPresenceBadge";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
 import { useOptionalPresenceFeed } from "@/components/presence/PresenceFeed";
-import { resolveDisplayStatus } from "@/lib/presence";
 
 type HomeSidebarProps = {
   threads: DmThread[];
   activeThreadId: string | null;
   loadingThreads: boolean;
+  /** Users currently typing in the open DM (status badge → animated dots). */
+  typingUserIds?: Set<string>;
   onSelectThread: (threadId: string) => void;
   onCloseThread?: (threadId: string) => void;
   footer?: ReactNode;
@@ -23,6 +24,7 @@ export function HomeSidebar({
   threads,
   activeThreadId,
   loadingThreads,
+  typingUserIds,
   onSelectThread,
   onCloseThread,
   footer,
@@ -55,6 +57,8 @@ export function HomeSidebar({
               const active = thread.id === activeThreadId;
               const name =
                 profileUi?.nicknameFor(thread.otherUserId) || thread.username;
+              const live = feed?.get(thread.otherUserId);
+              const typing = typingUserIds?.has(thread.otherUserId) ?? false;
               return (
                 <li key={thread.id} className="group/thread relative">
                   <button
@@ -73,8 +77,11 @@ export function HomeSidebar({
                         size="sm"
                         className="!h-8 !w-8"
                       />
-                      <span
-                        className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#2b2d31] ${statusDotClass(resolveDisplayStatus(feed?.get(thread.otherUserId)?.status ?? thread.status, feed?.get(thread.otherUserId)?.lastSeenAt ?? thread.last_seen_at))}`}
+                      <StatusPresenceBadge
+                        status={live?.status ?? thread.status}
+                        lastSeenAt={live?.lastSeenAt ?? thread.last_seen_at}
+                        typing={typing}
+                        ringClassName="ring-[#2b2d31]"
                       />
                     </span>
                     <span className="min-w-0 flex-1">

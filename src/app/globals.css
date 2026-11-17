@@ -102,3 +102,38 @@ body::before {
 ::-webkit-scrollbar-thumb:hover {
   background: #444;
 }
+
+/* Discord-style avatar typing dots (status-colored badge). */
+@keyframes typing-dot-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  30% {
+    transform: translateY(-2px);
+    opacity: 1;
+  }
+}
+
+.typing-dot {
+  animation: typing-dot-bounce 1.05s ease-in-out infinite;
+}
+
+.typing-dot-delay-1 {
+  animation-delay: 0.15s;
+}
+
+.typing-dot-delay-2 {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot,
+  .typing-dot-delay-1,
+  .typing-dot-delay-2 {
+    animation: none;
+    opacity: 0.85;
+  }
+}

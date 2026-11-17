@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { isPresenceOnline, statusDotClass } from "@/components/messenger/data";
+import { isPresenceOnline } from "@/components/messenger/data";
+import { StatusPresenceBadge } from "@/components/messenger/StatusPresenceBadge";
 import type { MemberView } from "@/components/messenger/types";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
@@ -13,6 +14,8 @@ type MemberListProps = {
   members: MemberView[];
   ownerId: string | null;
   currentUserId: string | null;
+  /** Users typing in the open channel — status badge becomes animated dots. */
+  typingUserIds?: Set<string>;
   onMessage: (userId: string) => void;
   className?: string;
 };
@@ -21,20 +24,18 @@ function MemberButton({
   member,
   owner,
   displayName,
+  typing,
   onClick,
 }: {
   member: MemberView;
   owner: boolean;
   displayName: string;
+  typing: boolean;
   onClick: (element: HTMLButtonElement) => void;
 }) {
   const feed = useOptionalPresenceFeed();
   const live = feed?.get(member.user_id);
   void feed?.version;
-  const displayStatus = resolveDisplayStatus(
-    live?.status ?? member.status,
-    live?.lastSeenAt ?? member.last_seen_at,
-  );
   return (
     <button
       type="button"
@@ -48,8 +49,11 @@ function MemberButton({
           size="sm"
           className="!h-8 !w-8"
         />
-        <span
-          className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#2b2d31] ${statusDotClass(displayStatus)}`}
+        <StatusPresenceBadge
+          status={live?.status ?? member.status}
+          lastSeenAt={live?.lastSeenAt ?? member.last_seen_at}
+          typing={typing}
+          ringClassName="ring-[#2b2d31]"
         />
       </span>
       <span className="min-w-0 flex-1">
@@ -76,6 +80,7 @@ export function MemberList({
   members,
   ownerId,
   currentUserId: _currentUserId,
+  typingUserIds,
   onMessage: _onMessage,
   className = "",
 }: MemberListProps) {
@@ -137,6 +142,7 @@ export function MemberList({
                 member={member}
                 displayName={displayNameOf(member)}
                 owner={member.user_id === ownerId}
+                typing={Boolean(typingUserIds?.has(member.user_id))}
                 onClick={(el) => openPopover(member, el)}
               />
             </li>

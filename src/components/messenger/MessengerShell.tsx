@@ -250,6 +250,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const messageIdsRef = useRef<Set<string>>(new Set());
   const dmLocks = useRef(new Map<string, Promise<string | null>>());
   const serversRequest = useRef(0);
+  const typingChannelRef = useRef<ReturnType<
+    ReturnType<typeof createClient>["channel"]
+  > | null>(null);
+  const lastTypingSentRef = useRef(0);
 
   paneRef.current = pane;
   routeServerRef.current = routeServerId;
@@ -1252,6 +1256,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           );
           if (!hydrated || cancelled) return;
           setDmMessages((prev) => mergeIncoming(prev, hydrated));
+          // Message sent → drop that user's typing indicator immediately.
+          if (hydrated.user_id && hydrated.user_id !== userIdRef.current) {
+            setTypingUsers((prev) => {
+              if (!prev[hydrated.user_id]) return prev;
+              const next = { ...prev };
+              delete next[hydrated.user_id];
+              return next;
+            });
+          }
         },
       )
       .on(
@@ -1314,21 +1327,26 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     void saveChannelRead(user.id, activeChannelId, at);
   }, [user, pane, activeChannelId, activeChannel?.type, activeLast]);
 
+  // Live typing for the open text/voice channel OR the open DM conversation.
   useEffect(() => {
-    if (
-      !activeChannelId ||
-      !user ||
-      (activeChannel?.type !== "text" && activeChannel?.type !== "voice")
-    ) {
+    const typingKey =
+      pane === "home" && activeConversationId
+        ? `dm:${activeConversationId}`
+        : activeChannelId &&
+            (activeChannel?.type === "text" || activeChannel?.type === "voice")
+          ? `channel:${activeChannelId}`
+          : null;
+
+    if (!user || !typingKey) {
       setTypingUsers({});
       typingChannelRef.current = null;
       return;
     }
-    const channelId = activeChannelId;
+
     const selfId = user.id;
     const supabase = createClient();
     const channel = supabase
-      .channel(`typing:${channelId}`)
+      .channel(`typing:${typingKey}`)
       .on("broadcast", { event: "typing" }, ({ payload }) => {
         const data = payload as {
           userId?: string;
@@ -1351,8 +1369,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setTypingUsers((prev) => ({
           ...prev,
           [userId]: {
-            // Short hang — stops clear immediately via `stop` / new messages.
-            until: Date.now() + 1800,
+            // ~Discord: lasts ~10s unless refreshed; stop/send clear immediately.
+            until: Date.now() + 10_000,
             username: data.username || prev[userId]?.username || "Someone",
             avatarUrl:
               data.avatarUrl ?? prev[userId]?.avatarUrl ?? null,
@@ -1372,13 +1390,21 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         }
         return changed ? next : prev;
       });
-    }, 250);
+    }, 400);
     return () => {
       window.clearInterval(tick);
       typingChannelRef.current = null;
       void supabase.removeChannel(channel);
     };
-  }, [activeChannelId, activeChannel?.type, user, blockedIds, ignoredIds]);
+  }, [
+    pane,
+    activeConversationId,
+    activeChannelId,
+    activeChannel?.type,
+    user,
+    blockedIds,
+    ignoredIds,
+  ]);
 
   useEffect(() => {
     if (!pinsOpen || !activeChannelId || activeChannel?.type !== "text") return;
@@ -1537,20 +1563,33 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       )
       .map(([userId, info]) => {
         const member = membersById.get(userId);
+        const dmName =
+          activeThread?.otherUserId === userId ? activeThread.username : null;
         return {
           userId,
-          username: member?.username || info.username || "Someone",
-          avatarUrl: member?.avatar_url ?? info.avatarUrl ?? null,
+          username:
+            member?.username || dmName || info.username || "Someone",
+          avatarUrl:
+            member?.avatar_url ??
+            (activeThread?.otherUserId === userId
+              ? activeThread.avatar_url
+              : null) ??
+            info.avatarUrl ??
+            null,
         };
       })
       // Stable order so avatar stacks don't jump while people keep typing.
       .sort((a, b) => a.username.localeCompare(b.username));
-  }, [typingUsers, membersById, isMessageHidden]);
+  }, [typingUsers, membersById, isMessageHidden, activeThread]);
 
-  const typingChannelRef = useRef<ReturnType<
-    ReturnType<typeof createClient>["channel"]
-  > | null>(null);
-  const lastTypingSentRef = useRef(0);
+  const typingUserIds = useMemo(() => {
+    const now = Date.now();
+    return new Set(
+      Object.entries(typingUsers)
+        .filter(([userId, info]) => info.until > now && !isMessageHidden(userId))
+        .map(([userId]) => userId),
+    );
+  }, [typingUsers, isMessageHidden]);
 
   const publishTyping = useCallback(() => {
     const userId = user?.id;
@@ -2458,6 +2497,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             threads={visibleThreads}
             activeThreadId={activeConversationId}
             loadingThreads={loadingThreads}
+            typingUserIds={typingUserIds}
             onSelectThread={selectThread}
             onCloseThread={(threadId) => void closeThread(threadId)}
             footer={sidebarFooter}
@@ -2784,13 +2824,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 allowAttach={textMode && canSendMessages}
                 disabled={!user || (textMode && !canSendMessages)}
                 mentionSuggestions={textMode ? mentionSuggestions : []}
-                typingPeople={textMode ? typingPeople : []}
+                typingPeople={typingPeople}
                 onDraft={setDraft}
                 onCancelReply={() => setReplyTo(null)}
                 onFile={chooseFile}
                 onClearFile={() => setPendingFile(null)}
-                onTyping={textMode ? publishTyping : undefined}
-                onTypingStop={textMode ? publishTypingStop : undefined}
+                onTyping={publishTyping}
+                onTypingStop={publishTypingStop}
                 onSubmit={() => {
                   if (dmMode) void sendDm();
                   else void sendChannel();
@@ -2819,6 +2859,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           members={visibleMembers}
           ownerId={activeServer?.owner_id ?? null}
           currentUserId={user?.id ?? null}
+          typingUserIds={typingUserIds}
           onMessage={startDm}
           className={`${
             textMode && membersOpen ? "flex" : "hidden"
