@@ -78,9 +78,13 @@ export function BigProfileModal({
 }: BigProfileModalProps) {
   const router = useRouter();
   const [restricted, setRestricted] = useState(false);
-  const bio = restricted ? "" : profile.bio?.trim() || "";
-  const statusText = restricted ? "" : profile.status_text?.trim() || "";
   const shownName = displayName || profile.username;
+  const [liveStatus, setLiveStatus] = useState(profile.status);
+  const [liveManual, setLiveManual] = useState(profile.manual_status ?? null);
+  const [liveStatusText, setLiveStatusText] = useState(profile.status_text);
+  const [liveLastSeen, setLiveLastSeen] = useState(profile.last_seen_at ?? null);
+  const bio = restricted ? "" : profile.bio?.trim() || "";
+  const statusText = restricted ? "" : liveStatusText?.trim() || "";
   const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
   const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
   const [friendsSince, setFriendsSince] = useState<string | null>(null);
@@ -97,6 +101,19 @@ export function BigProfileModal({
   const friendsSectionRef = useRef<HTMLDivElement | null>(null);
   const serversSectionRef = useRef<HTMLDivElement | null>(null);
   const memberSince = formatSinceDate(profile.created_at);
+
+  useEffect(() => {
+    setLiveStatus(profile.status);
+    setLiveManual(profile.manual_status ?? null);
+    setLiveStatusText(profile.status_text);
+    setLiveLastSeen(profile.last_seen_at ?? null);
+  }, [
+    profile.id,
+    profile.status,
+    profile.manual_status,
+    profile.status_text,
+    profile.last_seen_at,
+  ]);
 
   useEffect(() => {
     setNickDraft(nickname ?? "");
@@ -254,7 +271,7 @@ export function BigProfileModal({
                 className="!h-[88px] !w-[88px] !text-2xl"
               />
               <span
-                className={`absolute bottom-2 right-2 h-4 w-4 rounded-full ring-[3px] ring-[#111214] ${statusDotClass(resolveDisplayStatus(profile.status, profile.last_seen_at))}`}
+                className={`absolute bottom-2 right-2 h-4 w-4 rounded-full ring-[3px] ring-[#111214] ${statusDotClass(resolveDisplayStatus(liveStatus, liveLastSeen))}`}
               />
             </span>
           </div>
@@ -269,18 +286,24 @@ export function BigProfileModal({
                     className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
                   >
                     <span
-                      className={`h-2.5 w-2.5 rounded-full ${statusDotClass(resolveDisplayStatus(profile.status, profile.last_seen_at))}`}
+                      className={`h-2.5 w-2.5 rounded-full ${statusDotClass(resolveDisplayStatus(liveStatus, liveLastSeen))}`}
                     />
                     Status
                   </button>
                   <StatusPicker
                     open={statusOpen}
-                    status={profile.status}
-                    manualStatus={profile.manual_status}
-                    statusText={profile.status_text}
+                    status={liveStatus}
+                    manualStatus={liveManual}
+                    statusText={liveStatusText}
                     placement="below"
                     onClose={() => setStatusOpen(false)}
-                    onSaved={() => setStatusOpen(false)}
+                    onSaved={(next) => {
+                      setLiveStatus(next.status);
+                      setLiveManual(next.status);
+                      setLiveStatusText(next.statusText);
+                      setLiveLastSeen(new Date().toISOString());
+                      setStatusOpen(false);
+                    }}
                   />
                 </div>
                 <button
@@ -372,8 +395,8 @@ export function BigProfileModal({
             {!restricted ? (
               <PresenceCaption
                 userId={profile.id}
-                status={profile.status}
-                lastSeenAt={profile.last_seen_at}
+                status={liveStatus}
+                lastSeenAt={liveLastSeen}
                 customStatus={statusText}
                 className="mt-1"
               />

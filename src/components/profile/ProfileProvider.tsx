@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -157,6 +158,72 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const [ignoring, setIgnoring] = useState(false);
   const [messageNotice, setMessageNotice] = useState<string | null>(null);
+
+  // Keep own big/small profile status dots in sync after StatusPicker / heartbeat.
+  useEffect(() => {
+    if (!current) return;
+    setBig((prev) => {
+      if (!prev || prev.id !== current.id) return prev;
+      if (
+        prev.status === current.status &&
+        prev.status_text === current.status_text &&
+        prev.last_seen_at === current.last_seen_at &&
+        prev.manual_status === current.manual_status
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        status: current.status,
+        status_text: current.status_text,
+        last_seen_at: current.last_seen_at,
+        manual_status: current.manual_status,
+        avatar_url: current.avatar_url,
+        username: current.username,
+        bio: current.bio,
+        banner_url: current.banner_url,
+        banner_color: current.banner_color,
+      };
+    });
+    setSmall((prev) => {
+      if (!prev || prev.profile.id !== current.id) return prev;
+      const p = prev.profile;
+      if (
+        p.status === current.status &&
+        p.status_text === current.status_text &&
+        p.last_seen_at === current.last_seen_at &&
+        p.manual_status === current.manual_status
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        profile: {
+          ...p,
+          status: current.status,
+          status_text: current.status_text,
+          last_seen_at: current.last_seen_at,
+          manual_status: current.manual_status,
+          avatar_url: current.avatar_url,
+          username: current.username,
+          bio: current.bio,
+          banner_url: current.banner_url,
+          banner_color: current.banner_color,
+        },
+      };
+    });
+  }, [
+    current?.id,
+    current?.status,
+    current?.status_text,
+    current?.last_seen_at,
+    current?.manual_status,
+    current?.avatar_url,
+    current?.username,
+    current?.bio,
+    current?.banner_url,
+    current?.banner_color,
+  ]);
 
   const messageUser = useCallback(
     async (userId: string) => {
