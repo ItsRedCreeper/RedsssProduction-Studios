@@ -31,9 +31,11 @@ export function HomeSidebar({
   const feed = useOptionalPresenceFeed();
   void feed?.version;
 
+  const watchKey = threads.map((thread) => thread.otherUserId).join(",");
   useEffect(() => {
-    feed?.watchMany(threads.map((thread) => thread.otherUserId));
-  }, [feed, threads]);
+    if (!feed || !watchKey) return;
+    feed.watchMany(watchKey.split(",").filter(Boolean));
+  }, [feed, watchKey]);
 
   return (
     <aside className="flex h-full w-full flex-col bg-[#2b2d31]">

@@ -414,9 +414,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     void loadServers();
   }, [loadServers]);
 
-  const refreshThreads = useCallback(async () => {
+  const refreshThreads = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) return;
-    setLoadingThreads(true);
+    const silent = opts?.silent === true;
+    // Only flash "Loading…" on the first/empty load — never when updating previews.
+    if (!silent) setLoadingThreads(true);
     const supabase = createClient();
     const { data: mine, error: mineError } = await supabase
       .from("dm_participants")
@@ -426,13 +428,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     if (mineError) {
       setError(mineError.message);
       setThreads([]);
-      setLoadingThreads(false);
+      if (!silent) setLoadingThreads(false);
       return;
     }
     const ids = (mine ?? []).map((row) => row.conversation_id);
     if (ids.length === 0) {
       setThreads([]);
-      setLoadingThreads(false);
+      if (!silent) setLoadingThreads(false);
       return;
     }
     const { data: parts, error: partsError } = await supabase
@@ -441,13 +443,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .in("conversation_id", ids);
     if (partsError || !parts) {
       if (partsError) setError(partsError.message);
-      setLoadingThreads(false);
+      if (!silent) setLoadingThreads(false);
       return;
     }
     const others = parts.filter((row) => row.user_id !== user.id);
     const profiles = await loadProfiles(others.map((row) => row.user_id));
     const profileMap = new Map(profiles.map((item) => [item.id, item]));
-    const next = await Promise.all(
+    const fetched = await Promise.all(
       others.map(async (part) => {
         const { data: last } = await supabase
           .from("dm_messages")
@@ -470,13 +472,44 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         } satisfies DmThread;
       }),
     );
-    next.sort((a, b) => {
+    fetched.sort((a, b) => {
       const left = a.previewAt ? Date.parse(a.previewAt) : 0;
       const right = b.previewAt ? Date.parse(b.previewAt) : 0;
       return right - left || a.username.localeCompare(b.username);
     });
-    setThreads(next);
-    setLoadingThreads(false);
+    // Reuse prior thread objects when unchanged so the sidebar doesn't remount rows.
+    setThreads((prev) => {
+      const prevById = new Map(prev.map((thread) => [thread.id, thread]));
+      return fetched.map((thread) => {
+        const old = prevById.get(thread.id);
+        if (
+          old &&
+          old.otherUserId === thread.otherUserId &&
+          old.username === thread.username &&
+          old.avatar_url === thread.avatar_url &&
+          old.preview === thread.preview &&
+          old.previewAt === thread.previewAt &&
+          old.status === thread.status &&
+          old.last_seen_at === thread.last_seen_at &&
+          old.status_text === thread.status_text
+        ) {
+          return old;
+        }
+        // Keep live presence fields from the existing row when only preview changed.
+        if (old && old.otherUserId === thread.otherUserId) {
+          return {
+            ...thread,
+            status: old.status,
+            last_seen_at: old.last_seen_at,
+            status_text: old.status_text,
+            username: old.username || thread.username,
+            avatar_url: old.avatar_url ?? thread.avatar_url,
+          };
+        }
+        return thread;
+      });
+    });
+    if (!silent) setLoadingThreads(false);
   }, [user]);
 
   useEffect(() => {
@@ -484,18 +517,67 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     void refreshThreads();
   }, [user, refreshThreads]);
 
-  // Keep the DM list live: new messages reopen hidden chats for recipients,
-  // and this subscription refreshes the sidebar without a manual reload.
+  // Keep the DM list live without remounting people on every message.
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
+
+    function patchThreadPreview(row: {
+      conversation_id?: string;
+      content?: string | null;
+      created_at?: string | null;
+    }) {
+      const conversationId = row.conversation_id;
+      if (!conversationId) return;
+      setThreads((prev) => {
+        const known = prev.some((thread) => thread.id === conversationId);
+        if (!known) {
+          // Hidden / new conversation — pull the full inbox quietly.
+          queue refreshThreads({ silent: true });
+          return prev;
+        }
+        const nextPreview = row.content ?? null;
+        const nextAt = row.created_at ?? null;
+        // Skip if this insert is already reflected (e.g. local send patched first).
+        const current = prev.find((thread) => thread.id === conversationId);
+        if (
+          current &&
+          current.preview === nextPreview &&
+          current.previewAt === nextAt
+        ) {
+          return prev;
+        }
+        return prev
+          .map((thread) =>
+            thread.id === conversationId
+              ? {
+                  ...thread,
+                  preview: nextPreview ?? thread.preview,
+                  previewAt: nextAt ?? thread.previewAt,
+                }
+              : thread,
+          )
+          .sort((a, b) => {
+            const left = a.previewAt ? Date.parse(a.previewAt) : 0;
+            const right = b.previewAt ? Date.parse(b.previewAt) : 0;
+            return right - left || a.username.localeCompare(b.username);
+          });
+      });
+    }
+
     const channel = supabase
       .channel(`dm-inbox:${user.id}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "dm_messages" },
-        () => {
-          void refreshThreads();
+        (payload) => {
+          patchThreadPreview(
+            payload.new as {
+              conversation_id?: string;
+              content?: string | null;
+              created_at?: string | null;
+            },
+          );
         },
       )
       .on(
@@ -507,12 +589,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          void refreshThreads();
+          void refreshThreads({ silent: true });
         },
       )
       .subscribe();
     const unsubLocal = subscribeDmInboxChanged(() => {
-      void refreshThreads();
+      void refreshThreads({ silent: true });
     });
     return () => {
       unsubLocal();
@@ -2020,7 +2102,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         }),
     );
 
-    // Notify the other participant and make sure their sidebar can pick it up.
+    // Notify the other participant. Sidebar preview was already patched locally;
+    // their client patches via realtime without a full list remount.
     if (otherId) {
       void supabase.rpc("create_notification", {
         p_user_id: otherId,
@@ -2032,7 +2115,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         p_link: messengerDmPath(conversationId),
       });
     }
-    void refreshThreads();
     setSending(false);
   }
 
