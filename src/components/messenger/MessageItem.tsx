@@ -35,6 +35,10 @@ type MessageItemProps = {
   channelNames?: string[];
   mentionMaps?: MentionMaps;
   canDeleteOthers?: boolean;
+  /** Discord: friend nicknames only in DMs, never in server channels. */
+  preferFriendNickname?: boolean;
+  /** Server nicknames keyed by user id (channel messages). */
+  serverNickByUserId?: Record<string, string>;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
   onDelete: (messageId: string) => Promise<void>;
@@ -59,6 +63,8 @@ export function MessageItem({
   channelNames,
   mentionMaps,
   canDeleteOthers = false,
+  preferFriendNickname = false,
+  serverNickByUserId,
   onReply,
   onEdit,
   onDelete,
@@ -74,9 +80,18 @@ export function MessageItem({
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const profileUi = useOptionalProfileUi();
-  const author = message.profiles?.username ?? "Unknown";
+  // Discord: friend nick in DMs; server nick in servers; else username.
+  const authorBase = message.profiles?.username ?? "Unknown";
+  const author = preferFriendNickname
+    ? profileUi?.nicknameFor(message.user_id)?.trim() || authorBase
+    : serverNickByUserId?.[message.user_id] || authorBase;
   const reply = message.reply_to;
-  const replyAuthor = reply?.profiles?.username ?? "Unknown";
+  const replyBase = reply?.profiles?.username ?? "Unknown";
+  const replyAuthor = !reply
+    ? replyBase
+    : preferFriendNickname
+      ? profileUi?.nicknameFor(reply.user_id)?.trim() || replyBase
+      : serverNickByUserId?.[reply.user_id] || replyBase;
   const replyBlocked =
     !!reply && (profileUi?.blockedIds?.includes(reply.user_id) ?? false);
   const replyIgnored =

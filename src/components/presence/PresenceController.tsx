@@ -260,26 +260,33 @@ export function PresenceController() {
     (profile as { manual_status?: string | null } | null)?.manual_status,
   ]);
 
-  // Clear timed custom statuses when their timer elapses.
+  // Clear timed custom text and timed idle/dnd/invisible when timers elapse.
   useEffect(() => {
     if (!user || !profile) return;
-    const expiresAt = (
+    const textExpires = (
       profile as { status_text_expires_at?: string | null }
     ).status_text_expires_at;
-    if (!expiresAt) return;
-    const at = Date.parse(expiresAt);
-    if (Number.isNaN(at)) return;
+    const manualExpires = (
+      profile as { manual_status_expires_at?: string | null }
+    ).manual_status_expires_at;
+    const times = [textExpires, manualExpires]
+      .map((value) => (value ? Date.parse(value) : Number.NaN))
+      .filter((value) => !Number.isNaN(value));
+    if (times.length === 0) return;
+    const soonest = Math.min(...times);
 
     function maybeClear() {
-      if (at <= Date.now()) void clearExpiredStatusText();
+      if (soonest <= Date.now()) void clearExpiredStatusText();
     }
     maybeClear();
-    const timer = window.setInterval(maybeClear, 30_000);
+    const timer = window.setInterval(maybeClear, 15_000);
     return () => window.clearInterval(timer);
   }, [
     user?.id,
     (profile as { status_text_expires_at?: string | null } | null)
       ?.status_text_expires_at,
+    (profile as { manual_status_expires_at?: string | null } | null)
+      ?.manual_status_expires_at,
   ]);
 
   return null;

@@ -24,6 +24,12 @@ type StatusPickerProps = {
   placement?: "above" | "below";
 };
 
+function clearAfterSelectValue(value: StatusClearAfter): string {
+  if (value === null) return "none";
+  if (value === "today" || value === "week") return value;
+  return String(value);
+}
+
 export function StatusPicker({
   open,
   status,
@@ -36,7 +42,8 @@ export function StatusPicker({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [draftStatus, setDraftStatus] = useState<ManualStatus>("online");
   const [draftText, setDraftText] = useState("");
-  const [clearAfter, setClearAfter] = useState<StatusClearAfter>(null);
+  // Discord defaults Clear After to Today for new custom statuses.
+  const [clearAfter, setClearAfter] = useState<StatusClearAfter>("today");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +56,7 @@ export function StatusPicker({
         : "online") as ManualStatus,
     );
     setDraftText(statusText ?? "");
-    setClearAfter(null);
+    setClearAfter(statusText?.trim() ? null : "today");
     setError(null);
   }, [open, status, manualStatus, statusText]);
 
@@ -71,34 +78,59 @@ export function StatusPicker({
 
   if (!open) return null;
 
-  async function save(nextStatus?: ManualStatus, clearText = false) {
+  const clearMinutes = clearAfterToMinutes(clearAfter);
+
+  async function savePresence(nextStatus: ManualStatus) {
     setBusy(true);
     setError(null);
-    const statusToSave = nextStatus ?? draftStatus;
-    // Presence-only clicks keep existing custom status + timer untouched.
-    const presenceOnly = nextStatus !== undefined && !clearText;
+    setDraftStatus(nextStatus);
+    // Presence click: keep custom text; optionally time the presence itself.
     const { error: saveError } = await setManualStatus({
-      manualStatus: statusToSave,
-      ...(clearText
-        ? { statusText: null, clearStatusText: true, clearAfterMinutes: 0 }
-        : presenceOnly
-          ? {}
-          : {
-              statusText: draftText,
-              clearAfterMinutes: clearAfterToMinutes(clearAfter),
-            }),
+      manualStatus: nextStatus,
+      manualClearAfterMinutes:
+        nextStatus === "online" ? 0 : clearMinutes === null ? 0 : clearMinutes,
+      // Don't touch custom text / its timer.
+      clearAfterMinutes: null,
     });
     setBusy(false);
     if (saveError) {
       setError(saveError);
       return;
     }
-    const cleaned = clearText
-      ? null
-      : presenceOnly
-        ? (statusText?.trim() || null)
-        : draftText.trim() || null;
-    setDraftStatus(statusToSave);
+    onSaved?.({
+      status: nextStatus,
+      statusText: statusText?.trim() || null,
+    });
+    onClose();
+  }
+
+  async function saveCustom(clearText = false) {
+    setBusy(true);
+    setError(null);
+    const statusToSave = draftStatus;
+    const { error: saveError } = await setManualStatus({
+      manualStatus: statusToSave,
+      ...(clearText
+        ? {
+            statusText: null,
+            clearStatusText: true,
+            clearAfterMinutes: 0,
+            manualClearAfterMinutes:
+              statusToSave === "online" ? 0 : clearMinutes === null ? 0 : clearMinutes,
+          }
+        : {
+            statusText: draftText,
+            clearAfterMinutes: clearMinutes === null ? 0 : clearMinutes,
+            manualClearAfterMinutes:
+              statusToSave === "online" ? 0 : clearMinutes === null ? 0 : clearMinutes,
+          }),
+    });
+    setBusy(false);
+    if (saveError) {
+      setError(saveError);
+      return;
+    }
+    const cleaned = clearText ? null : draftText.trim() || null;
     if (clearText) setDraftText("");
     onSaved?.({ status: statusToSave, statusText: cleaned });
     onClose();
@@ -126,7 +158,7 @@ export function StatusPicker({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void save(value)}
+                onClick={() => void savePresence(value)}
                 className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm ${
                   active
                     ? "bg-accent/15 text-white"
@@ -155,7 +187,7 @@ export function StatusPicker({
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              void save();
+              void saveCustom();
             }
           }}
           placeholder="What's on your mind?"
@@ -164,15 +196,12 @@ export function StatusPicker({
         <label className="mb-1 mt-2 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
           Clear after
         </label>
+        <p className="mb-1 text-[10px] leading-snug text-[#6d6f78]">
+          Applies to custom text and to Idle / DND / Invisible (reverts to Online).
+        </p>
         <select
-          value={
-            clearAfter === null
-              ? "none"
-              : clearAfter === "today" || clearAfter === "week"
-                ? clearAfter
-                : String(clearAfter)
-          }
-          disabled={busy || !draftText.trim()}
+          value={clearAfterSelectValue(clearAfter)}
+          disabled={busy}
           onChange={(event) => {
             const v = event.target.value;
             if (v === "none") setClearAfter(null);
@@ -196,19 +225,36 @@ export function StatusPicker({
             </option>
           ))}
         </select>
+        <label className="mb-1 mt-2 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+          Status with custom
+        </label>
+        <select
+          value={draftStatus}
+          disabled={busy}
+          onChange={(event) =>
+            setDraftStatus(event.target.value as ManualStatus)
+          }
+          className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] focus:ring-accent"
+        >
+          {STATUSES.map((value) => (
+            <option key={value} value={value}>
+              {statusLabel(value)}
+            </option>
+          ))}
+        </select>
         <div className="mt-2 flex items-center justify-between gap-2">
           <button
             type="button"
             disabled={busy || (!draftText && !statusText)}
-            onClick={() => void save(undefined, true)}
+            onClick={() => void saveCustom(true)}
             className="text-xs font-medium text-[#949ba4] hover:text-white disabled:opacity-40"
           >
             Clear
           </button>
           <button
             type="button"
-            disabled={busy}
-            onClick={() => void save()}
+            disabled={busy || !draftText.trim()}
+            onClick={() => void saveCustom()}
             className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
           >
             Save

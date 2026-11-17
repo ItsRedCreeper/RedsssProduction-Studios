@@ -31,17 +31,32 @@ export async function setFriendNickname(friendId: string, nickname: string) {
   return { error: error?.message ?? null };
 }
 
-/** Prefer personal nickname, then server nickname, then username. */
+/**
+ * Discord-style name resolution:
+ * - Friend nicknames: DMs, friends list, your view of their profile — NOT servers.
+ * - Server nicknames: that server only (member list, messages, voice).
+ * - Otherwise: username (our stand-in for display name).
+ */
 export function displayNameFor(
   userId: string,
   username: string,
   opts?: {
+    /** Private friend nickname (DM / friends contexts only). */
+    friendNickname?: string | null;
     nicknames?: NicknameMap | null;
+    /** Per-server nickname. */
     serverNickname?: string | null;
+    /** When true, allow friend nickname. Default false (server-safe). */
+    allowFriendNickname?: boolean;
   },
 ) {
-  const personal = opts?.nicknames?.[userId]?.trim();
-  if (personal) return personal;
+  if (opts?.allowFriendNickname) {
+    const personal =
+      opts.friendNickname?.trim() ||
+      opts.nicknames?.[userId]?.trim() ||
+      null;
+    if (personal) return personal;
+  }
   const server = opts?.serverNickname?.trim();
   if (server) return server;
   return username;

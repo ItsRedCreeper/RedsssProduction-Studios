@@ -45,8 +45,9 @@ export function resolveDisplayStatus(
 }
 
 /**
- * Combined caption under a username: activity (when not offline), else custom
- * status, else Idle / DND / Offline fallback.
+ * Combined caption under a username.
+ * Discord: custom status overrides activity in member/friends lists; Invisible
+ * hides custom status and shows Offline.
  */
 export function presenceCaption(opts: {
   status: string | null | undefined;
@@ -60,14 +61,13 @@ export function presenceCaption(opts: {
   const custom = opts.customStatus?.trim() || null;
   const activity = opts.activityLabel?.trim() || null;
 
-  // Explicit manual offline (and no fresh activity) → Offline.
+  // Invisible / offline — Discord hides custom status from others.
   if (stored === "offline") {
-    return custom || "Offline";
+    return "Offline";
   }
 
   let status = resolveDisplayStatus(opts.status, opts.lastSeenAt);
   // Heartbeat can lag a beat during navigation; if activity just updated, stay present.
-  // (stored is already non-offline here — handled above.)
   if (status === "offline" && opts.activityUpdatedAt) {
     const act = Date.parse(opts.activityUpdatedAt);
     if (!Number.isNaN(act) && Date.now() - act < PRESENCE_STALE_MS) {
@@ -76,11 +76,12 @@ export function presenceCaption(opts: {
   }
 
   if (status === "offline") {
-    return custom || "Offline";
+    return "Offline";
   }
 
-  if (activity) return activity;
+  // Custom status wins over "Playing / In voice / …" in list captions.
   if (custom) return custom;
+  if (activity) return activity;
   if (status === "idle") return "Idle";
   if (status === "dnd") return "Do Not Disturb";
   return "Online";
@@ -100,14 +101,13 @@ export function computeAutoEffectiveStatus(opts: {
   return "online";
 }
 
-/** Discord-style clear-after options for custom status text (minutes). */
+/** Discord Clear After menu order (custom status + timed presence). */
 export const STATUS_CLEAR_AFTER_OPTIONS = [
-  { label: "Don't clear", minutes: null },
-  { label: "30 minutes", minutes: 30 },
-  { label: "1 hour", minutes: 60 },
-  { label: "4 hours", minutes: 240 },
   { label: "Today", minutes: "today" as const },
-  { label: "This week", minutes: "week" as const },
+  { label: "4 hours", minutes: 240 },
+  { label: "1 hour", minutes: 60 },
+  { label: "30 minutes", minutes: 30 },
+  { label: "Don't clear", minutes: null },
 ] as const;
 
 export type StatusClearAfter =
@@ -138,17 +138,23 @@ export async function setManualStatus(opts: {
   manualStatus: ManualStatus;
   statusText?: string | null;
   clearStatusText?: boolean;
-  /** Minutes until custom status clears; 0 = don't clear; omit = leave expiry unchanged. */
+  /** Minutes until custom status text clears; 0 = don't clear; omit = leave unchanged. */
   clearAfterMinutes?: number | null;
+  /** Minutes until idle/dnd/offline reverts to online; 0 = don't clear; omit = leave. */
+  manualClearAfterMinutes?: number | null;
 }) {
   const supabase = createClient();
-  // Always send all four named args so PostgREST never hits an overload clash.
+  // Always send all named args so PostgREST never hits an overload clash.
   const { error } = await supabase.rpc("set_manual_status", {
     p_manual_status: opts.manualStatus,
     p_status_text: opts.statusText !== undefined ? opts.statusText : null,
     p_clear_status_text: opts.clearStatusText ?? false,
     p_clear_after_minutes:
       opts.clearAfterMinutes !== undefined ? opts.clearAfterMinutes : null,
+    p_manual_clear_after_minutes:
+      opts.manualClearAfterMinutes !== undefined
+        ? opts.manualClearAfterMinutes
+        : null,
   });
   if (error) return { error: error.message };
   notifyProfileUpdated();

@@ -1641,6 +1641,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     [typingUserIds],
   );
 
+  const serverNickByUserId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const member of members) {
+      const nick = member.nickname?.trim();
+      if (nick) map[member.user_id] = nick;
+    }
+    return map;
+  }, [members]);
+
   const loadOlderChannel = useCallback(async () => {
     if (!activeChannelId || loadingOlderMessages || !channelHasMore) return;
     const oldest = messages[0]?.created_at;
@@ -2829,6 +2838,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               hasMore={!searchNeedle && dmHasMore}
               loadingOlder={loadingOlderMessages}
               onLoadOlder={() => void loadOlderDm()}
+              preferFriendNickname
               onReply={setReplyTo}
               onEdit={editDm}
               onDelete={deleteDm}
@@ -2859,6 +2869,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               mentionMaps={mentionMaps}
               canDeleteOthers={canManageMessages}
               reactionMap={reactionMap}
+              serverNickByUserId={serverNickByUserId}
               hasMore={!searchNeedle && channelHasMore}
               loadingOlder={loadingOlderMessages}
               onLoadOlder={() => void loadOlderChannel()}
@@ -3030,6 +3041,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 mentionMaps={mentionMaps}
                 canDeleteOthers={canManageMessages}
                 reactionMap={reactionMap}
+                serverNickByUserId={serverNickByUserId}
                 hasMore={channelHasMore}
                 loadingOlder={loadingOlderMessages}
                 onLoadOlder={() => void loadOlderChannel()}

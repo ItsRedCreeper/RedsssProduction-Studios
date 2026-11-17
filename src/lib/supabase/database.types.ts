@@ -156,6 +156,7 @@ export type Database = {
           status_text: string | null
           status_text_expires_at: string | null
           manual_status: string
+          manual_status_expires_at: string | null
           last_seen_at: string | null
           bio: string | null
           banner_url: string | null
@@ -170,6 +171,7 @@ export type Database = {
           status_text?: string | null
           status_text_expires_at?: string | null
           manual_status?: string
+          manual_status_expires_at?: string | null
           last_seen_at?: string | null
           bio?: string | null
           banner_url?: string | null
@@ -333,6 +335,7 @@ export type Database = {
           p_status_text?: string | null
           p_clear_status_text?: boolean
           p_clear_after_minutes?: number | null
+          p_manual_clear_after_minutes?: number | null
         }
         Returns: undefined
       }

@@ -102,10 +102,10 @@ export function MemberList({
     feed?.watchMany(members.map((member) => member.user_id));
   }, [feed, members]);
 
+  // Discord: friend nicknames do NOT appear in server member lists — only
+  // server nicknames (or username / display name).
   const displayNameOf = (member: MemberView) =>
-    profileUi?.nicknameFor(member.user_id) ||
-    member.nickname ||
-    member.username;
+    member.nickname?.trim() || member.username;
 
   const { online, offline } = useMemo(() => {
     const now = Date.now();
@@ -126,7 +126,7 @@ export function MemberList({
     };
     // feedVersion/nowTick intentionally included for live + stale flips.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [members, profileUi?.nicknames, nowTick, feedVersion, feed]);
+  }, [members, nowTick, feedVersion, feed]);
 
   function openPopover(member: MemberView, element: HTMLButtonElement) {
     void profileUi?.openSmallProfile(member.user_id, element);

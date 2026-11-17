@@ -25,6 +25,10 @@ type ChatTimelineProps = {
   hasMore?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
+  /** Discord: friend nicknames only in DM timelines. */
+  preferFriendNickname?: boolean;
+  /** Server nicknames for channel message authors. */
+  serverNickByUserId?: Record<string, string>;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
   onDelete: (messageId: string) => Promise<void>;
@@ -54,6 +58,8 @@ export function ChatTimeline({
   hasMore = false,
   loadingOlder = false,
   onLoadOlder,
+  preferFriendNickname = false,
+  serverNickByUserId,
   onReply,
   onEdit,
   onDelete,
@@ -195,6 +201,8 @@ export function ChatTimeline({
               channelNames={channelNames}
               mentionMaps={mentionMaps}
               canDeleteOthers={canDeleteOthers}
+              preferFriendNickname={preferFriendNickname}
+              serverNickByUserId={serverNickByUserId}
               reactions={reactionMap[message.id] ?? []}
               onReply={onReply}
               onEdit={onEdit}
