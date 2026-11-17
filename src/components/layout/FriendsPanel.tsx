@@ -16,6 +16,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { useOptionalPresenceFeed } from "@/components/presence/PresenceFeed";
 import { resolveDisplayStatus } from "@/lib/presence";
 import { useOptionalProfileUi, type FriendsTab } from "@/components/profile/ProfileProvider";
 import {
@@ -101,6 +102,7 @@ export function FriendsPanel({
   initialTab = "friends",
 }: FriendsPanelProps) {
   const profileUi = useOptionalProfileUi();
+  const presenceFeed = useOptionalPresenceFeed();
   const { width, beginResize } = useFriendsPanelWidth();
   const [tab, setTab] = useState<FriendsTab>(initialTab);
   const [edges, setEdges] = useState<FriendEdge[]>([]);
@@ -302,6 +304,11 @@ export function FriendsPanel({
     if (!userId) return { friends: [], incoming: [], outgoing: [] };
     return splitFriendEdges(userId, edges);
   }, [userId, edges]);
+
+  useEffect(() => {
+    if (!open) return;
+    presenceFeed?.watchMany(friends.map((edge) => edge.other.id));
+  }, [open, friends, presenceFeed]);
 
   function changeTab(next: FriendsTab) {
     setTab(next);

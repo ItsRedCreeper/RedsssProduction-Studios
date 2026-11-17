@@ -26,15 +26,25 @@ export function SiteActivityTracker() {
 
   useEffect(() => {
     const next = activityForPath(pathname);
-    if (!next) return;
+    if (!next) {
+      // Leaving site pages into messenger — let ActivityTracker take over.
+      lastKey.current = "";
+      return;
+    }
     const key = next.type;
     if (key === lastKey.current) return;
-    lastKey.current = key;
-    void setUserActivity({
-      type: next.type,
-      contextName: next.name ?? null,
-      isPublic: true,
-    });
+    let cancelled = false;
+    void (async () => {
+      const { error } = await setUserActivity({
+        type: next.type,
+        contextName: next.name ?? null,
+        isPublic: true,
+      });
+      if (!cancelled && !error) lastKey.current = key;
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
   return null;

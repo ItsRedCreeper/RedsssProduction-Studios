@@ -31,6 +31,7 @@ export function ActivityTracker({
   voiceServerPublic,
 }: ActivityTrackerProps) {
   const lastKey = useRef<string>("");
+  const inflight = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,15 +78,18 @@ export function ActivityTracker({
         isPublic ? "1" : "0",
       ].join("|");
       if (key === lastKey.current) return;
-      lastKey.current = key;
+      const seq = ++inflight.current;
       if (cancelled) return;
-      await setUserActivity({
+      const { error } = await setUserActivity({
         type,
         contextId,
         contextName,
         contextExtra,
         isPublic,
       });
+      if (cancelled || seq !== inflight.current) return;
+      // Only lock the key after a successful write so failures retry.
+      if (!error) lastKey.current = key;
     }
 
     void publish();

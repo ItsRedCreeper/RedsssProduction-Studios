@@ -60,13 +60,28 @@ export function DiscoverPane({
     if (!user) return;
     const supabase = createClient();
     let cancelled = false;
+    let statsTimer: number | null = null;
+
+    async function refreshStats() {
+      const statsRes = await supabase.rpc("discover_server_stats");
+      if (cancelled) return;
+      const nextStats: Record<string, ServerStats> = {};
+      for (const row of statsRes.data ?? []) {
+        nextStats[row.server_id] = {
+          member_count: Number(row.member_count) || 0,
+          online_count: Number(row.online_count) || 0,
+        };
+      }
+      setStatsById(nextStats);
+      if (statsRes.error) setError(statsRes.error.message);
+    }
 
     async function load() {
       if (!user) return;
       setLoading(true);
       setError(null);
 
-      const [publicRes, membershipRes, statsRes] = await Promise.all([
+      const [publicRes, membershipRes] = await Promise.all([
         supabase
           .from("servers")
           .select("*")
@@ -76,7 +91,6 @@ export function DiscoverPane({
           .from("server_members")
           .select("server_id")
           .eq("user_id", user.id),
-        supabase.rpc("discover_server_stats"),
       ]);
 
       if (cancelled) return;
@@ -88,25 +102,51 @@ export function DiscoverPane({
         setServers(publicRes.data ?? []);
       }
 
-      const nextStats: Record<string, ServerStats> = {};
-      for (const row of statsRes.data ?? []) {
-        nextStats[row.server_id] = {
-          member_count: Number(row.member_count) || 0,
-          online_count: Number(row.online_count) || 0,
-        };
-      }
-      setStatsById(nextStats);
-      if (statsRes.error && !publicRes.error) {
-        setError(statsRes.error.message);
-      }
-
       setMemberIds((membershipRes.data ?? []).map((row) => row.server_id));
-      setLoading(false);
+      await refreshStats();
+      if (!cancelled) setLoading(false);
     }
 
     void load();
+
+    let statsDebounce: number | null = null;
+    function scheduleStatsRefresh() {
+      if (statsDebounce) window.clearTimeout(statsDebounce);
+      statsDebounce = window.setTimeout(() => {
+        void refreshStats();
+      }, 400);
+    }
+
+    const channel = supabase
+      .channel(`discover-stats:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "server_members" },
+        () => scheduleStatsRefresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        () => scheduleStatsRefresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "servers" },
+        () => {
+          void load();
+        },
+      )
+      .subscribe();
+
+    statsTimer = window.setInterval(() => {
+      void refreshStats();
+    }, 10_000);
+
     return () => {
       cancelled = true;
+      if (statsDebounce) window.clearTimeout(statsDebounce);
+      if (statsTimer) window.clearInterval(statsTimer);
+      void supabase.removeChannel(channel);
     };
   }, [user]);
 

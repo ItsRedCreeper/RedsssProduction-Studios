@@ -1,12 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { statusDotClass } from "@/components/messenger/data";
 import type { DmThread } from "@/components/messenger/types";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { useOptionalPresenceFeed } from "@/components/presence/PresenceFeed";
 import { resolveDisplayStatus } from "@/lib/presence";
 
 type HomeSidebarProps = {
@@ -27,6 +28,12 @@ export function HomeSidebar({
   footer,
 }: HomeSidebarProps) {
   const profileUi = useOptionalProfileUi();
+  const feed = useOptionalPresenceFeed();
+  void feed?.version;
+
+  useEffect(() => {
+    feed?.watchMany(threads.map((thread) => thread.otherUserId));
+  }, [feed, threads]);
 
   return (
     <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
@@ -65,7 +72,7 @@ export function HomeSidebar({
                         className="!h-8 !w-8"
                       />
                       <span
-                        className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#2b2d31] ${statusDotClass(resolveDisplayStatus(thread.status, thread.last_seen_at))}`}
+                        className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#2b2d31] ${statusDotClass(resolveDisplayStatus(feed?.get(thread.otherUserId)?.status ?? thread.status, feed?.get(thread.otherUserId)?.lastSeenAt ?? thread.last_seen_at))}`}
                       />
                     </span>
                     <span className="min-w-0 flex-1">

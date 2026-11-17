@@ -22,6 +22,18 @@ export type UserActivityRow = {
   updated_at: string;
 };
 
+const ACTIVITY_CHANGED = "redsss-activity-changed";
+
+export function notifyActivityChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(ACTIVITY_CHANGED));
+}
+
+export function onActivityChanged(handler: () => void) {
+  window.addEventListener(ACTIVITY_CHANGED, handler);
+  return () => window.removeEventListener(ACTIVITY_CHANGED, handler);
+}
+
 export async function setUserActivity(opts: {
   type: ActivityType | string;
   contextId?: string | null;
@@ -37,6 +49,7 @@ export async function setUserActivity(opts: {
     p_context_extra: opts.contextExtra ?? null,
     p_is_public: opts.isPublic ?? true,
   });
+  if (!error) notifyActivityChanged();
   return { error: error?.message ?? null };
 }
 

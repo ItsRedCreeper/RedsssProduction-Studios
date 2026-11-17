@@ -6,6 +6,7 @@ import { isPresenceOnline, statusDotClass } from "@/components/messenger/data";
 import type { MemberView } from "@/components/messenger/types";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { useOptionalPresenceFeed } from "@/components/presence/PresenceFeed";
 import { resolveDisplayStatus } from "@/lib/presence";
 
 type MemberListProps = {
@@ -27,9 +28,12 @@ function MemberButton({
   displayName: string;
   onClick: (element: HTMLButtonElement) => void;
 }) {
+  const feed = useOptionalPresenceFeed();
+  const live = feed?.get(member.user_id);
+  void feed?.version;
   const displayStatus = resolveDisplayStatus(
-    member.status,
-    member.last_seen_at,
+    live?.status ?? member.status,
+    live?.lastSeenAt ?? member.last_seen_at,
   );
   return (
     <button
@@ -76,12 +80,18 @@ export function MemberList({
   className = "",
 }: MemberListProps) {
   const profileUi = useOptionalProfileUi();
+  const feed = useOptionalPresenceFeed();
+  const feedVersion = feed?.version ?? 0;
   // Recompute online/offline as heartbeats go stale without a new render.
   const [nowTick, setNowTick] = useState(0);
   useEffect(() => {
-    const timer = window.setInterval(() => setNowTick(Date.now()), 15_000);
+    const timer = window.setInterval(() => setNowTick(Date.now()), 10_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    feed?.watchMany(members.map((member) => member.user_id));
+  }, [feed, members]);
 
   const displayNameOf = (member: MemberView) =>
     profileUi?.nicknameFor(member.user_id) ||
@@ -93,22 +103,21 @@ export function MemberList({
     const sorted = [...members].sort((a, b) =>
       displayNameOf(a).localeCompare(displayNameOf(b)),
     );
-    return {
-      online: sorted.filter((member) =>
-        isPresenceOnline(
-          resolveDisplayStatus(member.status, member.last_seen_at, now),
-        ),
-      ),
-      offline: sorted.filter(
-        (member) =>
-          !isPresenceOnline(
-            resolveDisplayStatus(member.status, member.last_seen_at, now),
-          ),
-      ),
+    const statusOf = (member: MemberView) => {
+      const live = feed?.get(member.user_id);
+      return resolveDisplayStatus(
+        live?.status ?? member.status,
+        live?.lastSeenAt ?? member.last_seen_at,
+        now,
+      );
     };
-    // nowTick intentionally included so stale presence flips Online → Offline.
+    return {
+      online: sorted.filter((member) => isPresenceOnline(statusOf(member))),
+      offline: sorted.filter((member) => !isPresenceOnline(statusOf(member))),
+    };
+    // feedVersion/nowTick intentionally included for live + stale flips.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [members, profileUi?.nicknames, nowTick]);
+  }, [members, profileUi?.nicknames, nowTick, feedVersion, feed]);
 
   function openPopover(member: MemberView, element: HTMLButtonElement) {
     void profileUi?.openSmallProfile(member.user_id, element);

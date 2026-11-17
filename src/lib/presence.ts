@@ -7,7 +7,7 @@ const CUSTOM_STATUS_MAX = 128;
 /** If no heartbeat within this window, treat as offline when rendering. */
 export const PRESENCE_STALE_MS = 120_000;
 export const IDLE_AFTER_MS = 10 * 60 * 1000;
-export const HEARTBEAT_INTERVAL_MS = 20_000;
+export const HEARTBEAT_INTERVAL_MS = 8_000;
 export const TAB_PING_MS = 2_000;
 
 export type ManualStatus = "online" | "idle" | "dnd" | "offline";
