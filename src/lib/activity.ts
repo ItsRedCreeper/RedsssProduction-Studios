@@ -81,6 +81,7 @@ type ActivityViewOpts = {
 /**
  * Privacy-aware activity label for display on profiles / friends list.
  * Never reveals private server names or DM partners without friendship+membership.
+ * Own profile always sees the full/true label.
  */
 export function formatActivityLabel(
   row: UserActivityRow | null | undefined,
@@ -91,9 +92,15 @@ export function formatActivityLabel(
   const name = row.context_name?.trim() || null;
   const extra = row.context_extra?.trim() || null;
   const isPublic = row.is_public_context;
-  const isFriend = opts.friendIds.has(opts.activityOwnerId);
+  const isSelf = !!opts.viewerId && opts.viewerId === opts.activityOwnerId;
+  const isFriend =
+    isSelf || opts.friendIds.has(opts.activityOwnerId);
   const inServer =
-    !!row.context_id && opts.viewerServerIds.has(row.context_id);
+    isSelf ||
+    (!!row.context_id && opts.viewerServerIds.has(row.context_id));
+  /** Viewer is the other person in this DM. */
+  const messagingYou =
+    !!opts.viewerId && !!extra && opts.viewerId === extra;
 
   switch (type) {
     case "home":
@@ -109,28 +116,27 @@ export function formatActivityLabel(
     case "editing_profile":
       return "Editing profile";
     case "dm": {
-      if (
-        isFriend &&
-        extra &&
-        opts.friendIds.has(extra) &&
-        name
-      ) {
+      if (messagingYou) return "Messaging you";
+      if (isSelf && name) return `Messaging ${name}`;
+      if (isFriend && extra && opts.friendIds.has(extra) && name) {
         return `Messaging ${name}`;
       }
       return "Messaging someone";
     }
     case "server": {
-      if (isPublic && name) return `In ${name}`;
-      if (!isPublic && isFriend && inServer && name) return `In ${name}`;
+      if ((isPublic || isSelf || (isFriend && inServer)) && name) {
+        return `In ${name}`;
+      }
       return "In a server";
     }
     case "voice": {
-      if (isPublic && name) return `In voice — ${name}`;
-      if (!isPublic && isFriend && inServer && name) {
+      if ((isPublic || isSelf || (isFriend && inServer)) && name) {
         return `In voice — ${name}`;
       }
       return "In a voice channel";
     }
+    case "other":
+      return name || null;
     default:
       return name ? name : null;
   }

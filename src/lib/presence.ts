@@ -53,15 +53,31 @@ export function presenceCaption(opts: {
   lastSeenAt?: string | null;
   activityLabel?: string | null;
   customStatus?: string | null;
+  /** Fresh activity timestamp — keeps caption from flashing Offline mid-switch. */
+  activityUpdatedAt?: string | null;
 }): string {
-  const status = resolveDisplayStatus(opts.status, opts.lastSeenAt);
+  const stored = asPresenceStatus(opts.status);
   const custom = opts.customStatus?.trim() || null;
+  const activity = opts.activityLabel?.trim() || null;
+
+  // Explicit manual offline (and no fresh activity) → Offline.
+  if (stored === "offline") {
+    return custom || "Offline";
+  }
+
+  let status = resolveDisplayStatus(opts.status, opts.lastSeenAt);
+  // Heartbeat can lag a beat during navigation; if activity just updated, stay present.
+  if (status === "offline" && stored !== "offline" && opts.activityUpdatedAt) {
+    const act = Date.parse(opts.activityUpdatedAt);
+    if (!Number.isNaN(act) && Date.now() - act < PRESENCE_STALE_MS) {
+      status = stored;
+    }
+  }
 
   if (status === "offline") {
     return custom || "Offline";
   }
 
-  const activity = opts.activityLabel?.trim() || null;
   if (activity) return activity;
   if (custom) return custom;
   if (status === "idle") return "Idle";

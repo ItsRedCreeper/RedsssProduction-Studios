@@ -27,7 +27,7 @@ export function SiteActivityTracker() {
   useEffect(() => {
     const next = activityForPath(pathname);
     if (!next) {
-      // Leaving site pages into messenger — let ActivityTracker take over.
+      // Entering messenger — clear local lock so ActivityTracker always wins.
       lastKey.current = "";
       return;
     }
@@ -42,8 +42,25 @@ export function SiteActivityTracker() {
       });
       if (!cancelled && !error) lastKey.current = key;
     })();
+
+    function onVisible() {
+      if (document.visibilityState !== "visible") return;
+      const again = activityForPath(pathname);
+      if (!again || again.type !== key) return;
+      lastKey.current = "";
+      void setUserActivity({
+        type: again.type,
+        contextName: again.name ?? null,
+        isPublic: true,
+      }).then(({ error }) => {
+        if (!error) lastKey.current = key;
+      });
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [pathname]);
 

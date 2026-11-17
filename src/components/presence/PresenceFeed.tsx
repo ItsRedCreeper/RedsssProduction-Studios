@@ -18,7 +18,11 @@ import {
   type UserActivityRow,
 } from "@/lib/activity";
 import { loadFriendEdges } from "@/lib/friends";
-import { presenceCaption, resolveDisplayStatus } from "@/lib/presence";
+import {
+  asPresenceStatus,
+  presenceCaption,
+  resolveDisplayStatus,
+} from "@/lib/presence";
 
 export type PresenceSnapshot = {
   userId: string;
@@ -44,15 +48,16 @@ const PresenceFeedContext = createContext<PresenceFeedValue | null>(null);
 const POLL_MS = 8_000;
 
 function emptySnap(userId: string): PresenceSnapshot {
+  // Use online as a neutral placeholder so activity-only patches don't flash Offline.
   return {
     userId,
-    status: "offline",
+    status: "online",
     statusText: null,
-    lastSeenAt: null,
+    lastSeenAt: new Date().toISOString(),
     activity: null,
     activityLabel: null,
-    caption: "Offline",
-    displayStatus: "offline",
+    caption: "Online",
+    displayStatus: "online",
   };
 }
 
@@ -61,16 +66,25 @@ function buildCaption(
     activityLabel: string | null;
   },
 ): Pick<PresenceSnapshot, "caption" | "displayStatus"> {
-  const displayStatus = resolveDisplayStatus(snap.status, snap.lastSeenAt);
-  return {
-    displayStatus,
-    caption: presenceCaption({
-      status: displayStatus,
-      lastSeenAt: snap.lastSeenAt,
-      activityLabel: displayStatus === "offline" ? null : snap.activityLabel,
-      customStatus: snap.statusText,
-    }),
-  };
+  const caption = presenceCaption({
+    status: snap.status,
+    lastSeenAt: snap.lastSeenAt,
+    activityLabel: snap.activityLabel,
+    customStatus: snap.statusText,
+    activityUpdatedAt: snap.activity?.updated_at ?? null,
+  });
+  let displayStatus = resolveDisplayStatus(snap.status, snap.lastSeenAt);
+  if (
+    displayStatus === "offline" &&
+    snap.activity?.updated_at &&
+    asPresenceStatus(snap.status) !== "offline"
+  ) {
+    const act = Date.parse(snap.activity.updated_at);
+    if (!Number.isNaN(act) && Date.now() - act < 120_000) {
+      displayStatus = asPresenceStatus(snap.status);
+    }
+  }
+  return { displayStatus, caption };
 }
 
 export function PresenceFeedProvider({ children }: { children: ReactNode }) {
@@ -187,10 +201,13 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
     [fetchUsers],
   );
 
-  // Load viewer privacy context once.
+  // Load viewer privacy context once, and always track self so own profiles
+  // show the true status/activity.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    watchedRef.current.add(user.id);
+    void fetchUsers([user.id]);
     void (async () => {
       const [edges, membership] = await Promise.all([
         loadFriendEdges(user.id),
@@ -208,7 +225,7 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
       serverIdsRef.current = new Set(
         (membership.data ?? []).map((row) => row.server_id),
       );
-      // Relabel existing snaps with fresh privacy context.
+      // Relabel existing snaps with fresh privacy context (includes self).
       for (const [id, snap] of snapsRef.current) {
         upsert(id, { activity: snap.activity });
       }
@@ -216,7 +233,7 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, upsert]);
+  }, [user?.id, upsert, fetchUsers]);
 
   // One shared realtime channel for the whole app.
   useEffect(() => {
@@ -237,11 +254,16 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
           if (!row?.id) return;
           if (!watchedRef.current.has(row.id) && row.id !== user.id) return;
           watchedRef.current.add(row.id);
-          upsert(row.id, {
-            status: row.status ?? "offline",
-            statusText: row.status_text ?? null,
-            lastSeenAt: row.last_seen_at ?? null,
-          });
+          const patch: Partial<{
+            status: string;
+            statusText: string | null;
+            lastSeenAt: string | null;
+          }> = {};
+          // Never invent "offline" from a partial payload — that caused the flicker.
+          if (typeof row.status === "string") patch.status = row.status;
+          if (row.status_text !== undefined) patch.statusText = row.status_text;
+          if (row.last_seen_at !== undefined) patch.lastSeenAt = row.last_seen_at;
+          if (Object.keys(patch).length) upsert(row.id, patch);
         },
       )
       .on(

@@ -42,21 +42,26 @@ export function PresenceCaption({
     feed.watch(userId);
   }, [feed, userId]);
 
-  const displayStatus = resolveDisplayStatus(
-    live?.status ?? status,
-    live?.lastSeenAt ?? lastSeenAt,
-  );
-  const caption =
-    live?.caption ??
-    presenceCaption({
-      status: displayStatus,
-      lastSeenAt: live?.lastSeenAt ?? lastSeenAt,
-      activityLabel:
-        displayStatus === "offline"
-          ? null
-          : (activityLabelProp ?? live?.activityLabel ?? null),
-      customStatus: live?.statusText ?? customStatus,
-    });
+  // Props win for status (own profile StatusPicker), feed wins for activity text.
+  const mergedStatus = status ?? live?.status ?? null;
+  const mergedLastSeen = lastSeenAt ?? live?.lastSeenAt ?? null;
+  const mergedCustom =
+    customStatus !== undefined && customStatus !== null
+      ? customStatus
+      : (live?.statusText ?? null);
+  const mergedActivity =
+    activityLabelProp !== undefined && activityLabelProp !== null
+      ? activityLabelProp
+      : (live?.activityLabel ?? null);
+
+  const displayStatus = resolveDisplayStatus(mergedStatus, mergedLastSeen);
+  const caption = presenceCaption({
+    status: mergedStatus,
+    lastSeenAt: mergedLastSeen,
+    activityLabel: mergedActivity,
+    customStatus: mergedCustom,
+    activityUpdatedAt: live?.activity?.updated_at ?? null,
+  });
 
   const tone =
     displayStatus === "offline"
