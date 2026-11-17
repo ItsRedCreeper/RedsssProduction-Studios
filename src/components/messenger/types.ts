@@ -15,6 +15,7 @@ export type MiniProfile = {
   avatar_url: string | null;
   status: string;
   status_text: string | null;
+  last_seen_at?: string | null;
   bio?: string | null;
   banner_url?: string | null;
   banner_color?: string | null;
@@ -48,6 +49,7 @@ export type MemberView = {
   avatar_url: string | null;
   status: string;
   status_text: string | null;
+  last_seen_at?: string | null;
   bio?: string | null;
   banner_url?: string | null;
   banner_color?: string | null;
@@ -60,6 +62,8 @@ export type DmThread = {
   username: string;
   avatar_url: string | null;
   status: string;
+  last_seen_at?: string | null;
+  status_text?: string | null;
   preview: string | null;
   previewAt: string | null;
 };

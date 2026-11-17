@@ -9,6 +9,8 @@ export type FriendProfile = {
   avatar_url: string | null;
   status: string;
   status_text: string | null;
+  last_seen_at?: string | null;
+  manual_status?: string | null;
   bio: string | null;
   banner_url: string | null;
   banner_color: string | null;
@@ -26,6 +28,8 @@ function asProfile(row: Partial<FriendProfile> & { id: string; username: string 
     avatar_url: row.avatar_url ?? null,
     status: row.status ?? "offline",
     status_text: row.status_text ?? null,
+    last_seen_at: row.last_seen_at ?? null,
+    manual_status: row.manual_status ?? null,
     bio: row.bio ?? null,
     banner_url: row.banner_url ?? null,
     banner_color: row.banner_color ?? null,
@@ -87,7 +91,7 @@ export async function loadFriendEdges(userId: string) {
 
   const { data: profiles, error: profileError } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, status, status_text, bio, banner_url, banner_color")
+    .select("id, username, avatar_url, status, status_text, last_seen_at, manual_status, bio, banner_url, banner_color")
     .in("id", unique);
   if (profileError) return { edges: [] as FriendEdge[], error: profileError.message };
 
@@ -212,7 +216,7 @@ export async function searchProfiles(query: string, excludeId: string) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, status, status_text, bio, banner_url, banner_color")
+    .select("id, username, avatar_url, status, status_text, last_seen_at, manual_status, bio, banner_url, banner_color")
     .ilike("username", `%${trimmed}%`)
     .neq("id", excludeId)
     .limit(20);

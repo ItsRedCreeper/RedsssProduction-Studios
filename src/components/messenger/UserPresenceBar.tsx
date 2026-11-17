@@ -64,6 +64,7 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
         <StatusPicker
           open={pickerOpen}
           status={profile.status}
+          manualStatus={profile.manual_status}
           statusText={profile.status_text}
           placement="above"
           onClose={() => setPickerOpen(false)}

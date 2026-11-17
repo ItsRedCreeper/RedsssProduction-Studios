@@ -14,8 +14,9 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { StatusPicker } from "@/components/profile/StatusPicker";
-import { ProfileActivityLine } from "@/components/profile/ProfileActivityLine";
-import { statusDotClass, statusLabel } from "@/components/messenger/data";
+import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { statusDotClass } from "@/components/messenger/data";
+import { resolveDisplayStatus } from "@/lib/presence";
 import { avatarLetter } from "@/lib/avatar";
 import type { MutualFocus } from "@/components/profile/SmallProfileCard";
 import { loadIsBlockedBy } from "@/lib/blocking";
@@ -253,7 +254,7 @@ export function BigProfileModal({
                 className="!h-[88px] !w-[88px] !text-2xl"
               />
               <span
-                className={`absolute bottom-2 right-2 h-4 w-4 rounded-full ring-[3px] ring-[#111214] ${statusDotClass(profile.status)}`}
+                className={`absolute bottom-2 right-2 h-4 w-4 rounded-full ring-[3px] ring-[#111214] ${statusDotClass(resolveDisplayStatus(profile.status, profile.last_seen_at))}`}
               />
             </span>
           </div>
@@ -268,13 +269,14 @@ export function BigProfileModal({
                     className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
                   >
                     <span
-                      className={`h-2.5 w-2.5 rounded-full ${statusDotClass(profile.status)}`}
+                      className={`h-2.5 w-2.5 rounded-full ${statusDotClass(resolveDisplayStatus(profile.status, profile.last_seen_at))}`}
                     />
                     Status
                   </button>
                   <StatusPicker
                     open={statusOpen}
                     status={profile.status}
+                    manualStatus={profile.manual_status}
                     statusText={profile.status_text}
                     placement="below"
                     onClose={() => setStatusOpen(false)}
@@ -367,13 +369,15 @@ export function BigProfileModal({
             {shownName !== profile.username && (
               <p className="mt-0.5 text-sm text-[#6d6f78]">@{profile.username}</p>
             )}
-            <p className="mt-1 text-sm text-[#949ba4]">
-              {statusLabel(profile.status)}
-              {statusText ? ` · ${statusText}` : ""}
-            </p>
-            {!restricted && (
-              <ProfileActivityLine userId={profile.id} className="mt-1" />
-            )}
+            {!restricted ? (
+              <PresenceCaption
+                userId={profile.id}
+                status={profile.status}
+                lastSeenAt={profile.last_seen_at}
+                customStatus={statusText}
+                className="mt-1"
+              />
+            ) : null}
             {!isSelf && !restricted && onSaveNickname && (
               <div className="mt-3 border-t border-white/10 pt-3">
                 <div className="flex items-center justify-between gap-2">

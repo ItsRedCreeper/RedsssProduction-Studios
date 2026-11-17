@@ -2,13 +2,11 @@
 
 import { useMemo } from "react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import {
-  isPresenceOnline,
-  statusDotClass,
-  statusLabel,
-} from "@/components/messenger/data";
+import { isPresenceOnline, statusDotClass } from "@/components/messenger/data";
 import type { MemberView } from "@/components/messenger/types";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
+import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { resolveDisplayStatus } from "@/lib/presence";
 
 type MemberListProps = {
   members: MemberView[];
@@ -29,7 +27,10 @@ function MemberButton({
   displayName: string;
   onClick: (element: HTMLButtonElement) => void;
 }) {
-  const custom = member.status_text?.trim();
+  const displayStatus = resolveDisplayStatus(
+    member.status,
+    member.last_seen_at,
+  );
   return (
     <button
       type="button"
@@ -44,7 +45,7 @@ function MemberButton({
           className="!h-8 !w-8"
         />
         <span
-          className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#2b2d31] ${statusDotClass(member.status)}`}
+          className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#2b2d31] ${statusDotClass(displayStatus)}`}
         />
       </span>
       <span className="min-w-0 flex-1">
@@ -56,9 +57,12 @@ function MemberButton({
             </span>
           )}
         </span>
-        <span className="block truncate text-[11px] text-[#6d6f78]">
-          {custom || statusLabel(member.status)}
-        </span>
+        <PresenceCaption
+          userId={member.user_id}
+          status={member.status}
+          lastSeenAt={member.last_seen_at}
+          customStatus={member.status_text}
+        />
       </span>
     </button>
   );
@@ -83,8 +87,17 @@ export function MemberList({
       displayNameOf(a).localeCompare(displayNameOf(b)),
     );
     return {
-      online: sorted.filter((member) => isPresenceOnline(member.status)),
-      offline: sorted.filter((member) => !isPresenceOnline(member.status)),
+      online: sorted.filter((member) =>
+        isPresenceOnline(
+          resolveDisplayStatus(member.status, member.last_seen_at),
+        ),
+      ),
+      offline: sorted.filter(
+        (member) =>
+          !isPresenceOnline(
+            resolveDisplayStatus(member.status, member.last_seen_at),
+          ),
+      ),
     };
   }, [members, profileUi?.nicknames]);
 
@@ -106,7 +119,7 @@ export function MemberList({
                 member={member}
                 displayName={displayNameOf(member)}
                 owner={member.user_id === ownerId}
-                onClick={(element) => openPopover(member, element)}
+                onClick={(el) => openPopover(member, el)}
               />
             </li>
           ))}
@@ -116,7 +129,7 @@ export function MemberList({
   }
 
   return (
-    <aside className={`w-60 shrink-0 flex-col bg-[#2b2d31] ${className}`}>
+    <aside className={`flex w-60 shrink-0 flex-col bg-[#2b2d31] ${className}`}>
       <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
         Members
       </div>

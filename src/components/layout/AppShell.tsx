@@ -5,12 +5,14 @@ import { Suspense } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { ProfileProvider } from "@/components/profile/ProfileProvider";
 import { SiteActivityTracker } from "@/components/layout/SiteActivityTracker";
+import { PresenceController } from "@/components/presence/PresenceController";
 import { VoiceSessionProvider } from "@/components/messenger/voice/VoiceSessionProvider";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <VoiceSessionProvider>
       <ProfileProvider>
+        <PresenceController />
         <Suspense
           fallback={
             <header className="sticky top-0 z-30 h-14 border-b border-border bg-background/95 backdrop-blur-md" />

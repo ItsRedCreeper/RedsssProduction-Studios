@@ -6,6 +6,8 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { statusDotClass } from "@/components/messenger/data";
 import type { DmThread } from "@/components/messenger/types";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
+import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { resolveDisplayStatus } from "@/lib/presence";
 
 type HomeSidebarProps = {
   threads: DmThread[];
@@ -63,16 +65,19 @@ export function HomeSidebar({
                         className="!h-8 !w-8"
                       />
                       <span
-                        className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#2b2d31] ${statusDotClass(thread.status)}`}
+                        className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#2b2d31] ${statusDotClass(resolveDisplayStatus(thread.status, thread.last_seen_at))}`}
                       />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">
                         {name}
                       </span>
-                      <span className="block truncate text-[11px] text-[#6d6f78]">
-                        {thread.preview || "No messages yet"}
-                      </span>
+                      <PresenceCaption
+                        userId={thread.otherUserId}
+                        status={thread.status}
+                        lastSeenAt={thread.last_seen_at}
+                        customStatus={thread.status_text}
+                      />
                     </span>
                   </button>
                   {onCloseThread && (

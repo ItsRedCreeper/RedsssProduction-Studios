@@ -5,8 +5,9 @@ import { Ban, MessageSquare, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
-import { statusDotClass, statusLabel } from "@/components/messenger/data";
-import { ProfileActivityLine } from "@/components/profile/ProfileActivityLine";
+import { statusDotClass } from "@/components/messenger/data";
+import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { resolveDisplayStatus } from "@/lib/presence";
 import { avatarLetter } from "@/lib/avatar";
 import type {
   FriendProfile,
@@ -174,7 +175,7 @@ export function SmallProfileCard({
               className="!h-14 !w-14 !text-base"
             />
             <span
-              className={`absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full ring-2 ring-[#111214] ${statusDotClass(profile.status)}`}
+              className={`absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full ring-2 ring-[#111214] ${statusDotClass(resolveDisplayStatus(profile.status, profile.last_seen_at))}`}
             />
           </span>
         </button>
@@ -194,13 +195,15 @@ export function SmallProfileCard({
               @{profile.username}
             </p>
           )}
-          <p className="truncate text-xs text-[#949ba4]">
-            {statusLabel(profile.status)}
-            {profile.status_text?.trim()
-              ? ` · ${profile.status_text.trim()}`
-              : ""}
-          </p>
-          {!restricted && <ProfileActivityLine userId={profile.id} />}
+          {!restricted ? (
+            <PresenceCaption
+              userId={profile.id}
+              status={profile.status}
+              lastSeenAt={profile.last_seen_at}
+              customStatus={profile.status_text}
+              className="mt-0.5"
+            />
+          ) : null}
         </button>
 
         {bio && bio !== profile.status_text?.trim() && (

@@ -15,6 +15,8 @@ import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
+import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { resolveDisplayStatus } from "@/lib/presence";
 import { useOptionalProfileUi, type FriendsTab } from "@/components/profile/ProfileProvider";
 import {
   acceptFriendRequest,
@@ -42,7 +44,6 @@ import {
   FRIENDS_PANEL_MIN,
   useFriendsPanelWidth,
 } from "@/hooks/useFriendsPanelWidth";
-import { ProfileActivityLine } from "@/components/profile/ProfileActivityLine";
 
 export type FriendListItem = {
   id: string;
@@ -208,6 +209,52 @@ export function FriendsPanel({
         },
         () => {
           void refresh();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+        },
+        (payload) => {
+          const row = payload.new as {
+            id?: string;
+            status?: string;
+            status_text?: string | null;
+            last_seen_at?: string | null;
+            avatar_url?: string | null;
+            username?: string;
+          };
+          if (!row?.id) return;
+          setEdges((prev) => {
+            if (!prev.some((edge) => edge.other.id === row.id)) return prev;
+            return prev.map((edge) =>
+              edge.other.id === row.id
+                ? {
+                    ...edge,
+                    other: {
+                      ...edge.other,
+                      status: row.status ?? edge.other.status,
+                      status_text:
+                        row.status_text !== undefined
+                          ? row.status_text
+                          : edge.other.status_text,
+                      last_seen_at:
+                        row.last_seen_at !== undefined
+                          ? row.last_seen_at
+                          : edge.other.last_seen_at,
+                      avatar_url:
+                        row.avatar_url !== undefined
+                          ? row.avatar_url
+                          : edge.other.avatar_url,
+                      username: row.username ?? edge.other.username,
+                    },
+                  }
+                : edge,
+            );
+          });
         },
       )
       .subscribe();
@@ -534,7 +581,7 @@ export function FriendsPanel({
                           size="md"
                         />
                         <span
-                          className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-surface ${statusDotClass(edge.other.status)}`}
+                          className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-surface ${statusDotClass(resolveDisplayStatus(edge.other.status, edge.other.last_seen_at))}`}
                         />
                       </span>
                       <span className="min-w-0">
@@ -542,11 +589,13 @@ export function FriendsPanel({
                           {profileUi?.nicknameFor(edge.other.id) ||
                             edge.other.username}
                         </span>
-                        <span className="block truncate text-xs text-muted">
-                          {edge.other.status_text?.trim() ||
-                            statusLabel(edge.other.status)}
-                        </span>
-                        <ProfileActivityLine userId={edge.other.id} />
+                        <PresenceCaption
+                          userId={edge.other.id}
+                          status={edge.other.status}
+                          lastSeenAt={edge.other.last_seen_at}
+                          customStatus={edge.other.status_text}
+                          className="mt-0.5"
+                        />
                       </span>
                     </button>
                     <button

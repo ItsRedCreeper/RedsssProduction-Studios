@@ -1,18 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  statusDotClass,
-  statusLabel,
-  type PresenceStatus,
-} from "@/components/messenger/data";
-import { updateOwnPresence } from "@/lib/presence";
+import { statusDotClass, statusLabel } from "@/components/messenger/data";
+import { setManualStatus, type ManualStatus } from "@/lib/presence";
 
-const STATUSES: PresenceStatus[] = ["online", "idle", "dnd", "offline"];
+const STATUSES: ManualStatus[] = ["online", "idle", "dnd", "offline"];
 
 type StatusPickerProps = {
   open: boolean;
   status: string | null | undefined;
+  /** Preferred: the user's chosen status (manual_status). Falls back to status. */
+  manualStatus?: string | null | undefined;
   statusText: string | null | undefined;
   onClose: () => void;
   onSaved?: (next: { status: string; statusText: string | null }) => void;
@@ -23,28 +21,29 @@ type StatusPickerProps = {
 export function StatusPicker({
   open,
   status,
+  manualStatus,
   statusText,
   onClose,
   onSaved,
   placement = "above",
 }: StatusPickerProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [draftStatus, setDraftStatus] = useState<PresenceStatus>("online");
+  const [draftStatus, setDraftStatus] = useState<ManualStatus>("online");
   const [draftText, setDraftText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    const value = (status ?? "online").toLowerCase();
+    const value = (manualStatus ?? status ?? "online").toLowerCase();
     setDraftStatus(
-      (STATUSES.includes(value as PresenceStatus)
+      (STATUSES.includes(value as ManualStatus)
         ? value
-        : "online") as PresenceStatus,
+        : "online") as ManualStatus,
     );
     setDraftText(statusText ?? "");
     setError(null);
-  }, [open, status, statusText]);
+  }, [open, status, manualStatus, statusText]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,14 +63,14 @@ export function StatusPicker({
 
   if (!open) return null;
 
-  async function save(nextStatus?: PresenceStatus, clearText = false) {
+  async function save(nextStatus?: ManualStatus, clearText = false) {
     setBusy(true);
     setError(null);
     const statusToSave = nextStatus ?? draftStatus;
-    const textToSave = clearText ? null : draftText;
-    const { error: saveError } = await updateOwnPresence({
-      status: statusToSave,
-      statusText: textToSave,
+    const { error: saveError } = await setManualStatus({
+      manualStatus: statusToSave,
+      statusText: clearText ? null : draftText,
+      clearStatusText: clearText,
     });
     setBusy(false);
     if (saveError) {
@@ -82,6 +81,7 @@ export function StatusPicker({
     setDraftStatus(statusToSave);
     if (clearText) setDraftText("");
     onSaved?.({ status: statusToSave, statusText: cleaned });
+    onClose();
   }
 
   return (

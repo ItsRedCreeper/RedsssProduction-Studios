@@ -154,6 +154,8 @@ export type Database = {
           avatar_url: string | null
           status: string
           status_text: string | null
+          manual_status: string
+          last_seen_at: string | null
           bio: string | null
           banner_url: string | null
           banner_color: string | null
@@ -165,6 +167,8 @@ export type Database = {
           avatar_url?: string | null
           status?: string
           status_text?: string | null
+          manual_status?: string
+          last_seen_at?: string | null
           bio?: string | null
           banner_url?: string | null
           banner_color?: string | null
@@ -304,6 +308,21 @@ export type Database = {
       }
       set_friend_nickname: {
         Args: { friend_id: string; nickname: string }
+        Returns: undefined
+      }
+      heartbeat_presence: {
+        Args: {
+          p_status: string
+          p_manual_status?: string | null
+        }
+        Returns: undefined
+      }
+      set_manual_status: {
+        Args: {
+          p_manual_status: string
+          p_status_text?: string | null
+          p_clear_status_text?: boolean
+        }
         Returns: undefined
       }
       set_user_activity: {

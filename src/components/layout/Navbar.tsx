@@ -16,6 +16,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
 import { useProfileUi } from "@/components/profile/ProfileProvider";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
+import { resolveDisplayStatus } from "@/lib/presence";
 import { NAV_LINKS } from "@/lib/nav";
 
 function isActive(pathname: string, href: string) {
@@ -132,7 +133,12 @@ export function Navbar() {
               <button
                 type="button"
                 className="relative shrink-0"
-                title={statusLabel(profile?.status)}
+                title={statusLabel(
+                  resolveDisplayStatus(
+                    profile?.status,
+                    profile?.last_seen_at,
+                  ),
+                )}
                 onClick={() => {
                   if (!user) return;
                   void profileUi.openBigProfile(user.id);
@@ -146,8 +152,13 @@ export function Navbar() {
                   className={speaking ? "!ring-offset-background" : ""}
                 />
                 <span
-                  className={`absolute bottom-0 right-0 h-3 w-3 rounded-full ring-2 ring-background ${statusDotClass(profile?.status)}`}
-                  aria-label={statusLabel(profile?.status)}
+                  className={`absolute bottom-0 right-0 h-3 w-3 rounded-full ring-2 ring-background ${statusDotClass(resolveDisplayStatus(profile?.status, profile?.last_seen_at))}`}
+                  aria-label={statusLabel(
+                    resolveDisplayStatus(
+                      profile?.status,
+                      profile?.last_seen_at,
+                    ),
+                  )}
                 />
               </button>
               <button
