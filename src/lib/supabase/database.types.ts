@@ -309,7 +309,7 @@ export type Database = {
         Returns: undefined
       }
       set_friend_nickname: {
-        Args: { friend_id: string; nickname: string }
+        Args: { p_friend_id: string; p_nickname: string }
         Returns: undefined
       }
       discover_server_stats: {

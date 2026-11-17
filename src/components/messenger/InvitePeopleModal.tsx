@@ -8,8 +8,8 @@ import {
   inviteUrl,
   loadProfiles,
   makeInviteCode,
-  statusDotClass,
 } from "@/components/messenger/data";
+import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import type { Server } from "@/components/messenger/types";
 
 type FriendRow = {
@@ -308,8 +308,10 @@ export function InvitePeopleModal({
                         size="sm"
                         className="!h-9 !w-9"
                       />
-                      <span
-                        className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#313338] ${statusDotClass(friend.status)}`}
+                      <LiveStatusDot
+                        userId={friend.id}
+                        status={friend.status}
+                        ringClassName="ring-[#313338]"
                       />
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#dbdee1]">

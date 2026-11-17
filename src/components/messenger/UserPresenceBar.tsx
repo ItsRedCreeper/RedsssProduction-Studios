@@ -4,12 +4,12 @@ import { useState } from "react";
 import { ChevronDown, Settings } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { StatusPicker } from "@/components/profile/StatusPicker";
-import {
-  statusDotClass,
-  statusLabel,
-} from "@/components/messenger/data";
+import { statusLabel } from "@/components/messenger/data";
+import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
+import { useUserPresence } from "@/components/presence/PresenceFeed";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
+import { resolveDisplayStatus } from "@/lib/presence";
 
 type UserPresenceBarProps = {
   className?: string;
@@ -20,10 +20,16 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
   const profileUi = useOptionalProfileUi();
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  const live = useUserPresence(user?.id);
   if (!user || !profile) return null;
 
   const name = profile.username;
-  const custom = profile.status_text?.trim() || null;
+  const mergedStatus = live?.status ?? profile.status;
+  const mergedLastSeen = live?.lastSeenAt ?? profile.last_seen_at;
+  const custom =
+    (live?.statusText !== undefined ? live.statusText : profile.status_text)?.trim() ||
+    null;
+  const display = resolveDisplayStatus(mergedStatus, mergedLastSeen);
 
   return (
     <div
@@ -36,8 +42,11 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
         title="Open profile"
       >
         <UserAvatar username={name} avatarUrl={profile.avatar_url} size="sm" />
-        <span
-          className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#232428] ${statusDotClass(profile.status)}`}
+        <LiveStatusDot
+          userId={user.id}
+          status={mergedStatus}
+          lastSeenAt={mergedLastSeen}
+          ringClassName="ring-[#232428]"
         />
       </button>
       <button
@@ -47,7 +56,7 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
       >
         <p className="truncate text-sm font-semibold text-white">{name}</p>
         <p className="truncate text-[11px] text-[#949ba4]">
-          {custom || statusLabel(profile.status)}
+          {custom || statusLabel(display)}
         </p>
       </button>
       <div className="relative shrink-0">

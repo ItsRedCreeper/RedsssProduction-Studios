@@ -25,8 +25,8 @@ export async function loadFriendNicknames() {
 export async function setFriendNickname(friendId: string, nickname: string) {
   const supabase = createClient();
   const { error } = await supabase.rpc("set_friend_nickname", {
-    friend_id: friendId,
-    nickname,
+    p_friend_id: friendId,
+    p_nickname: nickname,
   });
   return { error: error?.message ?? null };
 }

@@ -15,7 +15,8 @@ import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
 import { useProfileUi } from "@/components/profile/ProfileProvider";
-import { statusDotClass, statusLabel } from "@/components/messenger/data";
+import { statusLabel } from "@/components/messenger/data";
+import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import { resolveDisplayStatus } from "@/lib/presence";
 import { NAV_LINKS } from "@/lib/nav";
 
@@ -151,15 +152,21 @@ export function Navbar() {
                   speaking={speaking}
                   className={speaking ? "!ring-offset-background" : ""}
                 />
-                <span
-                  className={`absolute bottom-0 right-0 h-3 w-3 rounded-full ring-2 ring-background ${statusDotClass(resolveDisplayStatus(profile?.status, profile?.last_seen_at))}`}
-                  aria-label={statusLabel(
-                    resolveDisplayStatus(
-                      profile?.status,
-                      profile?.last_seen_at,
-                    ),
-                  )}
-                />
+                {user && (
+                  <LiveStatusDot
+                    userId={user.id}
+                    status={profile?.status}
+                    lastSeenAt={profile?.last_seen_at}
+                    size="md"
+                    ringClassName="ring-2 ring-background"
+                    title={statusLabel(
+                      resolveDisplayStatus(
+                        profile?.status,
+                        profile?.last_seen_at,
+                      ),
+                    )}
+                  />
+                )}
               </button>
               <button
                 type="button"

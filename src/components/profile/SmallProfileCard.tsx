@@ -5,9 +5,8 @@ import { Ban, MessageSquare, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
-import { statusDotClass } from "@/components/messenger/data";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
-import { resolveDisplayStatus } from "@/lib/presence";
+import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import { avatarLetter } from "@/lib/avatar";
 import type {
   FriendProfile,
@@ -174,8 +173,13 @@ export function SmallProfileCard({
               size="lg"
               className="!h-14 !w-14 !text-base"
             />
-            <span
-              className={`absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full ring-2 ring-[#111214] ${statusDotClass(resolveDisplayStatus(profile.status, profile.last_seen_at))}`}
+            <LiveStatusDot
+              userId={profile.id}
+              status={profile.status}
+              lastSeenAt={profile.last_seen_at}
+              size="md"
+              ringClassName="ring-2 ring-[#111214]"
+              className="!bottom-0.5 !right-0.5"
             />
           </span>
         </button>

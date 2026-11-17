@@ -14,10 +14,10 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { statusDotClass, statusLabel } from "@/components/messenger/data";
+import { statusLabel } from "@/components/messenger/data";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import { useOptionalPresenceFeed } from "@/components/presence/PresenceFeed";
-import { resolveDisplayStatus } from "@/lib/presence";
 import { useOptionalProfileUi, type FriendsTab } from "@/components/profile/ProfileProvider";
 import {
   acceptFriendRequest,
@@ -593,8 +593,11 @@ export function FriendsPanel({
                           avatarUrl={edge.other.avatar_url}
                           size="md"
                         />
-                        <span
-                          className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-surface ${statusDotClass(resolveDisplayStatus(edge.other.status, edge.other.last_seen_at))}`}
+                        <LiveStatusDot
+                          userId={edge.other.id}
+                          status={edge.other.status}
+                          lastSeenAt={edge.other.last_seen_at}
+                          ringClassName="ring-surface"
                         />
                       </span>
                       <span className="min-w-0">

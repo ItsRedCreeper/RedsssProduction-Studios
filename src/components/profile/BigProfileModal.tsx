@@ -15,6 +15,8 @@ import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { StatusPicker } from "@/components/profile/StatusPicker";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
+import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
+import { useUserPresence } from "@/components/presence/PresenceFeed";
 import { statusDotClass } from "@/components/messenger/data";
 import { resolveDisplayStatus } from "@/lib/presence";
 import { avatarLetter } from "@/lib/avatar";
@@ -88,6 +90,7 @@ export function BigProfileModal({
   const router = useRouter();
   const restricted = ready.restricted;
   const shownName = displayName || profile.username;
+  const feedPresence = useUserPresence(profile.id);
   const [liveStatus, setLiveStatus] = useState(profile.status);
   const [liveManual, setLiveManual] = useState(profile.manual_status ?? null);
   const [liveStatusText, setLiveStatusText] = useState(profile.status_text);
@@ -121,6 +124,23 @@ export function BigProfileModal({
     profile.manual_status,
     profile.status_text,
     profile.last_seen_at,
+  ]);
+
+  // Keep status circle + caption synced from PresenceFeed for self and others.
+  useEffect(() => {
+    if (!feedPresence) return;
+    if (feedPresence.status) setLiveStatus(feedPresence.status);
+    if (feedPresence.lastSeenAt !== undefined) {
+      setLiveLastSeen(feedPresence.lastSeenAt);
+    }
+    if (feedPresence.statusText !== undefined) {
+      setLiveStatusText(feedPresence.statusText);
+    }
+  }, [
+    feedPresence?.status,
+    feedPresence?.lastSeenAt,
+    feedPresence?.statusText,
+    feedPresence,
   ]);
 
   useEffect(() => {
@@ -239,8 +259,12 @@ export function BigProfileModal({
                 size="lg"
                 className="!h-[112px] !w-[112px] !text-3xl"
               />
-              <span
-                className={`absolute bottom-2 right-2 h-5 w-5 rounded-full ring-[3px] ring-[#111214] ${statusDotClass(resolveDisplayStatus(liveStatus, liveLastSeen))}`}
+              <LiveStatusDot
+                userId={profile.id}
+                status={liveStatus}
+                lastSeenAt={liveLastSeen}
+                size="lg"
+                ringClassName="ring-[3px] ring-[#111214]"
               />
             </span>
           </div>
@@ -255,7 +279,7 @@ export function BigProfileModal({
                     className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
                   >
                     <span
-                      className={`h-2.5 w-2.5 rounded-full ${statusDotClass(resolveDisplayStatus(liveStatus, liveLastSeen))}`}
+                      className={`relative h-2.5 w-2.5 rounded-full ${statusDotClass(resolveDisplayStatus(liveStatus, liveLastSeen))}`}
                     />
                     Status
                   </button>
@@ -527,8 +551,11 @@ export function BigProfileModal({
                                   size="sm"
                                   className="!h-8 !w-8"
                                 />
-                                <span
-                                  className={`absolute bottom-0 right-0 h-2 w-2 rounded-full ring-2 ring-[#1e1f22] ${statusDotClass(friend.status)}`}
+                                <LiveStatusDot
+                                  userId={friend.id}
+                                  status={friend.status}
+                                  ringClassName="ring-[#1e1f22]"
+                                  className="!h-2 !w-2"
                                 />
                               </span>
                               <span className="truncate text-sm text-[#dbdee1]">

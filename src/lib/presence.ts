@@ -142,22 +142,14 @@ export async function setManualStatus(opts: {
   clearAfterMinutes?: number | null;
 }) {
   const supabase = createClient();
-  const args: {
-    p_manual_status: string;
-    p_status_text?: string | null;
-    p_clear_status_text: boolean;
-    p_clear_after_minutes?: number | null;
-  } = {
+  // Always send all four named args so PostgREST never hits an overload clash.
+  const { error } = await supabase.rpc("set_manual_status", {
     p_manual_status: opts.manualStatus,
+    p_status_text: opts.statusText !== undefined ? opts.statusText : null,
     p_clear_status_text: opts.clearStatusText ?? false,
-  };
-  if (opts.statusText !== undefined) {
-    args.p_status_text = opts.statusText;
-  }
-  if (opts.clearAfterMinutes !== undefined) {
-    args.p_clear_after_minutes = opts.clearAfterMinutes;
-  }
-  const { error } = await supabase.rpc("set_manual_status", args);
+    p_clear_after_minutes:
+      opts.clearAfterMinutes !== undefined ? opts.clearAfterMinutes : null,
+  });
   if (error) return { error: error.message };
   notifyProfileUpdated();
   return { error: null as string | null };
