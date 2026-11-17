@@ -529,13 +529,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }) {
       const conversationId = row.conversation_id;
       if (!conversationId) return;
+      let known = false;
       setThreads((prev) => {
-        const known = prev.some((thread) => thread.id === conversationId);
-        if (!known) {
-          // Hidden / new conversation — pull the full inbox quietly.
-          queue refreshThreads({ silent: true });
-          return prev;
-        }
+        known = prev.some((thread) => thread.id === conversationId);
+        if (!known) return prev;
         const nextPreview = row.content ?? null;
         const nextAt = row.created_at ?? null;
         // Skip if this insert is already reflected (e.g. local send patched first).
@@ -563,6 +560,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             return right - left || a.username.localeCompare(b.username);
           });
       });
+      // Hidden / new conversation: pull the full inbox quietly.
+      if (!known) {
+        void refreshThreads({ silent: true });
+      }
     }
 
     const channel = supabase
