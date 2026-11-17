@@ -476,19 +476,12 @@ export function BigProfileModal({
               />
             ) : null}
             {isSelf && (presenceExpiryLabel || customExpiryLabel) ? (
-              <div className="mt-2 space-y-0.5 rounded-md bg-black/25 px-2.5 py-2 text-[11px] leading-snug text-[#949ba4]">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#6d6f78]">
-                  Only you can see this
-                </p>
+              <div className="mt-2 space-y-0.5 text-[11px] leading-snug text-[#949ba4]">
                 {presenceExpiryLabel ? (
-                  <p>
-                    Online status · {presenceExpiryLabel}
-                  </p>
+                  <p>Online status · {presenceExpiryLabel}</p>
                 ) : null}
                 {customExpiryLabel ? (
-                  <p>
-                    Custom status · {customExpiryLabel}
-                  </p>
+                  <p>Custom status · {customExpiryLabel}</p>
                 ) : null}
               </div>
             ) : null}

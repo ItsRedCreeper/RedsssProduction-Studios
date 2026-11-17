@@ -282,9 +282,6 @@ export function StatusPicker({
             <p className="mt-2 text-[11px] leading-snug text-[#b5bac1]">
               {presencePreview}
             </p>
-            <p className="mt-0.5 text-[10px] leading-snug text-[#6d6f78]">
-              Uses your local time. Only you see this timer.
-            </p>
             <div className="mt-3 flex items-center justify-end gap-2">
               <button
                 type="button"
@@ -336,9 +333,6 @@ export function StatusPicker({
                 );
               })}
             </ul>
-            <p className="px-3 pt-1 text-[10px] leading-snug text-[#6d6f78]">
-              Online applies right away. Idle, DND, and Offline ask how long.
-            </p>
             {error && (
               <p className="px-3 pb-1 text-xs text-accent">{error}</p>
             )}
@@ -359,10 +353,6 @@ export function StatusPicker({
         <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
           Custom status
         </label>
-        <p className="mb-1 text-[10px] leading-snug text-[#6d6f78]">
-          Separate from online status. Shows under your name; activity is
-          hidden while this is set.
-        </p>
         {savedCustomExpiry && statusText?.trim() && (
           <p className="mb-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5 text-[11px] text-[#b5bac1]">
             Current: {savedCustomExpiry}
@@ -411,9 +401,6 @@ export function StatusPicker({
         </select>
         <p className="mt-2 text-[11px] leading-snug text-[#b5bac1]">
           {customPreview}
-        </p>
-        <p className="mt-0.5 text-[10px] leading-snug text-[#6d6f78]">
-          Preview uses your local time. Only you see this timer.
         </p>
         <div className="mt-2 flex items-center justify-between gap-2">
           <button
