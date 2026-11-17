@@ -114,6 +114,20 @@ function mergeIncoming(prev: ChatMessage[], incoming: ChatMessage): ChatMessage[
   return [...prev, incoming];
 }
 
+/** Most recent activity first. Active typers float above everyone else. */
+function compareDmThreads(
+  a: DmThread,
+  b: DmThread,
+  typingUserIds?: Set<string>,
+): number {
+  const aTyping = typingUserIds?.has(a.otherUserId) ? 1 : 0;
+  const bTyping = typingUserIds?.has(b.otherUserId) ? 1 : 0;
+  if (aTyping !== bTyping) return bTyping - aTyping;
+  const left = a.previewAt ? Date.parse(a.previewAt) : 0;
+  const right = b.previewAt ? Date.parse(b.previewAt) : 0;
+  return right - left || a.username.localeCompare(b.username);
+}
+
 function routeParam(value: string | string[] | null | undefined): string | null {
   const raw = Array.isArray(value) ? value[0] : value;
   if (!raw) return null;
@@ -493,11 +507,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         } satisfies DmThread;
       }),
     );
-    fetched.sort((a, b) => {
-      const left = a.previewAt ? Date.parse(a.previewAt) : 0;
-      const right = b.previewAt ? Date.parse(b.previewAt) : 0;
-      return right - left || a.username.localeCompare(b.username);
-    });
+    fetched.sort((a, b) => compareDmThreads(a, b));
     // Reuse prior thread objects when unchanged so the sidebar doesn't remount rows.
     setThreads((prev) => {
       const prevById = new Map(prev.map((thread) => [thread.id, thread]));
@@ -575,11 +585,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 }
               : thread,
           )
-          .sort((a, b) => {
-            const left = a.previewAt ? Date.parse(a.previewAt) : 0;
-            const right = b.previewAt ? Date.parse(b.previewAt) : 0;
-            return right - left || a.username.localeCompare(b.username);
-          });
+          .sort((a, b) => compareDmThreads(a, b));
       });
       // Hidden / new conversation: pull the full inbox quietly.
       if (!known) {
@@ -1615,11 +1621,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     [members, isBlocked],
   );
 
-  const visibleThreads = useMemo(
-    () => threads.filter((thread) => !isBlocked(thread.otherUserId)),
-    [threads, isBlocked],
-  );
-
   const mentionSuggestions = useMemo<MentionSuggestion[]>(() => {
     const users = visibleMembers.map((member) => ({
       id: member.user_id,
@@ -1753,6 +1754,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
     return ids;
   }, [inboxTypingUsers, isMessageHidden, pane, typingUserIds]);
+
+  // Newest message first; friends who are typing jump to the top while active.
+  const visibleThreads = useMemo(
+    () =>
+      threads
+        .filter((thread) => !isBlocked(thread.otherUserId))
+        .slice()
+        .sort((a, b) => compareDmThreads(a, b, dmSidebarTypingIds)),
+    [threads, isBlocked, dmSidebarTypingIds],
+  );
 
   const typingUserIdsKey = useMemo(
     () =>
@@ -2389,11 +2400,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             ? { ...thread, preview: content, previewAt: data.created_at }
             : thread,
         )
-        .sort((a, b) => {
-          const left = a.previewAt ? Date.parse(a.previewAt) : 0;
-          const right = b.previewAt ? Date.parse(b.previewAt) : 0;
-          return right - left;
-        }),
+        .sort((a, b) => compareDmThreads(a, b)),
     );
 
     // Notify the other participant. Sidebar preview was already patched locally;
