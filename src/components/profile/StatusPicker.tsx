@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import {
-  STATUS_CLEAR_AFTER_OPTIONS,
+  CUSTOM_STATUS_CLEAR_AFTER_OPTIONS,
+  PRESENCE_CLEAR_AFTER_OPTIONS,
   clearAfterToMinutes,
   setManualStatus,
   type ManualStatus,
@@ -30,6 +31,12 @@ function clearAfterSelectValue(value: StatusClearAfter): string {
   return String(value);
 }
 
+function parseClearAfter(raw: string): StatusClearAfter {
+  if (raw === "none") return null;
+  if (raw === "today" || raw === "week") return raw;
+  return Number(raw);
+}
+
 export function StatusPicker({
   open,
   status,
@@ -42,8 +49,11 @@ export function StatusPicker({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [draftStatus, setDraftStatus] = useState<ManualStatus>("online");
   const [draftText, setDraftText] = useState("");
-  // Discord defaults Clear After to Today for new custom statuses.
-  const [clearAfter, setClearAfter] = useState<StatusClearAfter>("today");
+  // Separate timers: presence forever by default; custom status 24h.
+  const [presenceClearAfter, setPresenceClearAfter] =
+    useState<StatusClearAfter>(null);
+  const [customClearAfter, setCustomClearAfter] =
+    useState<StatusClearAfter>(1440);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +66,8 @@ export function StatusPicker({
         : "online") as ManualStatus,
     );
     setDraftText(statusText ?? "");
-    setClearAfter(statusText?.trim() ? null : "today");
+    setPresenceClearAfter(null);
+    setCustomClearAfter(1440);
     setError(null);
   }, [open, status, manualStatus, statusText]);
 
@@ -78,18 +89,18 @@ export function StatusPicker({
 
   if (!open) return null;
 
-  const clearMinutes = clearAfterToMinutes(clearAfter);
+  const presenceMinutes = clearAfterToMinutes(presenceClearAfter);
+  const customMinutes = clearAfterToMinutes(customClearAfter);
 
   async function savePresence(nextStatus: ManualStatus) {
     setBusy(true);
     setError(null);
     setDraftStatus(nextStatus);
-    // Presence click: keep custom text; optionally time the presence itself.
     const { error: saveError } = await setManualStatus({
       manualStatus: nextStatus,
+      // Presence timer only — leave custom text alone.
       manualClearAfterMinutes:
-        nextStatus === "online" ? 0 : clearMinutes === null ? 0 : clearMinutes,
-      // Don't touch custom text / its timer.
+        nextStatus === "online" ? 0 : presenceMinutes ?? 0,
       clearAfterMinutes: null,
     });
     setBusy(false);
@@ -107,22 +118,19 @@ export function StatusPicker({
   async function saveCustom(clearText = false) {
     setBusy(true);
     setError(null);
-    const statusToSave = draftStatus;
     const { error: saveError } = await setManualStatus({
-      manualStatus: statusToSave,
+      // Keep current presence; only change custom text + its timer.
+      manualStatus: draftStatus,
+      manualClearAfterMinutes: null,
       ...(clearText
         ? {
             statusText: null,
             clearStatusText: true,
             clearAfterMinutes: 0,
-            manualClearAfterMinutes:
-              statusToSave === "online" ? 0 : clearMinutes === null ? 0 : clearMinutes,
           }
         : {
             statusText: draftText,
-            clearAfterMinutes: clearMinutes === null ? 0 : clearMinutes,
-            manualClearAfterMinutes:
-              statusToSave === "online" ? 0 : clearMinutes === null ? 0 : clearMinutes,
+            clearAfterMinutes: customMinutes ?? 0,
           }),
     });
     setBusy(false);
@@ -132,7 +140,7 @@ export function StatusPicker({
     }
     const cleaned = clearText ? null : draftText.trim() || null;
     if (clearText) setDraftText("");
-    onSaved?.({ status: statusToSave, statusText: cleaned });
+    onSaved?.({ status: draftStatus, statusText: cleaned });
     onClose();
   }
 
@@ -148,7 +156,7 @@ export function StatusPicker({
       aria-label="Set status"
     >
       <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-        Status
+        Online status
       </p>
       <ul>
         {STATUSES.map((value) => {
@@ -174,11 +182,48 @@ export function StatusPicker({
           );
         })}
       </ul>
-      <div className="mx-2 my-2 border-t border-white/10" />
-      <div className="px-3 pb-2">
+      <div className="px-3 pb-2 pt-1">
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+          Clear status after
+        </label>
+        <p className="mb-1 text-[10px] leading-snug text-[#6d6f78]">
+          For Idle / DND / Invisible — reverts to Online. Default is forever.
+        </p>
+        <select
+          value={clearAfterSelectValue(presenceClearAfter)}
+          disabled={busy}
+          onChange={(event) =>
+            setPresenceClearAfter(parseClearAfter(event.target.value))
+          }
+          className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] focus:ring-accent"
+        >
+          {PRESENCE_CLEAR_AFTER_OPTIONS.map((opt) => (
+            <option
+              key={opt.label}
+              value={
+                opt.minutes === null
+                  ? "none"
+                  : typeof opt.minutes === "string"
+                    ? opt.minutes
+                    : String(opt.minutes)
+              }
+            >
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mx-2 my-1 border-t border-white/10" />
+
+      <div className="px-3 pb-2 pt-1">
         <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
           Custom status
         </label>
+        <p className="mb-1 text-[10px] leading-snug text-[#6d6f78]">
+          Separate from online status. Shows under your name; activity is
+          hidden while this is set.
+        </p>
         <input
           value={draftText}
           maxLength={128}
@@ -194,23 +239,17 @@ export function StatusPicker({
           className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-accent"
         />
         <label className="mb-1 mt-2 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-          Clear after
+          Clear custom after
         </label>
-        <p className="mb-1 text-[10px] leading-snug text-[#6d6f78]">
-          Applies to custom text and to Idle / DND / Invisible (reverts to Online).
-        </p>
         <select
-          value={clearAfterSelectValue(clearAfter)}
+          value={clearAfterSelectValue(customClearAfter)}
           disabled={busy}
-          onChange={(event) => {
-            const v = event.target.value;
-            if (v === "none") setClearAfter(null);
-            else if (v === "today" || v === "week") setClearAfter(v);
-            else setClearAfter(Number(v));
-          }}
-          className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] focus:ring-accent disabled:opacity-40"
+          onChange={(event) =>
+            setCustomClearAfter(parseClearAfter(event.target.value))
+          }
+          className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] focus:ring-accent"
         >
-          {STATUS_CLEAR_AFTER_OPTIONS.map((opt) => (
+          {CUSTOM_STATUS_CLEAR_AFTER_OPTIONS.map((opt) => (
             <option
               key={opt.label}
               value={
@@ -222,23 +261,6 @@ export function StatusPicker({
               }
             >
               {opt.label}
-            </option>
-          ))}
-        </select>
-        <label className="mb-1 mt-2 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-          Status with custom
-        </label>
-        <select
-          value={draftStatus}
-          disabled={busy}
-          onChange={(event) =>
-            setDraftStatus(event.target.value as ManualStatus)
-          }
-          className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] focus:ring-accent"
-        >
-          {STATUSES.map((value) => (
-            <option key={value} value={value}>
-              {statusLabel(value)}
             </option>
           ))}
         </select>

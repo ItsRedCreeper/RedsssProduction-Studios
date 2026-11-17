@@ -207,6 +207,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [typingUsers, setTypingUsers] = useState<
     Record<string, { until: number; username: string; avatarUrl: string | null }>
   >({});
+  /** Typing across all DM threads for the sidebar (even when that DM isn't open). */
+  const [inboxTypingUsers, setInboxTypingUsers] = useState<
+    Record<string, { until: number; username: string; avatarUrl: string | null }>
+  >({});
   /** Discord shows your own typing dots on the server member list. */
   const [selfTyping, setSelfTyping] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1275,10 +1279,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           setDmMessages((prev) => mergeIncoming(prev, hydrated));
           // Message sent → drop that user's typing indicator immediately.
           if (hydrated.user_id && hydrated.user_id !== userIdRef.current) {
+            const clearId = hydrated.user_id;
             setTypingUsers((prev) => {
-              if (!prev[hydrated.user_id]) return prev;
+              if (!prev[clearId]) return prev;
               const next = { ...prev };
-              delete next[hydrated.user_id];
+              delete next[clearId];
+              return next;
+            });
+            setInboxTypingUsers((prev) => {
+              if (!prev[clearId]) return prev;
+              const next = { ...prev };
+              delete next[clearId];
               return next;
             });
           }
@@ -1344,8 +1355,53 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     void saveChannelRead(user.id, activeChannelId, at);
   }, [user, pane, activeChannelId, activeChannel?.type, activeLast]);
 
-  // Live typing for the open text/voice channel OR the open DM conversation.
-  // Discord: member-list / DM-list dots only for THIS open conversation/channel.
+  function applyTypingBroadcast(
+    message: unknown,
+    selfId: string,
+    setter: typeof setTypingUsers,
+  ) {
+    const raw = message as {
+      payload?: {
+        userId?: string;
+        username?: string;
+        avatarUrl?: string | null;
+        stop?: boolean;
+      };
+      userId?: string;
+      username?: string;
+      avatarUrl?: string | null;
+      stop?: boolean;
+    };
+    const data = raw.payload ?? raw;
+    const userId = data.userId;
+    // Self is tracked locally for member-list dots; ignore echo.
+    if (!userId || userId === selfId) return;
+    if (
+      blockedIdsRef.current.includes(userId) ||
+      ignoredIdsRef.current.includes(userId)
+    ) {
+      return;
+    }
+    if (data.stop) {
+      setter((prev) => {
+        if (!prev[userId]) return prev;
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+      return;
+    }
+    setter((prev) => ({
+      ...prev,
+      [userId]: {
+        until: Date.now() + 10_000,
+        username: data.username || prev[userId]?.username || "Someone",
+        avatarUrl: data.avatarUrl ?? prev[userId]?.avatarUrl ?? null,
+      },
+    }));
+  }
+
+  // Live typing for the open text/voice channel OR the open DM (composer + member list).
   useEffect(() => {
     const typingKey =
       pane === "home" && activeConversationId
@@ -1371,57 +1427,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         config: { broadcast: { self: false } },
       })
       .on("broadcast", { event: "typing" }, (message) => {
-        // supabase-js may nest payload or pass fields at the top level.
-        const raw = message as {
-          payload?: {
-            userId?: string;
-            username?: string;
-            avatarUrl?: string | null;
-            stop?: boolean;
-          };
-          userId?: string;
-          username?: string;
-          avatarUrl?: string | null;
-          stop?: boolean;
-        };
-        const data = raw.payload ?? raw;
-        const userId = data.userId;
-        // Self is tracked locally for member-list dots (Discord); ignore echo.
-        if (!userId || userId === selfId) return;
-        if (
-          blockedIdsRef.current.includes(userId) ||
-          ignoredIdsRef.current.includes(userId)
-        ) {
-          return;
+        applyTypingBroadcast(message, selfId, setTypingUsers);
+        // Keep inbox sidebar in sync when this is the open DM.
+        if (pane === "home") {
+          applyTypingBroadcast(message, selfId, setInboxTypingUsers);
         }
-        if (data.stop) {
-          setTypingUsers((prev) => {
-            if (!prev[userId]) return prev;
-            const next = { ...prev };
-            delete next[userId];
-            return next;
-          });
-          return;
-        }
-        setTypingUsers((prev) => ({
-          ...prev,
-          [userId]: {
-            // ~Discord: lasts ~10s unless refreshed; stop/send clear immediately.
-            until: Date.now() + 10_000,
-            username: data.username || prev[userId]?.username || "Someone",
-            avatarUrl:
-              data.avatarUrl ?? prev[userId]?.avatarUrl ?? null,
-          },
-        }));
       })
       .subscribe((status) => {
-        // Only publish once Realtime has joined — early sends were dropped.
         if (status === "SUBSCRIBED") {
           typingChannelRef.current = channel;
-          // Flush a pending "I'm typing" that fired before join completed.
           if (typingWantedRef.current && user?.id) {
             lastTypingSentRef.current = 0;
-            setSelfTyping(true);
+            if (pane === "server") setSelfTyping(true);
             void channel.send({
               type: "broadcast",
               event: "typing",
@@ -1466,6 +1483,58 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     profile?.username,
     profile?.avatar_url,
   ]);
+
+  // Watch ALL DM threads for typing so the sidebar shows who is typing even
+  // when that conversation isn't the open one.
+  const dmThreadWatchKey = useMemo(
+    () =>
+      threads
+        .map((thread) => thread.id)
+        .sort()
+        .join(","),
+    [threads],
+  );
+
+  useEffect(() => {
+    if (!user || pane !== "home" || !dmThreadWatchKey) {
+      setInboxTypingUsers({});
+      return;
+    }
+    const selfId = user.id;
+    const supabase = createClient();
+    const ids = dmThreadWatchKey.split(",").filter(Boolean);
+    // Skip the open DM — already covered by the active typing channel above
+    // (avoids double-subscribe on the same Realtime topic).
+    const watchIds = ids.filter((id) => id !== activeConversationId);
+    const channels = watchIds.map((conversationId) =>
+      supabase
+        .channel(`typing:dm:${conversationId}`, {
+          config: { broadcast: { self: false } },
+        })
+        .on("broadcast", { event: "typing" }, (message) => {
+          applyTypingBroadcast(message, selfId, setInboxTypingUsers);
+        })
+        .subscribe(),
+    );
+    const tick = window.setInterval(() => {
+      const now = Date.now();
+      setInboxTypingUsers((prev) => {
+        const next: typeof prev = {};
+        let changed = false;
+        for (const [id, info] of Object.entries(prev)) {
+          if (info.until > now) next[id] = info;
+          else changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }, 400);
+    return () => {
+      window.clearInterval(tick);
+      for (const channel of channels) {
+        void supabase.removeChannel(channel);
+      }
+    };
+  }, [user, pane, dmThreadWatchKey, activeConversationId]);
 
   useEffect(() => {
     if (!pinsOpen || !activeChannelId || activeChannel?.type !== "text") return;
@@ -1669,10 +1738,28 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     pane,
     activeChannel?.type,
   ]);
-  // Stable string so sidebars re-render when membership changes even if Set identity is reused.
+
+  /** DM sidebar: anyone typing in any watched conversation. */
+  const dmSidebarTypingIds = useMemo(() => {
+    const now = Date.now();
+    const ids = new Set(
+      Object.entries(inboxTypingUsers)
+        .filter(([userId, info]) => info.until > now && !isMessageHidden(userId))
+        .map(([userId]) => userId),
+    );
+    // Also include the open DM's typers from the active subscription.
+    if (pane === "home") {
+      for (const id of typingUserIds) ids.add(id);
+    }
+    return ids;
+  }, [inboxTypingUsers, isMessageHidden, pane, typingUserIds]);
+
   const typingUserIdsKey = useMemo(
-    () => [...typingUserIds].sort().join(","),
-    [typingUserIds],
+    () =>
+      pane === "home"
+        ? [...dmSidebarTypingIds].sort().join(",")
+        : [...typingUserIds].sort().join(","),
+    [pane, dmSidebarTypingIds, typingUserIds],
   );
 
   const serverNickByUserId = useMemo(() => {
@@ -2665,7 +2752,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             threads={visibleThreads}
             activeThreadId={activeConversationId}
             loadingThreads={loadingThreads}
-            typingUserIds={typingUserIds}
+            typingUserIds={dmSidebarTypingIds}
             typingUserIdsKey={typingUserIdsKey}
             onSelectThread={selectThread}
             onCloseThread={(threadId) => void closeThread(threadId)}

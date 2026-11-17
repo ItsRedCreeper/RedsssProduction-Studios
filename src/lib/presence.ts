@@ -101,8 +101,21 @@ export function computeAutoEffectiveStatus(opts: {
   return "online";
 }
 
-/** Discord Clear After menu order (custom status + timed presence). */
-export const STATUS_CLEAR_AFTER_OPTIONS = [
+export type StatusClearAfter = null | number | "today" | "week";
+
+/** Presence (Online / Idle / DND / Invisible) — default Don't clear (forever). */
+export const PRESENCE_CLEAR_AFTER_OPTIONS = [
+  { label: "Don't clear", minutes: null },
+  { label: "30 minutes", minutes: 30 },
+  { label: "1 hour", minutes: 60 },
+  { label: "4 hours", minutes: 240 },
+  { label: "Today", minutes: "today" as const },
+  { label: "24 hours", minutes: 1440 },
+] as const;
+
+/** Custom status text — default 24 hours. */
+export const CUSTOM_STATUS_CLEAR_AFTER_OPTIONS = [
+  { label: "24 hours", minutes: 1440 },
   { label: "Today", minutes: "today" as const },
   { label: "4 hours", minutes: 240 },
   { label: "1 hour", minutes: 60 },
@@ -110,11 +123,8 @@ export const STATUS_CLEAR_AFTER_OPTIONS = [
   { label: "Don't clear", minutes: null },
 ] as const;
 
-export type StatusClearAfter =
-  | null
-  | number
-  | "today"
-  | "week";
+/** @deprecated Use PRESENCE_ / CUSTOM_STATUS_CLEAR_AFTER_OPTIONS */
+export const STATUS_CLEAR_AFTER_OPTIONS = CUSTOM_STATUS_CLEAR_AFTER_OPTIONS;
 
 export function clearAfterToMinutes(value: StatusClearAfter): number | null {
   if (value === null) return 0; // explicit don't-clear
