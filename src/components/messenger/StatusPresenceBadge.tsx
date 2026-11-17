@@ -53,11 +53,11 @@ export function StatusPresenceBadge({
       <span
         title={title ?? "Typing…"}
         aria-label="Typing"
-        className={`absolute z-[1] flex items-center justify-center gap-[2px] rounded-full ring-2 ${TYPING_SIZE[size]} ${ringClassName} ${colorClass} ${className}`}
+        className={`absolute z-[1] flex items-center justify-center gap-0.5 rounded-full ring-2 ${TYPING_SIZE[size]} ${ringClassName} ${colorClass} ${className}`}
       >
-        <span className="typing-dot h-[3.5px] w-[3.5px] rounded-full bg-[#111214]" />
-        <span className="typing-dot typing-dot-delay-1 h-[3.5px] w-[3.5px] rounded-full bg-[#111214]" />
-        <span className="typing-dot typing-dot-delay-2 h-[3.5px] w-[3.5px] rounded-full bg-[#111214]" />
+        <span className="typing-dot" />
+        <span className="typing-dot typing-dot-delay-1" />
+        <span className="typing-dot typing-dot-delay-2" />
       </span>
     );
   }

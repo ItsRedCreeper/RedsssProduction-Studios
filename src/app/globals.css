@@ -103,37 +103,43 @@ body::before {
   background: #444;
 }
 
-/* Discord-style avatar typing dots (status-colored badge). */
+/* Discord-style avatar typing dots (status-colored badge).
+   Must be inline-block — transform animations do nothing on inline spans. */
 @keyframes typing-dot-bounce {
   0%,
   60%,
   100% {
     transform: translateY(0);
-    opacity: 0.55;
+    opacity: 0.45;
   }
   30% {
-    transform: translateY(-2px);
+    transform: translateY(-3px);
     opacity: 1;
   }
 }
 
 .typing-dot {
-  animation: typing-dot-bounce 1.05s ease-in-out infinite;
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: #111214;
+  animation: typing-dot-bounce 1s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .typing-dot-delay-1 {
-  animation-delay: 0.15s;
+  animation-delay: 0.16s;
 }
 
 .typing-dot-delay-2 {
-  animation-delay: 0.3s;
+  animation-delay: 0.32s;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .typing-dot,
   .typing-dot-delay-1,
   .typing-dot-delay-2 {
-    animation: none;
-    opacity: 0.85;
+    animation: typing-dot-bounce 1s ease-in-out infinite;
   }
 }

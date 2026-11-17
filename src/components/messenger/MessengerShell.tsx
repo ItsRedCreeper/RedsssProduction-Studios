@@ -207,6 +207,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [typingUsers, setTypingUsers] = useState<
     Record<string, { until: number; username: string; avatarUrl: string | null }>
   >({});
+  /** Discord shows your own typing dots on the server member list. */
+  const [selfTyping, setSelfTyping] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [dmMessages, setDmMessages] = useState<ChatMessage[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
@@ -1355,24 +1357,36 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     if (!user || !typingKey) {
       setTypingUsers({});
+      setSelfTyping(false);
       typingChannelRef.current = null;
       return;
     }
 
     const selfId = user.id;
+    setSelfTyping(false);
+    setTypingUsers({});
     const supabase = createClient();
     const channel = supabase
       .channel(`typing:${typingKey}`, {
-        config: { broadcast: { ack: false, self: false } },
+        config: { broadcast: { self: false } },
       })
-      .on("broadcast", { event: "typing" }, ({ payload }) => {
-        const data = payload as {
+      .on("broadcast", { event: "typing" }, (message) => {
+        // supabase-js may nest payload or pass fields at the top level.
+        const raw = message as {
+          payload?: {
+            userId?: string;
+            username?: string;
+            avatarUrl?: string | null;
+            stop?: boolean;
+          };
           userId?: string;
           username?: string;
           avatarUrl?: string | null;
           stop?: boolean;
         };
+        const data = raw.payload ?? raw;
         const userId = data.userId;
+        // Self is tracked locally for member-list dots (Discord); ignore echo.
         if (!userId || userId === selfId) return;
         if (
           blockedIdsRef.current.includes(userId) ||
@@ -1407,6 +1421,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           // Flush a pending "I'm typing" that fired before join completed.
           if (typingWantedRef.current && user?.id) {
             lastTypingSentRef.current = 0;
+            setSelfTyping(true);
             void channel.send({
               type: "broadcast",
               event: "typing",
@@ -1436,6 +1451,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return () => {
       window.clearInterval(tick);
       typingWantedRef.current = false;
+      setSelfTyping(false);
       if (typingChannelRef.current === channel) {
         typingChannelRef.current = null;
       }
@@ -1629,12 +1645,30 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const typingUserIds = useMemo(() => {
     const now = Date.now();
-    return new Set(
+    const ids = new Set(
       Object.entries(typingUsers)
         .filter(([userId, info]) => info.until > now && !isMessageHidden(userId))
         .map(([userId]) => userId),
     );
-  }, [typingUsers, isMessageHidden]);
+    // Discord: your own dots appear on the server member list while you type.
+    // Not on the DM list — you aren't listed there as the other person.
+    if (
+      selfTyping &&
+      user?.id &&
+      pane === "server" &&
+      (activeChannel?.type === "text" || activeChannel?.type === "voice")
+    ) {
+      ids.add(user.id);
+    }
+    return ids;
+  }, [
+    typingUsers,
+    isMessageHidden,
+    selfTyping,
+    user?.id,
+    pane,
+    activeChannel?.type,
+  ]);
   // Stable string so sidebars re-render when membership changes even if Set identity is reused.
   const typingUserIdsKey = useMemo(
     () => [...typingUserIds].sort().join(","),
@@ -1723,6 +1757,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const publishTyping = useCallback(() => {
     const userId = user?.id;
     typingWantedRef.current = true;
+    // Local self dots for member list (Discord) — don't wait on Realtime round-trip.
+    if (pane === "server") setSelfTyping(true);
     const channel = typingChannelRef.current;
     if (!userId || !channel) return;
     const now = Date.now();
@@ -1739,11 +1775,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         stop: false,
       },
     });
-  }, [user?.id, profile?.username, profile?.avatar_url]);
+  }, [user?.id, profile?.username, profile?.avatar_url, pane]);
 
   const publishTypingStop = useCallback(() => {
     const userId = user?.id;
     typingWantedRef.current = false;
+    setSelfTyping(false);
     const channel = typingChannelRef.current;
     if (!userId || !channel) return;
     lastTypingSentRef.current = 0;
