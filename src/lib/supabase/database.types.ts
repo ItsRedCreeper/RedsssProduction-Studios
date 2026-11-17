@@ -310,6 +310,14 @@ export type Database = {
         Args: { friend_id: string; nickname: string }
         Returns: undefined
       }
+      discover_server_stats: {
+        Args: Record<string, never>
+        Returns: {
+          server_id: string
+          member_count: number
+          online_count: number
+        }[]
+      }
       heartbeat_presence: {
         Args: {
           p_status: string

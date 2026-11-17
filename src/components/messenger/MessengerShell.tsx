@@ -725,71 +725,81 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     };
   }, [activeServerId]);
 
-  // Live presence for members + DM partners.
+  // Live presence for members + DM partners (profiles must be in supabase_realtime).
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
+    const applyPresenceRow = (row: {
+      id?: string;
+      status?: string;
+      status_text?: string | null;
+      last_seen_at?: string | null;
+      avatar_url?: string | null;
+      username?: string;
+    }) => {
+      if (!row?.id) return;
+      setMembers((prev) => {
+        if (!prev.some((m) => m.user_id === row.id)) return prev;
+        return prev.map((m) =>
+          m.user_id === row.id
+            ? {
+                ...m,
+                status: row.status ?? m.status,
+                status_text:
+                  row.status_text !== undefined
+                    ? row.status_text
+                    : m.status_text,
+                last_seen_at:
+                  row.last_seen_at !== undefined
+                    ? row.last_seen_at
+                    : m.last_seen_at,
+                avatar_url:
+                  row.avatar_url !== undefined ? row.avatar_url : m.avatar_url,
+                username: row.username ?? m.username,
+              }
+            : m,
+        );
+      });
+      setThreads((prev) =>
+        prev.map((thread) =>
+          thread.otherUserId === row.id
+            ? {
+                ...thread,
+                status: row.status ?? thread.status,
+                last_seen_at:
+                  row.last_seen_at !== undefined
+                    ? row.last_seen_at
+                    : thread.last_seen_at,
+                status_text:
+                  row.status_text !== undefined
+                    ? row.status_text
+                    : thread.status_text,
+                avatar_url:
+                  row.avatar_url !== undefined
+                    ? row.avatar_url
+                    : thread.avatar_url,
+                username: row.username ?? thread.username,
+              }
+            : thread,
+        ),
+      );
+    };
+
     const channel = supabase
       .channel(`presence-live:${user.id}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles" },
+        { event: "*", schema: "public", table: "profiles" },
         (payload) => {
-          const row = payload.new as {
-            id?: string;
-            status?: string;
-            status_text?: string | null;
-            last_seen_at?: string | null;
-            avatar_url?: string | null;
-            username?: string;
-          };
-          if (!row?.id) return;
-          setMembers((prev) => {
-            if (!prev.some((m) => m.user_id === row.id)) return prev;
-            return prev.map((m) =>
-              m.user_id === row.id
-                ? {
-                    ...m,
-                    status: row.status ?? m.status,
-                    status_text:
-                      row.status_text !== undefined
-                        ? row.status_text
-                        : m.status_text,
-                    last_seen_at:
-                      row.last_seen_at !== undefined
-                        ? row.last_seen_at
-                        : m.last_seen_at,
-                    avatar_url:
-                      row.avatar_url !== undefined
-                        ? row.avatar_url
-                        : m.avatar_url,
-                    username: row.username ?? m.username,
-                  }
-                : m,
-            );
-          });
-          setThreads((prev) =>
-            prev.map((thread) =>
-              thread.otherUserId === row.id
-                ? {
-                    ...thread,
-                    status: row.status ?? thread.status,
-                    last_seen_at:
-                      row.last_seen_at !== undefined
-                        ? row.last_seen_at
-                        : thread.last_seen_at,
-                    status_text:
-                      row.status_text !== undefined
-                        ? row.status_text
-                        : thread.status_text,
-                    avatar_url:
-                      row.avatar_url !== undefined
-                        ? row.avatar_url
-                        : thread.avatar_url,
-                    username: row.username ?? thread.username,
-                  }
-                : thread,
-            ),
+          applyPresenceRow(
+            (payload.new ?? payload.old) as {
+              id?: string;
+              status?: string;
+              status_text?: string | null;
+              last_seen_at?: string | null;
+              avatar_url?: string | null;
+              username?: string;
+            },
           );
         },
       )

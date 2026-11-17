@@ -5,7 +5,7 @@ import { notifyProfileUpdated } from "@/hooks/useCurrentProfile";
 const CUSTOM_STATUS_MAX = 128;
 
 /** If no heartbeat within this window, treat as offline when rendering. */
-export const PRESENCE_STALE_MS = 90_000;
+export const PRESENCE_STALE_MS = 120_000;
 export const IDLE_AFTER_MS = 10 * 60 * 1000;
 export const HEARTBEAT_INTERVAL_MS = 20_000;
 export const TAB_PING_MS = 2_000;
@@ -32,16 +32,16 @@ export function resolveDisplayStatus(
   lastSeenAt?: string | null,
   now = Date.now(),
 ): PresenceStatus {
+  const stored = asPresenceStatus(status);
+  // Only force-offline from heartbeat staleness when we have a last_seen value.
+  // Missing last_seen (legacy / not yet heartbeating) trusts the stored status.
   if (lastSeenAt) {
     const seen = Date.parse(lastSeenAt);
     if (!Number.isNaN(seen) && now - seen > PRESENCE_STALE_MS) {
       return "offline";
     }
-  } else if (status && status !== "offline") {
-    // Legacy rows without heartbeat — keep stored status but prefer offline
-    // only when explicitly offline.
   }
-  return asPresenceStatus(status);
+  return stored;
 }
 
 /**

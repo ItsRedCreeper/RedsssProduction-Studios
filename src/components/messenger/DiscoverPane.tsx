@@ -7,7 +7,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Compass, Eye, Search, Sparkles } from "lucide-react";
+import { Compass, Eye, Search, Sparkles, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import {
@@ -26,6 +26,11 @@ type DiscoverPaneProps = {
   onSidebarResizeStart: (event: PointerEvent<HTMLElement>) => void;
 };
 
+type ServerStats = {
+  member_count: number;
+  online_count: number;
+};
+
 const CATEGORIES = [
   { id: "featured", label: "Featured", icon: Sparkles },
   { id: "all", label: "All Public", icon: Compass },
@@ -40,6 +45,7 @@ export function DiscoverPane({
 }: DiscoverPaneProps) {
   const { user } = useCurrentProfile();
   const [servers, setServers] = useState<Tables<"servers">[]>([]);
+  const [statsById, setStatsById] = useState<Record<string, ServerStats>>({});
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]["id"]>("featured");
@@ -60,7 +66,7 @@ export function DiscoverPane({
       setLoading(true);
       setError(null);
 
-      const [publicRes, membershipRes] = await Promise.all([
+      const [publicRes, membershipRes, statsRes] = await Promise.all([
         supabase
           .from("servers")
           .select("*")
@@ -70,6 +76,7 @@ export function DiscoverPane({
           .from("server_members")
           .select("server_id")
           .eq("user_id", user.id),
+        supabase.rpc("discover_server_stats"),
       ]);
 
       if (cancelled) return;
@@ -79,6 +86,18 @@ export function DiscoverPane({
         setServers([]);
       } else {
         setServers(publicRes.data ?? []);
+      }
+
+      const nextStats: Record<string, ServerStats> = {};
+      for (const row of statsRes.data ?? []) {
+        nextStats[row.server_id] = {
+          member_count: Number(row.member_count) || 0,
+          online_count: Number(row.online_count) || 0,
+        };
+      }
+      setStatsById(nextStats);
+      if (statsRes.error && !publicRes.error) {
+        setError(statsRes.error.message);
       }
 
       setMemberIds((membershipRes.data ?? []).map((row) => row.server_id));
@@ -110,6 +129,16 @@ export function DiscoverPane({
     setMemberIds((current) =>
       current.includes(serverId) ? current : [...current, serverId],
     );
+    setStatsById((prev) => {
+      const current = prev[serverId] ?? { member_count: 0, online_count: 0 };
+      return {
+        ...prev,
+        [serverId]: {
+          member_count: current.member_count + 1,
+          online_count: current.online_count + 1,
+        },
+      };
+    });
     onJoined(serverId);
   }
 
@@ -121,11 +150,20 @@ export function DiscoverPane({
         .toLowerCase()
         .includes(needle);
     });
+
     if (category === "featured") {
-      list = list.slice(0, 12);
+      list = [...list].sort((a, b) => {
+        const aCount = statsById[a.id]?.member_count ?? 0;
+        const bCount = statsById[b.id]?.member_count ?? 0;
+        if (bCount !== aCount) return bCount - aCount;
+        return a.name.localeCompare(b.name);
+      });
+    } else {
+      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
     }
+
     return list;
-  }, [servers, query, category]);
+  }, [servers, query, category, statsById]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
@@ -233,7 +271,9 @@ export function DiscoverPane({
               <p className="text-xs text-[#949ba4]">
                 {loading
                   ? "Loading…"
-                  : `${filtered.length} server${filtered.length === 1 ? "" : "s"}`}
+                  : category === "featured"
+                    ? "Sorted by most members"
+                    : `A–Z · ${filtered.length} server${filtered.length === 1 ? "" : "s"}`}
               </p>
             </div>
           </div>
@@ -259,6 +299,10 @@ export function DiscoverPane({
             <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {filtered.map((server) => {
                 const joined = memberIds.includes(server.id);
+                const stats = statsById[server.id] ?? {
+                  member_count: 0,
+                  online_count: 0,
+                };
                 return (
                   <li
                     key={server.id}
@@ -286,6 +330,17 @@ export function DiscoverPane({
                       <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm text-[#b5bac1]">
                         {server.description || "No description yet."}
                       </p>
+                      <div className="mt-3 flex items-center gap-3 text-xs text-[#949ba4]">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-[#23a559]" />
+                          {stats.online_count.toLocaleString()} Online
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5" strokeWidth={2} />
+                          {stats.member_count.toLocaleString()} Member
+                          {stats.member_count === 1 ? "" : "s"}
+                        </span>
+                      </div>
                       <div className="mt-4 flex gap-2">
                         {!joined && (
                           <button

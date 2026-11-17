@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { isPresenceOnline, statusDotClass } from "@/components/messenger/data";
 import type { MemberView } from "@/components/messenger/types";
@@ -76,6 +76,12 @@ export function MemberList({
   className = "",
 }: MemberListProps) {
   const profileUi = useOptionalProfileUi();
+  // Recompute online/offline as heartbeats go stale without a new render.
+  const [nowTick, setNowTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTick(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const displayNameOf = (member: MemberView) =>
     profileUi?.nicknameFor(member.user_id) ||
@@ -83,23 +89,26 @@ export function MemberList({
     member.username;
 
   const { online, offline } = useMemo(() => {
+    const now = Date.now();
     const sorted = [...members].sort((a, b) =>
       displayNameOf(a).localeCompare(displayNameOf(b)),
     );
     return {
       online: sorted.filter((member) =>
         isPresenceOnline(
-          resolveDisplayStatus(member.status, member.last_seen_at),
+          resolveDisplayStatus(member.status, member.last_seen_at, now),
         ),
       ),
       offline: sorted.filter(
         (member) =>
           !isPresenceOnline(
-            resolveDisplayStatus(member.status, member.last_seen_at),
+            resolveDisplayStatus(member.status, member.last_seen_at, now),
           ),
       ),
     };
-  }, [members, profileUi?.nicknames]);
+    // nowTick intentionally included so stale presence flips Online → Offline.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members, profileUi?.nicknames, nowTick]);
 
   function openPopover(member: MemberView, element: HTMLButtonElement) {
     void profileUi?.openSmallProfile(member.user_id, element);
