@@ -18,6 +18,23 @@ export function messengerChannelPath(serverId: string, channelId: string) {
   return `/messenger/channels/${serverId}/${channelId}`;
 }
 
+/** Real server URL in look-only Discover preview mode. */
+export function messengerServerPreviewPath(
+  serverId: string,
+  channelId?: string | null,
+) {
+  const base = channelId
+    ? messengerChannelPath(serverId, channelId)
+    : messengerServerPath(serverId);
+  return `${base}?preview=1`;
+}
+
+export function withPreviewQuery(path: string, preview: boolean) {
+  if (!preview) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}preview=1`;
+}
+
 export function messengerDiscoverPath() {
   return "/messenger/discover";
 }

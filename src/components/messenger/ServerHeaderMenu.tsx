@@ -5,8 +5,10 @@ import { ChevronDown, FolderPlus, Hash, LogOut, Settings, UserPlus } from "lucid
 
 type ServerHeaderMenuProps = {
   serverName: string;
-  onInvite: () => void;
-  onSettings: () => void;
+  /** When false, invite / settings / create / leave are hidden (Discover preview). */
+  interactive?: boolean;
+  onInvite?: () => void;
+  onSettings?: () => void;
   onCreateChannel?: () => void;
   onCreateCategory?: () => void;
   onLeave?: () => void;
@@ -14,6 +16,7 @@ type ServerHeaderMenuProps = {
 
 export function ServerHeaderMenu({
   serverName,
+  interactive = true,
   onInvite,
   onSettings,
   onCreateChannel,
@@ -54,18 +57,20 @@ export function ServerHeaderMenu({
             strokeWidth={2}
           />
         </button>
-        <button
-          type="button"
-          onClick={onInvite}
-          title="Invite People"
-          aria-label="Invite People"
-          className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#b5bac1] transition-colors hover:bg-accent/15 hover:text-accent"
-        >
-          <UserPlus className="h-4 w-4" strokeWidth={2} />
-        </button>
+        {interactive && onInvite && (
+          <button
+            type="button"
+            onClick={onInvite}
+            title="Invite People"
+            aria-label="Invite People"
+            className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#b5bac1] transition-colors hover:bg-accent/15 hover:text-accent"
+          >
+            <UserPlus className="h-4 w-4" strokeWidth={2} />
+          </button>
+        )}
       </div>
 
-      {open && (
+      {open && interactive && (
         <div
           role="menu"
           className="absolute left-2 right-2 top-[calc(100%-4px)] z-30 overflow-hidden rounded-md border border-[#1e1f22] bg-[#111214] py-1.5 shadow-xl shadow-black/50"
@@ -98,18 +103,20 @@ export function ServerHeaderMenu({
               Create Category
             </button>
           )}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onSettings();
-            }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-accent hover:text-white"
-          >
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-            Server Settings
-          </button>
+          {onSettings && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onSettings();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-accent hover:text-white"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+              Server Settings
+            </button>
+          )}
           {onLeave && (
             <>
               <div className="my-1 border-t border-[#2b2d31]" />

@@ -322,6 +322,18 @@ export type Database = {
           online_count: number
         }[]
       }
+      get_public_server_preview: {
+        Args: { p_server_id: string }
+        Returns: Json
+      }
+      get_public_channel_messages: {
+        Args: {
+          p_channel_id: string
+          p_limit?: number
+          p_before?: string | null
+        }
+        Returns: Json
+      }
       heartbeat_presence: {
         Args: {
           p_status: string

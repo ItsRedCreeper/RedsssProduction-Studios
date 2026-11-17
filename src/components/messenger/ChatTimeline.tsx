@@ -29,6 +29,7 @@ type ChatTimelineProps = {
   preferFriendNickname?: boolean;
   /** Server nicknames for channel message authors. */
   serverNickByUserId?: Record<string, string>;
+  readOnly?: boolean;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
   onDelete: (messageId: string) => Promise<void>;
@@ -60,6 +61,7 @@ export function ChatTimeline({
   onLoadOlder,
   preferFriendNickname = false,
   serverNickByUserId,
+  readOnly = false,
   onReply,
   onEdit,
   onDelete,
@@ -203,16 +205,21 @@ export function ChatTimeline({
               canDeleteOthers={canDeleteOthers}
               preferFriendNickname={preferFriendNickname}
               serverNickByUserId={serverNickByUserId}
+              readOnly={readOnly}
               reactions={reactionMap[message.id] ?? []}
               onReply={onReply}
               onEdit={onEdit}
               onDelete={onDelete}
               onJumpToReply={onJumpToReply}
               onReact={
-                onReact ? (emoji) => onReact(message.id, emoji) : undefined
+                readOnly || !onReact
+                  ? undefined
+                  : (emoji) => onReact(message.id, emoji)
               }
               onTogglePin={
-                onTogglePin ? () => onTogglePin(message) : undefined
+                readOnly || !onTogglePin
+                  ? undefined
+                  : () => onTogglePin(message)
               }
             />
           ))}

@@ -34,6 +34,8 @@ type ChannelSidebarProps = {
   loading: boolean;
   canLeave: boolean;
   canManageChannels?: boolean;
+  /** Discover preview: browse channels only. */
+  previewMode?: boolean;
   connectedVoiceChannelId: string | null;
   onSelectChannel: (channelId: string) => void;
   onInvite: () => void;
@@ -102,6 +104,7 @@ export function ChannelSidebar({
   loading,
   canLeave,
   canManageChannels = false,
+  previewMode = false,
   connectedVoiceChannelId,
   onSelectChannel,
   onInvite,
@@ -278,13 +281,18 @@ export function ChannelSidebar({
     <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
       <ServerHeaderMenu
         serverName={serverName}
-        onInvite={onInvite}
-        onSettings={onSettings}
-        onCreateChannel={() => onCreateChannel()}
-        onCreateCategory={
-          canManageChannels && onCreateCategory ? onCreateCategory : undefined
+        interactive={!previewMode}
+        onInvite={previewMode ? undefined : onInvite}
+        onSettings={previewMode ? undefined : onSettings}
+        onCreateChannel={
+          previewMode ? undefined : () => onCreateChannel()
         }
-        onLeave={canLeave ? onLeave : undefined}
+        onCreateCategory={
+          !previewMode && canManageChannels && onCreateCategory
+            ? onCreateCategory
+            : undefined
+        }
+        onLeave={!previewMode && canLeave ? onLeave : undefined}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {loading ? (
@@ -292,26 +300,28 @@ export function ChannelSidebar({
         ) : sections.length === 0 ? (
           <div className="px-2">
             <p className="mb-3 text-xs text-muted">No channels yet.</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => onCreateChannel({ type: "text" })}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                Create Channel
-              </button>
-              {canManageChannels && onCreateCategory && (
+            {!previewMode && (
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={onCreateCategory}
-                  className="inline-flex items-center gap-1 rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#4e5058]"
+                  onClick={() => onCreateChannel({ type: "text" })}
+                  className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                  Create Category
+                  Create Channel
                 </button>
-              )}
-            </div>
+                {canManageChannels && onCreateCategory && (
+                  <button
+                    type="button"
+                    onClick={onCreateCategory}
+                    className="inline-flex items-center gap-1 rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#4e5058]"
+                  >
+                    <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                    Create Category
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           sections.map((section) => {
@@ -384,21 +394,23 @@ export function ChannelSidebar({
                       <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onCreateChannel({
-                        type: preferredType,
-                        categoryId:
-                          section.id === "uncategorized" ? null : section.id,
-                      })
-                    }
-                    className="rounded-md p-1 text-[#949ba4] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
-                    aria-label={`Create channel in ${section.name}`}
-                    title="Create Channel"
-                  >
-                    <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
-                  </button>
+                  {!previewMode && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onCreateChannel({
+                          type: preferredType,
+                          categoryId:
+                            section.id === "uncategorized" ? null : section.id,
+                        })
+                      }
+                      className="rounded-md p-1 text-[#949ba4] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
+                      aria-label={`Create channel in ${section.name}`}
+                      title="Create Channel"
+                    >
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
+                    </button>
+                  )}
                 </div>
                 {!isCollapsed && (
                   <ul className="mt-0.5 space-y-0.5">

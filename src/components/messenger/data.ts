@@ -199,6 +199,112 @@ export async function loadChannelMessages(channelId: string) {
   };
 }
 
+type PublicPreviewMember = {
+  user_id: string;
+  nickname: string | null;
+  joined_at: string;
+  username: string;
+  avatar_url: string | null;
+  status: string;
+  status_text: string | null;
+  last_seen_at: string | null;
+  bio: string | null;
+  banner_url: string | null;
+  banner_color: string | null;
+};
+
+export type PublicServerPreview = {
+  server: Tables<"servers">;
+  channels: Tables<"channels">[];
+  categories: Tables<"channel_categories">[];
+  members: PublicPreviewMember[];
+  member_count: number;
+};
+
+export async function loadPublicServerPreview(serverId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("get_public_server_preview", {
+    p_server_id: serverId,
+  });
+  if (error) {
+    return { preview: null as PublicServerPreview | null, error: error.message };
+  }
+  if (!data || typeof data !== "object") {
+    return {
+      preview: null as PublicServerPreview | null,
+      error: "This server is not available for preview.",
+    };
+  }
+  const raw = data as Record<string, unknown>;
+  const server = raw.server as Tables<"servers"> | null;
+  if (!server?.id) {
+    return {
+      preview: null as PublicServerPreview | null,
+      error: "This server is not available for preview.",
+    };
+  }
+  return {
+    preview: {
+      server,
+      channels: (raw.channels as Tables<"channels">[]) ?? [],
+      categories: (raw.categories as Tables<"channel_categories">[]) ?? [],
+      members: (raw.members as PublicPreviewMember[]) ?? [],
+      member_count: Number(raw.member_count) || 0,
+    } satisfies PublicServerPreview,
+    error: null as string | null,
+  };
+}
+
+type PublicPreviewMessageRow = Tables<"messages"> & {
+  profiles?: {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+    status?: string;
+    status_text?: string | null;
+    last_seen_at?: string | null;
+    bio?: string | null;
+    banner_url?: string | null;
+    banner_color?: string | null;
+  } | null;
+};
+
+export async function loadPublicChannelMessages(
+  channelId: string,
+  opts?: { limit?: number; before?: string | null },
+) {
+  const supabase = createClient();
+  const limit = opts?.limit ?? CHANNEL_MESSAGE_PAGE_SIZE;
+  const { data, error } = await supabase.rpc("get_public_channel_messages", {
+    p_channel_id: channelId,
+    p_limit: limit,
+    p_before: opts?.before ?? null,
+  });
+  if (error) {
+    return {
+      messages: [] as ChatMessage[],
+      hasMore: false,
+      error: error.message,
+    };
+  }
+  const rows = (Array.isArray(data) ? data : []) as PublicPreviewMessageRow[];
+  const messages: ChatMessage[] = rows.map((row) => {
+    const { profiles, ...message } = row;
+    return {
+      ...message,
+      profiles: profiles
+        ? { username: profiles.username, avatar_url: profiles.avatar_url }
+        : null,
+      reply_to: null,
+    };
+  });
+  return {
+    messages,
+    hasMore: rows.length >= limit,
+    error: null as string | null,
+  };
+}
+
 /** Older page: messages strictly before `beforeCreatedAt` (oldest currently loaded). */
 export async function loadOlderChannelMessages(
   channelId: string,

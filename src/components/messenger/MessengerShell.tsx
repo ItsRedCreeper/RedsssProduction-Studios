@@ -12,9 +12,11 @@ import {
   messengerDmPath,
   messengerHomePath,
   messengerServerPath,
+  messengerServerPreviewPath,
   recallServerChannel,
   rememberMessengerPath,
   rememberServerChannel,
+  withPreviewQuery,
 } from "@/lib/messenger-routes";
 import { CreateServerModal } from "@/components/messenger/CreateServerModal";
 import { CreateChannelModal } from "@/components/messenger/CreateChannelModal";
@@ -59,6 +61,8 @@ import {
   loadOlderChannelMessages,
   loadOlderDmMessages,
   loadProfiles,
+  loadPublicChannelMessages,
+  loadPublicServerPreview,
   loadSingleMessage,
   saveChannelRead,
   uploadAttachment,
@@ -173,6 +177,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const params = useParams<{ serverId?: string; channelId?: string }>();
   const searchParams = useSearchParams();
   const dmParam = searchParams.get("dm");
+  const wantsPreview = searchParams.get("preview") === "1";
   const { user, profile } = useCurrentProfile();
   const profileUi = useOptionalProfileUi();
   const blockedIds = profileUi?.blockedIds ?? EMPTY_BLOCKED_IDS;
@@ -258,6 +263,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [loadingServers, setLoadingServers] = useState(true);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [loadedServerId, setLoadedServerId] = useState<string | null>(null);
+  /** Public server chrome while Discover preview (?preview=1) is active. */
+  const [previewServer, setPreviewServer] = useState<Server | null>(null);
+  const [joiningPreview, setJoiningPreview] = useState(false);
   const [loadingChannelMessages, setLoadingChannelMessages] = useState(false);
   const [loadingDmMessages, setLoadingDmMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
@@ -294,7 +302,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   channelIdsRef.current = new Set(channels.map((channel) => channel.id));
   messageIdsRef.current = new Set(messages.map((message) => message.id));
 
-  const activeServer = servers.find((server) => server.id === activeServerId) ?? null;
+  const isMemberOfActiveServer =
+    !!activeServerId && servers.some((server) => server.id === activeServerId);
+  /** Look-only mode for public servers you haven't joined yet. */
+  const previewMode =
+    wantsPreview &&
+    pane === "server" &&
+    !!activeServerId &&
+    (loadingServers || !isMemberOfActiveServer);
+  const previewModeRef = useRef(previewMode);
+  previewModeRef.current = previewMode;
+  const activeServer =
+    servers.find((server) => server.id === activeServerId) ??
+    (previewMode && previewServer?.id === activeServerId ? previewServer : null);
   const activeChannel = channels.find((channel) => channel.id === activeChannelId) ?? null;
   const activeThread =
     threads.find((thread) => thread.id === activeConversationId) ?? null;
@@ -417,7 +437,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     if (serverIds.length === 0) {
       setServers([]);
       setLoadingServers(false);
-      if (paneRef.current === "server") router.replace(messengerHomePath());
+      // Discover preview uses the real server URL without membership.
+      if (paneRef.current === "server" && !previewModeRef.current) {
+        router.replace(messengerHomePath());
+      }
       return;
     }
 
@@ -437,7 +460,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (
         paneRef.current === "server" &&
         routeServerRef.current &&
-        !next.some((server) => server.id === routeServerRef.current)
+        !next.some((server) => server.id === routeServerRef.current) &&
+        !previewModeRef.current
       ) {
         router.replace(messengerHomePath());
       }
@@ -747,11 +771,32 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       });
   }, [user]);
 
+  // Members who open a preview URL get upgraded to the live server view.
+  useEffect(() => {
+    if (!wantsPreview || loadingServers || !routeServerId || pane !== "server") {
+      return;
+    }
+    if (!servers.some((server) => server.id === routeServerId)) return;
+    const path = routeChannelId
+      ? messengerChannelPath(routeServerId, routeChannelId)
+      : messengerServerPath(routeServerId);
+    router.replace(path);
+  }, [
+    wantsPreview,
+    loadingServers,
+    routeServerId,
+    routeChannelId,
+    servers,
+    pane,
+    router,
+  ]);
+
   useEffect(() => {
     if (!activeServerId) {
       setChannels([]);
       setCategories([]);
       setMembers([]);
+      setPreviewServer(null);
       setLoadedServerId(null);
       setLoadingChannels(false);
       return;
@@ -762,6 +807,53 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     // Keep previous server chrome visible until the new one is fully ready,
     // then swap channels + members + roles in one paint.
     setLoadingChannels(true);
+
+    async function loadPreview() {
+      const { preview, error: previewError } =
+        await loadPublicServerPreview(serverId);
+      if (cancelled) return;
+      if (previewError || !preview) {
+        setError(previewError ?? "This server is not available for preview.");
+        setPreviewServer(null);
+        setChannels([]);
+        setCategories([]);
+        setMembers([]);
+        setServerRoles([]);
+        setLoadedServerId(null);
+        setLoadingChannels(false);
+        router.replace(messengerDiscoverPath());
+        return;
+      }
+      setPreviewServer(preview.server);
+      setChannels(preview.channels);
+      setCategories(preview.categories);
+      setServerRoles([]);
+      setMembers(
+        preview.members.map((row) => ({
+          user_id: row.user_id,
+          nickname: row.nickname,
+          joined_at: row.joined_at,
+          username: row.username,
+          avatar_url: row.avatar_url,
+          status: row.status,
+          status_text: row.status_text,
+          last_seen_at: row.last_seen_at,
+          bio: row.bio,
+          banner_url: row.banner_url,
+          banner_color: row.banner_color,
+          roleIds: [] as string[],
+        })),
+      );
+      setMessages([]);
+      setReactions([]);
+      setChannelServerMap((prev) => {
+        const next = { ...prev };
+        for (const channel of preview.channels) next[channel.id] = serverId;
+        return next;
+      });
+      setLoadedServerId(serverId);
+      setLoadingChannels(false);
+    }
 
     async function load() {
       const [channelResult, categoryResult, memberResult, roleResult, rolesTable] =
@@ -811,6 +903,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         };
       });
 
+      setPreviewServer(null);
       setChannels(nextChannels);
       setCategories(categoryResult.data ?? []);
       setServerRoles((rolesTable.data as Role[] | null) ?? []);
@@ -826,11 +919,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setLoadingChannels(false);
     }
 
-    void load();
+    if (previewMode) {
+      void loadPreview();
+    } else {
+      void load();
+    }
     return () => {
       cancelled = true;
     };
-  }, [activeServerId]);
+  }, [activeServerId, previewMode, router]);
 
   // Live presence for members + DM partners (profiles must be in supabase_realtime).
   useEffect(() => {
@@ -923,19 +1020,26 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const channelValid =
       !!routeChannelId && channels.some((channel) => channel.id === routeChannelId);
     if (channelValid && routeChannelId) {
-      const current = channels.find((channel) => channel.id === routeChannelId);
-      // Only remember text channels so returning to a server doesn't auto-open voice.
-      if (current?.type === "text") {
-        rememberServerChannel(routeServerId, routeChannelId);
+      if (!previewMode) {
+        const current = channels.find((channel) => channel.id === routeChannelId);
+        // Only remember text channels so returning to a server doesn't auto-open voice.
+        if (current?.type === "text") {
+          rememberServerChannel(routeServerId, routeChannelId);
+        }
+        rememberMessengerPath(pathname);
       }
-      rememberMessengerPath(pathname);
       return;
     }
     if (channels.length === 0) return;
 
     const target = pickFallbackChannel(channels, routeServerId);
     if (!target || target.id === routeChannelId) return;
-    router.replace(messengerChannelPath(routeServerId, target.id));
+    router.replace(
+      withPreviewQuery(
+        messengerChannelPath(routeServerId, target.id),
+        previewMode,
+      ),
+    );
   }, [
     pane,
     routeServerId,
@@ -945,6 +1049,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     loadedServerId,
     pathname,
     router,
+    previewMode,
   ]);
 
   useEffect(() => {
@@ -1014,7 +1119,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [activeServerId]);
 
   useEffect(() => {
-    if (!activeServerId) {
+    if (!activeServerId || previewMode) {
       setVoiceStates([]);
       return;
     }
@@ -1050,7 +1155,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [activeServerId]);
+  }, [activeServerId, previewMode]);
 
   useEffect(() => {
     if (!activeChannelId || !activeChannel) return;
@@ -1061,6 +1166,27 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     // Sync: show loading before first paint of the new channel so scroll-to-bottom
     // waits for the real message list instead of locking onto stale content.
     setLoadingChannelMessages(true);
+
+    async function loadPreviewMessages() {
+      const result = await loadPublicChannelMessages(channelId);
+      if (cancelled) return;
+      if (result.error) {
+        setError(result.error);
+        setMessages([]);
+        setReactions([]);
+        setChannelHasMore(false);
+        setLoadingChannelMessages(false);
+        return;
+      }
+      setMessages(result.messages);
+      setReactions([]);
+      setChannelHasMore(result.hasMore);
+      const newest = result.messages[result.messages.length - 1]?.created_at;
+      if (newest) {
+        setLastMessageAt((prev) => ({ ...prev, [channelId]: newest }));
+      }
+      setLoadingChannelMessages(false);
+    }
 
     async function load() {
       const result = await loadChannelMessages(channelId);
@@ -1092,6 +1218,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setLastMessageAt((prev) => ({ ...prev, [channelId]: newest }));
       }
       setLoadingChannelMessages(false);
+    }
+
+    if (previewMode) {
+      void loadPreviewMessages();
+      return () => {
+        cancelled = true;
+      };
     }
 
     void load();
@@ -1178,7 +1311,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [activeChannelId, activeChannel?.type]);
+  }, [activeChannelId, activeChannel?.type, previewMode]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -1787,6 +1920,24 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const oldest = messages[0]?.created_at;
     if (!oldest) return;
     setLoadingOlderMessages(true);
+    if (previewMode) {
+      const result = await loadPublicChannelMessages(activeChannelId, {
+        before: oldest,
+      });
+      if (result.error) {
+        setError(result.error);
+        setLoadingOlderMessages(false);
+        return;
+      }
+      setMessages((prev) => {
+        const seen = new Set(prev.map((message) => message.id));
+        const older = result.messages.filter((message) => !seen.has(message.id));
+        return [...older, ...prev];
+      });
+      setChannelHasMore(result.hasMore);
+      setLoadingOlderMessages(false);
+      return;
+    }
     const result = await loadOlderChannelMessages(activeChannelId, oldest);
     if (result.error) {
       setError(result.error);
@@ -1825,6 +1976,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     loadingOlderMessages,
     channelHasMore,
     messages,
+    previewMode,
   ]);
 
   const loadOlderDm = useCallback(async () => {
@@ -1984,12 +2136,49 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   function selectServer(serverId: string) {
     setLeaveOpen(false);
-    if (serverId === activeServerId) return;
+    if (serverId === activeServerId && !previewMode) return;
     router.push(messengerServerPath(serverId));
+  }
+
+  function selectPreviewServer(serverId: string) {
+    setLeaveOpen(false);
+    router.push(messengerServerPreviewPath(serverId));
+  }
+
+  async function joinPreviewServer() {
+    if (!user || !activeServerId || joiningPreview) return;
+    setJoiningPreview(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: joinError } = await supabase.from("server_members").insert({
+      server_id: activeServerId,
+      user_id: user.id,
+    });
+    if (joinError) {
+      setJoiningPreview(false);
+      setError(joinError.message);
+      return;
+    }
+    const channelId = activeChannelId;
+    const serverId = activeServerId;
+    await loadServers();
+    setPreviewServer(null);
+    setJoiningPreview(false);
+    setToast("Joined server");
+    router.replace(
+      channelId
+        ? messengerChannelPath(serverId, channelId)
+        : messengerServerPath(serverId),
+    );
   }
 
   function selectChannel(channelId: string) {
     if (!activeServerId) return;
+    if (previewMode) {
+      if (channelId === activeChannelId) return;
+      router.push(messengerServerPreviewPath(activeServerId, channelId));
+      return;
+    }
     const target = channels.find((channel) => channel.id === channelId);
     if (target?.type === "voice" && activeServer) {
       const allowed = can(myPerms, PERMISSIONS.CONNECT, {
@@ -2746,6 +2935,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             router.push(messengerServerPath(serverId));
           }}
           onOpenServer={selectServer}
+          onPreviewServer={selectPreviewServer}
         />
       ) : (
       <>
@@ -2772,14 +2962,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             categories={categories}
             channels={channels}
             activeChannelId={activeChannelId}
-            unreadChannelIds={unreadChannelIds}
+            unreadChannelIds={previewMode ? new Set() : unreadChannelIds}
             voiceStates={displayVoiceStates}
             membersById={membersById}
             speakingUserIds={speakingUserIds}
             loading={false}
-            canLeave={activeServer.owner_id !== user?.id}
-            canManageChannels={canManageChannels || isServerOwner}
-            connectedVoiceChannelId={connection?.channelId ?? null}
+            previewMode={previewMode}
+            canLeave={!previewMode && activeServer.owner_id !== user?.id}
+            canManageChannels={
+              !previewMode && (canManageChannels || isServerOwner)
+            }
+            connectedVoiceChannelId={
+              previewMode ? null : connection?.channelId ?? null
+            }
             onSelectChannel={selectChannel}
             onInvite={openInvite}
             onSettings={openSettings}
@@ -2816,13 +3011,44 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             <div className="sm:hidden">
               <ServerHeaderMenu
                 serverName={activeServer.name}
-                onInvite={openInvite}
-                onSettings={openSettings}
-                onCreateChannel={() => openCreateChannel()}
+                interactive={!previewMode}
+                onInvite={previewMode ? undefined : openInvite}
+                onSettings={previewMode ? undefined : openSettings}
+                onCreateChannel={
+                  previewMode ? undefined : () => openCreateChannel()
+                }
                 onLeave={
-                  activeServer.owner_id !== user?.id ? () => setLeaveOpen(true) : undefined
+                  !previewMode && activeServer.owner_id !== user?.id
+                    ? () => setLeaveOpen(true)
+                    : undefined
                 }
               />
+            </div>
+          )}
+
+          {previewMode && activeServer && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-accent/30 bg-accent/10 px-4 py-2">
+              <p className="text-xs font-medium text-[#f2b8b5] sm:text-sm">
+                Previewing <span className="text-white">{activeServer.name}</span>{" "}
+                — look around; join to chat, react, or use voice.
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={selectDiscover}
+                  className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-[#dbdee1] hover:bg-white/5"
+                >
+                  Back to Discover
+                </button>
+                <button
+                  type="button"
+                  disabled={joiningPreview}
+                  onClick={() => void joinPreviewServer()}
+                  className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+                >
+                  {joiningPreview ? "Joining…" : "Join Server"}
+                </button>
+              </div>
             </div>
           )}
 
@@ -2835,9 +3061,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             membersOpen={membersOpen}
             chatOpen={voiceChatOpen}
             showSearch={(textMode || dmMode) && !channelPending}
-            showPins={textMode && !channelPending}
+            showPins={textMode && !channelPending && !previewMode}
             showMembers={textMode && !!activeServer && !channelPending}
-            showChat={voiceMode && !channelPending}
+            showChat={voiceMode && !channelPending && !previewMode}
             pinCount={pinList.length}
             onToggleSearch={() => setSearchOpen((open) => !open)}
             onTogglePins={() => setPinsOpen((open) => !open)}
@@ -2990,7 +3216,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               emptyBody={
                 searchNeedle
                   ? "Search only checks messages already loaded in this channel."
-                  : `This is the start of the #${activeChannel?.name ?? "channel"} channel.`
+                  : previewMode
+                    ? `Preview of #${activeChannel?.name ?? "channel"} — join to send messages.`
+                    : `This is the start of the #${activeChannel?.name ?? "channel"} channel.`
               }
               scrollKey={activeChannelId ?? ""}
               currentUserId={user?.id ?? null}
@@ -2998,53 +3226,83 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               roleNames={roleNames}
               channelNames={channelNames}
               mentionMaps={mentionMaps}
-              canDeleteOthers={canManageMessages}
+              canDeleteOthers={!previewMode && canManageMessages}
               reactionMap={reactionMap}
               serverNickByUserId={serverNickByUserId}
               hasMore={!searchNeedle && channelHasMore}
               loadingOlder={loadingOlderMessages}
               onLoadOlder={() => void loadOlderChannel()}
+              readOnly={previewMode}
               onReply={setReplyTo}
               onEdit={editChannel}
               onDelete={deleteChannel}
               onJumpToReply={jumpToMessage}
-              onReact={(messageId, emoji) => void toggleReaction(messageId, emoji)}
-              onTogglePin={(message) => void togglePin(message)}
+              onReact={
+                previewMode
+                  ? undefined
+                  : (messageId, emoji) => void toggleReaction(messageId, emoji)
+              }
+              onTogglePin={
+                previewMode
+                  ? undefined
+                  : (message) => void togglePin(message)
+              }
             />
           )}
 
           {voiceMode && !channelPending && activeChannel && (
-            <VoicePane
-              channelName={activeChannel.name}
-              joined={connectedHere}
-              muted={muted}
-              deafened={deafened}
-              quality={voice.quality}
-              currentUserId={user?.id ?? null}
-              participants={displayVoiceStates.filter(
-                (state) => state.channel_id === activeChannel.id,
-              )}
-              membersById={membersById}
-              speakingUserIds={speakingUserIds}
-              onToggleMute={voice.toggleMute}
-              onToggleDeafen={voice.toggleDeafen}
-              onLeave={() => void voice.leaveVoice()}
-              onRejoin={() => {
-                if (!activeServer) return;
-                if (!canConnectVoice) {
-                  setError("You don't have permission to connect to voice.");
-                  return;
-                }
-                voice.clearSkipAutoJoin(activeChannel.id);
-                void voice.joinVoice({
-                  channelId: activeChannel.id,
-                  serverId: activeServer.id,
-                  channelName: activeChannel.name,
-                  serverName: activeServer.name,
-                });
-              }}
-              {...deviceProps}
-            />
+            previewMode ? (
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                <Volume2 className="h-10 w-10 text-[#4e5058]" strokeWidth={1.5} />
+                <p className="text-sm font-medium text-[#dbdee1]">
+                  Voice is read-only in preview
+                </p>
+                <p className="max-w-sm text-xs text-[#949ba4]">
+                  Join {activeServer?.name ?? "this server"} to connect to #
+                  {activeChannel.name}.
+                </p>
+                <button
+                  type="button"
+                  disabled={joiningPreview}
+                  onClick={() => void joinPreviewServer()}
+                  className="mt-1 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+                >
+                  {joiningPreview ? "Joining…" : "Join Server"}
+                </button>
+              </div>
+            ) : (
+              <VoicePane
+                channelName={activeChannel.name}
+                joined={connectedHere}
+                muted={muted}
+                deafened={deafened}
+                quality={voice.quality}
+                currentUserId={user?.id ?? null}
+                participants={displayVoiceStates.filter(
+                  (state) => state.channel_id === activeChannel.id,
+                )}
+                membersById={membersById}
+                speakingUserIds={speakingUserIds}
+                onToggleMute={voice.toggleMute}
+                onToggleDeafen={voice.toggleDeafen}
+                onLeave={() => void voice.leaveVoice()}
+                onRejoin={() => {
+                  if (!activeServer) return;
+                  if (!canConnectVoice) {
+                    setError("You don't have permission to connect to voice.");
+                    return;
+                  }
+                  voice.clearSkipAutoJoin(activeChannel.id);
+                  void voice.joinVoice({
+                    channelId: activeChannel.id,
+                    serverId: activeServer.id,
+                    channelName: activeChannel.name,
+                    serverName: activeServer.name,
+                  });
+                }}
+                {...deviceProps}
+              />
+            )
           )}
 
           {pane === "server" && !activeChannel && !channelPending && channels.length === 0 && (
@@ -3053,8 +3311,25 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             </div>
           )}
 
+          {previewMode && textMode && !channelPending && (
+            <div className="flex items-center justify-between gap-3 border-t border-border bg-[#2b2d31] px-4 py-3">
+              <p className="text-sm text-[#b5bac1]">
+                You&apos;re previewing this server. Join to send messages.
+              </p>
+              <button
+                type="button"
+                disabled={joiningPreview}
+                onClick={() => void joinPreviewServer()}
+                className="shrink-0 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+              >
+                {joiningPreview ? "Joining…" : "Join Server"}
+              </button>
+            </div>
+          )}
+
           {(textMode || dmMode) &&
             !channelPending &&
+            !previewMode &&
             (dmMode && dmBlocked ? (
               <div className="border-t border-border bg-[#2b2d31] px-4 py-3 text-sm text-[#f2b8b5]">
                 You blocked this user. Unblock them from Friends → Blocked to

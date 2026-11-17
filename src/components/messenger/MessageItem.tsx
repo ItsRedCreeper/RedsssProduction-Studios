@@ -39,6 +39,8 @@ type MessageItemProps = {
   preferFriendNickname?: boolean;
   /** Server nicknames keyed by user id (channel messages). */
   serverNickByUserId?: Record<string, string>;
+  /** Discover preview: look around only — no reply/edit/react/delete. */
+  readOnly?: boolean;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
   onDelete: (messageId: string) => Promise<void>;
@@ -65,6 +67,7 @@ export function MessageItem({
   canDeleteOthers = false,
   preferFriendNickname = false,
   serverNickByUserId,
+  readOnly = false,
   onReply,
   onEdit,
   onDelete,
@@ -97,7 +100,7 @@ export function MessageItem({
   const replyIgnored =
     !!reply && (profileUi?.ignoredIds?.includes(reply.user_id) ?? false);
   const replyHidden = replyBlocked || replyIgnored;
-  const showToolbar = !message.optimistic && !editing;
+  const showToolbar = !readOnly && !message.optimistic && !editing;
 
   function openAuthorProfile(element: HTMLElement) {
     void profileUi?.openSmallProfile(message.user_id, element);
@@ -321,21 +324,31 @@ export function MessageItem({
 
         {reactions.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
-            {reactions.map((reaction) => (
-              <button
-                key={reaction.emoji}
-                type="button"
-                onClick={() => onReact?.(reaction.emoji)}
-                className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs ${
-                  reaction.reacted
-                    ? "border-accent bg-accent-muted text-white"
-                    : "border-transparent bg-[#2b2d31] text-[#dbdee1] hover:border-[#4e5058]"
-                }`}
-              >
-                <span>{reaction.emoji}</span>
-                <span>{reaction.count}</span>
-              </button>
-            ))}
+            {reactions.map((reaction) =>
+              readOnly ? (
+                <span
+                  key={reaction.emoji}
+                  className="inline-flex items-center gap-1 rounded-md border border-transparent bg-[#2b2d31] px-1.5 py-0.5 text-xs text-[#dbdee1]"
+                >
+                  <span>{reaction.emoji}</span>
+                  <span>{reaction.count}</span>
+                </span>
+              ) : (
+                <button
+                  key={reaction.emoji}
+                  type="button"
+                  onClick={() => onReact?.(reaction.emoji)}
+                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs ${
+                    reaction.reacted
+                      ? "border-accent bg-accent-muted text-white"
+                      : "border-transparent bg-[#2b2d31] text-[#dbdee1] hover:border-[#4e5058]"
+                  }`}
+                >
+                  <span>{reaction.emoji}</span>
+                  <span>{reaction.count}</span>
+                </button>
+              ),
+            )}
           </div>
         )}
       </div>

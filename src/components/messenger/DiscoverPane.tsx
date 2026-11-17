@@ -15,12 +15,12 @@ import {
   serverInitialsClass,
 } from "@/lib/server-initials";
 import { ResizableSidebar } from "@/components/messenger/ResizableSidebar";
-import { ServerPreviewModal } from "@/components/messenger/ServerPreviewModal";
 import type { Tables } from "@/lib/supabase/database.types";
 
 type DiscoverPaneProps = {
   onJoined: (serverId: string) => void;
   onOpenServer: (serverId: string) => void;
+  onPreviewServer: (serverId: string) => void;
   footer?: ReactNode;
   sidebarWidth: number;
   onSidebarResizeStart: (event: PointerEvent<HTMLElement>) => void;
@@ -39,6 +39,7 @@ const CATEGORIES = [
 export function DiscoverPane({
   onJoined,
   onOpenServer,
+  onPreviewServer,
   footer,
   sidebarWidth,
   onSidebarResizeStart,
@@ -52,9 +53,6 @@ export function DiscoverPane({
   const [loading, setLoading] = useState(true);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [previewServer, setPreviewServer] = useState<Tables<"servers"> | null>(
-    null,
-  );
 
   useEffect(() => {
     if (!user) return;
@@ -385,7 +383,7 @@ export function DiscoverPane({
                         {!joined && (
                           <button
                             type="button"
-                            onClick={() => setPreviewServer(server)}
+                            onClick={() => onPreviewServer(server.id)}
                             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-[#4e5058] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5c5e66]"
                           >
                             <Eye className="h-4 w-4" strokeWidth={1.75} />
@@ -413,7 +411,7 @@ export function DiscoverPane({
                       </div>
                       {!joined && (
                         <span className="mt-2 inline-flex self-start rounded bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
-                          Preview available
+                          Look around first
                         </span>
                       )}
                     </div>
@@ -424,21 +422,6 @@ export function DiscoverPane({
           )}
         </div>
       </section>
-
-      {previewServer && (
-        <ServerPreviewModal
-          server={previewServer}
-          joining={joiningId === previewServer.id}
-          onClose={() => setPreviewServer(null)}
-          onJoin={() => {
-            const id = previewServer.id;
-            void (async () => {
-              await joinServer(id);
-              setPreviewServer(null);
-            })();
-          }}
-        />
-      )}
     </div>
   );
 }
