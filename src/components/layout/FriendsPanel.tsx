@@ -401,6 +401,10 @@ export function FriendsPanel({
       setError("Unblock this user before sending a friend request.");
       return;
     }
+    if (profileUi?.isIgnored(person.id)) {
+      setError("Unignore this user before sending a friend request.");
+      return;
+    }
     if (blockedByThemIds.has(person.id)) {
       setError("This user has blocked you.");
       return;
@@ -753,6 +757,7 @@ export function FriendsPanel({
               <ul>
                 {results.map((person) => {
                   const blocked = profileUi?.isBlocked(person.id) ?? false;
+                  const ignored = profileUi?.isIgnored(person.id) ?? false;
                   const blockedByThem = blockedByThemIds.has(person.id);
                   const rel = userId
                     ? relationshipFor(userId, person.id, edges)
@@ -779,9 +784,11 @@ export function FriendsPanel({
                           <span className="block truncate text-xs text-muted">
                             {blocked
                               ? "Blocked"
-                              : blockedByThem
-                                ? "Blocked you"
-                                : statusLabel(person.status)}
+                              : ignored
+                                ? "Ignored"
+                                : blockedByThem
+                                  ? "Blocked you"
+                                  : statusLabel(person.status)}
                           </span>
                         </span>
                       </button>
@@ -797,6 +804,15 @@ export function FriendsPanel({
                           className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058]"
                         >
                           Unblock
+                        </button>
+                      ) : ignored ? (
+                        <button
+                          type="button"
+                          disabled={busyId === person.id}
+                          onClick={() => void profileUi?.unignoreUser(person.id)}
+                          className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058] disabled:opacity-50"
+                        >
+                          Unignore
                         </button>
                       ) : blockedByThem ? (
                         <button

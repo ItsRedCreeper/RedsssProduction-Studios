@@ -18,6 +18,7 @@ import {
   type UserActivityRow,
 } from "@/lib/activity";
 import { loadFriendEdges } from "@/lib/friends";
+import { loadFriendNicknames } from "@/lib/nicknames";
 import {
   asPresenceStatus,
   presenceCaption,
@@ -93,6 +94,8 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
   const snapsRef = useRef<Map<string, PresenceSnapshot>>(new Map());
   const watchedRef = useRef<Set<string>>(new Set());
   const friendIdsRef = useRef<Set<string>>(new Set());
+  const friendNamesRef = useRef<Map<string, string>>(new Map());
+  const nicknamesRef = useRef<Map<string, string>>(new Map());
   const serverIdsRef = useRef<Set<string>>(new Set());
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
@@ -104,6 +107,8 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
         friendIds: friendIdsRef.current,
         viewerServerIds: serverIdsRef.current,
         activityOwnerId: ownerId,
+        friendNames: friendNamesRef.current,
+        nicknames: nicknamesRef.current,
       });
     },
     [user?.id],
@@ -210,19 +215,29 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
     void fetchUsers([user.id]);
 
     async function refreshPrivacy() {
-      const [edges, membership] = await Promise.all([
+      const [edges, membership, nickResult] = await Promise.all([
         loadFriendEdges(user!.id),
         createClient()
           .from("server_members")
           .select("server_id")
           .eq("user_id", user!.id),
+        loadFriendNicknames(),
       ]);
       if (cancelled) return;
+      const accepted = edges.edges.filter((edge) => edge.status === "accepted");
       friendIdsRef.current = new Set(
-        edges.edges
-          .filter((edge) => edge.status === "accepted")
-          .map((edge) => edge.other.id.toLowerCase()),
+        accepted.map((edge) => edge.other.id.toLowerCase()),
       );
+      const names = new Map<string, string>();
+      for (const edge of accepted) {
+        names.set(edge.other.id.toLowerCase(), edge.other.username);
+      }
+      friendNamesRef.current = names;
+      const nicks = new Map<string, string>();
+      for (const [id, nick] of Object.entries(nickResult.map)) {
+        if (nick?.trim()) nicks.set(id.toLowerCase(), nick.trim());
+      }
+      nicknamesRef.current = nicks;
       serverIdsRef.current = new Set(
         (membership.data ?? []).map((row) => row.server_id),
       );
@@ -247,6 +262,13 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "server_members" },
+        () => {
+          void refreshPrivacy();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "friend_nicknames" },
         () => {
           void refreshPrivacy();
         },

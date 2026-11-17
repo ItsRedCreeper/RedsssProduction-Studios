@@ -229,6 +229,21 @@ export async function searchProfiles(query: string, excludeId: string) {
 
 export async function sendFriendRequest(fromUserId: string, toUserId: string) {
   const supabase = createClient();
+
+  // Ignored users cannot receive (or send via this client) friend requests.
+  const { data: ignoredRow } = await supabase
+    .from("ignored_users")
+    .select("ignored_id")
+    .eq("ignorer_id", fromUserId)
+    .eq("ignored_id", toUserId)
+    .maybeSingle();
+  if (ignoredRow) {
+    return {
+      edge: null,
+      error: "Unignore this user before sending a friend request.",
+    };
+  }
+
   const { data, error } = await supabase
     .from("friends")
     .insert({

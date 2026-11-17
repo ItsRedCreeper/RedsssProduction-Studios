@@ -82,13 +82,33 @@ export async function loadActivitiesFor(userIds: string[]) {
 
 type ActivityViewOpts = {
   viewerId: string | null;
-  /** Friend IDs of the viewer. */
+  /** Friend IDs of the viewer (lowercase). */
   friendIds: Set<string>;
   /** Server IDs the viewer belongs to. */
   viewerServerIds: Set<string>;
   /** When activity is a DM, the other participant id (context_extra). */
   activityOwnerId: string;
+  /** Lowercase friend id → username (for resolving DM partner labels). */
+  friendNames?: Map<string, string>;
+  /** Lowercase friend id → viewer nickname. */
+  nicknames?: Map<string, string>;
 };
+
+function resolveDmPartnerLabel(
+  partner: string | null,
+  fallbackName: string | null,
+  opts: ActivityViewOpts,
+): string | null {
+  if (!partner) return fallbackName;
+  const nick = opts.nicknames?.get(partner)?.trim();
+  if (nick) return nick;
+  const fromFriends = opts.friendNames?.get(partner)?.trim();
+  if (fromFriends) return fromFriends;
+  if (fallbackName && fallbackName.toLowerCase() !== "unknown") {
+    return fallbackName;
+  }
+  return fromFriends || fallbackName;
+}
 
 /**
  * Privacy-aware activity label for display on profiles / friends list.
@@ -116,6 +136,7 @@ export function formatActivityLabel(
     (!!row.context_id && opts.viewerServerIds.has(row.context_id));
   /** Viewer is the other person in this DM. */
   const messagingYou = !!viewer && !!partner && viewer === partner;
+  const partnerLabel = resolveDmPartnerLabel(partner, name, opts);
 
   switch (type) {
     case "home":
@@ -132,11 +153,12 @@ export function formatActivityLabel(
       return "Editing profile";
     case "dm": {
       if (messagingYou) return "Messaging you";
-      if (isSelf && name) return `Messaging ${name}`;
-      // Mutual friends of both DM participants see the partner username.
-      if (friendsWithOwner && friendsWithDmPartner && name) {
-        return `Messaging ${name}`;
+      if (isSelf && partnerLabel) return `Messaging ${partnerLabel}`;
+      // Friends of both DM participants always see who is being messaged.
+      if (friendsWithOwner && friendsWithDmPartner && partnerLabel) {
+        return `Messaging ${partnerLabel}`;
       }
+      // Friends of the owner but partner unknown / not mutual → generic.
       return "Messaging someone";
     }
     case "server": {

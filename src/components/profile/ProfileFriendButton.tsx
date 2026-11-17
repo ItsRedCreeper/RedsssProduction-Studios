@@ -46,6 +46,7 @@ export function ProfileFriendButton({
     initialBlockedByThem !== undefined && !!initialStatus,
   );
   const blocked = profileUi?.isBlocked(otherUserId) ?? false;
+  const ignored = profileUi?.isIgnored(otherUserId) ?? false;
 
   useEffect(() => {
     if (!user || user.id === otherUserId || blocked) {
@@ -104,7 +105,7 @@ export function ProfileFriendButton({
       : "inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors";
 
   async function handleAdd() {
-    if (!user || busy || blockedByThem) return;
+    if (!user || busy || blockedByThem || ignored) return;
     setBusy(true);
     const { error } = await sendFriendRequest(user.id, otherUserId);
     setBusy(false);
@@ -113,7 +114,7 @@ export function ProfileFriendButton({
   }
 
   async function handleAccept() {
-    if (!edgeId || busy || blockedByThem) return;
+    if (!edgeId || busy || blockedByThem || ignored) return;
     setBusy(true);
     const { error } = await acceptFriendRequest(edgeId);
     setBusy(false);
@@ -122,6 +123,8 @@ export function ProfileFriendButton({
   }
 
   if (!relationReady || status === "loading") {
+    // Ignored users: don't flash a loading Add Friend control.
+    if (ignored) return null;
     return (
       <button
         type="button"
@@ -160,6 +163,9 @@ export function ProfileFriendButton({
       </button>
     );
   }
+
+  // Ignored + not already friends → no Add / Accept / Request Sent.
+  if (ignored) return null;
 
   if (status === "outgoing") {
     return (
