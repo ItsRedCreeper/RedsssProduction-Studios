@@ -70,7 +70,7 @@ export function ChannelHeader({
             type="button"
             className={toolClass(searchOpen)}
             aria-label="Search"
-            title="Search loaded messages"
+            title="Search messages"
             aria-pressed={searchOpen}
             onClick={onToggleSearch}
           >

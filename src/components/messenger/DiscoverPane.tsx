@@ -257,7 +257,7 @@ export function DiscoverPane({
                   Find your community
                 </h1>
                 <p className="mt-1 max-w-xl text-sm text-[#b5bac1]">
-                  Browse public Redsss servers and join in one click — same place as your servers, no separate page.
+                  Browse and join public Redsss servers.
                 </p>
               </div>
             </div>
@@ -409,11 +409,6 @@ export function DiscoverPane({
                           </button>
                         )}
                       </div>
-                      {!joined && (
-                        <span className="mt-2 inline-flex self-start rounded bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
-                          Look around first
-                        </span>
-                      )}
                     </div>
                   </li>
                 );

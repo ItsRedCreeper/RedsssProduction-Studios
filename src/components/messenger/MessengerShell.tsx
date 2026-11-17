@@ -3029,8 +3029,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           {previewMode && activeServer && (
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-accent/30 bg-accent/10 px-4 py-2">
               <p className="text-xs font-medium text-[#f2b8b5] sm:text-sm">
-                Previewing <span className="text-white">{activeServer.name}</span>{" "}
-                — look around; join to chat, react, or use voice.
+                Previewing <span className="text-white">{activeServer.name}</span>
               </p>
               <div className="flex shrink-0 items-center gap-2">
                 <button
@@ -3082,12 +3081,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               <input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search loaded messages"
+                placeholder="Search messages"
                 className="w-full rounded-md bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-accent"
               />
-              <p className="mt-1 text-[11px] text-[#6d6f78]">
-                Full history search is not available yet. This filters messages already loaded.
-              </p>
             </div>
           )}
 
@@ -3186,7 +3182,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               emptyTitle={activeThread?.username ?? "Direct message"}
               emptyBody={
                 searchNeedle
-                  ? "No loaded messages match that search."
+                  ? "No messages match that search."
                   : `This is the beginning of your conversation with ${activeThread?.username ?? "this user"}.`
               }
               scrollKey={activeConversationId ?? ""}
@@ -3215,10 +3211,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               }
               emptyBody={
                 searchNeedle
-                  ? "Search only checks messages already loaded in this channel."
-                  : previewMode
-                    ? `Preview of #${activeChannel?.name ?? "channel"} — join to send messages.`
-                    : `This is the start of the #${activeChannel?.name ?? "channel"} channel.`
+                  ? "No messages match that search."
+                  : `This is the start of the #${activeChannel?.name ?? "channel"} channel.`
               }
               scrollKey={activeChannelId ?? ""}
               currentUserId={user?.id ?? null}
@@ -3255,11 +3249,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
                 <Volume2 className="h-10 w-10 text-[#4e5058]" strokeWidth={1.5} />
                 <p className="text-sm font-medium text-[#dbdee1]">
-                  Voice is read-only in preview
-                </p>
-                <p className="max-w-sm text-xs text-[#949ba4]">
-                  Join {activeServer?.name ?? "this server"} to connect to #
-                  {activeChannel.name}.
+                  #{activeChannel.name}
                 </p>
                 <button
                   type="button"
@@ -3312,10 +3302,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           )}
 
           {previewMode && textMode && !channelPending && (
-            <div className="flex items-center justify-between gap-3 border-t border-border bg-[#2b2d31] px-4 py-3">
-              <p className="text-sm text-[#b5bac1]">
-                You&apos;re previewing this server. Join to send messages.
-              </p>
+            <div className="flex items-center justify-end gap-3 border-t border-border bg-[#2b2d31] px-4 py-3">
               <button
                 type="button"
                 disabled={joiningPreview}

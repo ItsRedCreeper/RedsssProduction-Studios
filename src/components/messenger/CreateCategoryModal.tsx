@@ -89,7 +89,7 @@ export function CreateCategoryModal({
               Create Category
             </h2>
             <p className="mt-1 text-sm text-muted">
-              Group channels the way Discord does — Text, Voice, or anything you want.
+              Group related channels together.
             </p>
           </div>
           <button
