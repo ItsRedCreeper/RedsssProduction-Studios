@@ -100,17 +100,72 @@ export function computeAutoEffectiveStatus(opts: {
   return "online";
 }
 
+/** Discord-style clear-after options for custom status text (minutes). */
+export const STATUS_CLEAR_AFTER_OPTIONS = [
+  { label: "Don't clear", minutes: null },
+  { label: "30 minutes", minutes: 30 },
+  { label: "1 hour", minutes: 60 },
+  { label: "4 hours", minutes: 240 },
+  { label: "Today", minutes: "today" as const },
+  { label: "This week", minutes: "week" as const },
+] as const;
+
+export type StatusClearAfter =
+  | null
+  | number
+  | "today"
+  | "week";
+
+export function clearAfterToMinutes(value: StatusClearAfter): number | null {
+  if (value === null) return 0; // explicit don't-clear
+  if (typeof value === "number") return value;
+  const now = new Date();
+  if (value === "today") {
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    return Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 60_000));
+  }
+  // End of week = Sunday 23:59 local
+  const end = new Date(now);
+  const day = end.getDay(); // 0 Sun
+  const daysUntilSunday = day === 0 ? 0 : 7 - day;
+  end.setDate(end.getDate() + daysUntilSunday);
+  end.setHours(23, 59, 59, 999);
+  return Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 60_000));
+}
+
 export async function setManualStatus(opts: {
   manualStatus: ManualStatus;
   statusText?: string | null;
   clearStatusText?: boolean;
+  /** Minutes until custom status clears; 0 = don't clear; omit = leave expiry unchanged. */
+  clearAfterMinutes?: number | null;
 }) {
   const supabase = createClient();
-  const { error } = await supabase.rpc("set_manual_status", {
+  const args: {
+    p_manual_status: string;
+    p_status_text?: string | null;
+    p_clear_status_text: boolean;
+    p_clear_after_minutes?: number | null;
+  } = {
     p_manual_status: opts.manualStatus,
-    p_status_text: opts.statusText ?? null,
     p_clear_status_text: opts.clearStatusText ?? false,
-  });
+  };
+  if (opts.statusText !== undefined) {
+    args.p_status_text = opts.statusText;
+  }
+  if (opts.clearAfterMinutes !== undefined) {
+    args.p_clear_after_minutes = opts.clearAfterMinutes;
+  }
+  const { error } = await supabase.rpc("set_manual_status", args);
+  if (error) return { error: error.message };
+  notifyProfileUpdated();
+  return { error: null as string | null };
+}
+
+export async function clearExpiredStatusText() {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("clear_expired_status_text");
   if (error) return { error: error.message };
   notifyProfileUpdated();
   return { error: null as string | null };

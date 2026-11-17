@@ -140,23 +140,28 @@ export function hydrateMessages(
   });
 }
 
+/** Newest messages loaded per channel open (keeps channel load fast). */
+export const CHANNEL_MESSAGE_PAGE_SIZE = 100;
+
 export async function loadChannelMessages(channelId: string) {
   const supabase = createClient();
+  // Newest N first, then reverse so the timeline stays chronological.
   const { data, error } = await supabase
     .from("messages")
     .select("*")
     .eq("channel_id", channelId)
-    .order("created_at", { ascending: true })
-    .limit(100);
+    .order("created_at", { ascending: false })
+    .limit(CHANNEL_MESSAGE_PAGE_SIZE);
 
   if (error || !data) {
     return { messages: [] as ChatMessage[], error: error?.message ?? "Failed to load messages" };
   }
 
-  const present = new Set(data.map((row) => row.id));
+  const rows = [...data].reverse();
+  const present = new Set(rows.map((row) => row.id));
   const missingParentIds = [
     ...new Set(
-      data
+      rows
         .map((row) => row.reply_to_id)
         .filter((id): id is string => !!id && !present.has(id)),
     ),
@@ -172,11 +177,11 @@ export async function loadChannelMessages(channelId: string) {
   }
 
   const profileIds = [
-    ...data.map((row) => row.user_id),
+    ...rows.map((row) => row.user_id),
     ...parents.map((row) => row.user_id),
   ];
   const profiles = await loadProfiles(profileIds);
-  return { messages: hydrateMessages(data, profiles, parents), error: null };
+  return { messages: hydrateMessages(rows, profiles, parents), error: null };
 }
 
 export async function loadSingleMessage(messageId: string) {

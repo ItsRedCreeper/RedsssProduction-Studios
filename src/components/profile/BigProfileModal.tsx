@@ -214,12 +214,12 @@ export function BigProfileModal({
         aria-label="Close profile"
         onClick={onClose}
       />
-      <div className="relative z-10 flex max-h-[min(90vh,44rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-[#111214] shadow-2xl shadow-black/60">
-        <div className="relative shrink-0 pb-12">
+      <div className="relative z-10 flex max-h-[min(94vh,56rem)] w-full max-w-5xl flex-col overflow-visible rounded-xl border border-border bg-[#111214] shadow-2xl shadow-black/60">
+        <div className="relative shrink-0 overflow-visible rounded-t-xl pb-14">
           <ProfileBanner
             bannerUrl={profile.banner_url}
             bannerColor={profile.banner_color}
-            className="relative h-36 sm:h-44"
+            className="relative h-44 overflow-hidden rounded-t-xl sm:h-56"
           >
             <button
               type="button"
@@ -237,18 +237,18 @@ export function BigProfileModal({
                 username={profile.username}
                 avatarUrl={profile.avatar_url}
                 size="lg"
-                className="!h-[88px] !w-[88px] !text-2xl"
+                className="!h-[112px] !w-[112px] !text-3xl"
               />
               <span
-                className={`absolute bottom-2 right-2 h-4 w-4 rounded-full ring-[3px] ring-[#111214] ${statusDotClass(resolveDisplayStatus(liveStatus, liveLastSeen))}`}
+                className={`absolute bottom-2 right-2 h-5 w-5 rounded-full ring-[3px] ring-[#111214] ${statusDotClass(resolveDisplayStatus(liveStatus, liveLastSeen))}`}
               />
             </span>
           </div>
 
-          <div className="absolute bottom-1 right-5 flex flex-wrap items-center justify-end gap-2">
+          <div className="absolute bottom-1 right-5 z-20 flex flex-wrap items-center justify-end gap-2">
             {isSelf ? (
               <>
-                <div className="relative">
+                <div className="relative z-30">
                   <button
                     type="button"
                     onClick={() => setStatusOpen((open) => !open)}
@@ -347,7 +347,7 @@ export function BigProfileModal({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-2">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl px-6 pb-6 pt-3">
           <div className="rounded-lg bg-[#1e1f22] p-4">
             <h2
               id="big-profile-title"

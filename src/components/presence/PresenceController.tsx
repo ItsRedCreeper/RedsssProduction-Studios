@@ -6,6 +6,7 @@ import {
   HEARTBEAT_INTERVAL_MS,
   IDLE_AFTER_MS,
   TAB_PING_MS,
+  clearExpiredStatusText,
   computeAutoEffectiveStatus,
   heartbeatPresence,
   type ManualStatus,
@@ -257,6 +258,28 @@ export function PresenceController() {
   }, [
     user?.id,
     (profile as { manual_status?: string | null } | null)?.manual_status,
+  ]);
+
+  // Clear timed custom statuses when their timer elapses.
+  useEffect(() => {
+    if (!user || !profile) return;
+    const expiresAt = (
+      profile as { status_text_expires_at?: string | null }
+    ).status_text_expires_at;
+    if (!expiresAt) return;
+    const at = Date.parse(expiresAt);
+    if (Number.isNaN(at)) return;
+
+    function maybeClear() {
+      if (at <= Date.now()) void clearExpiredStatusText();
+    }
+    maybeClear();
+    const timer = window.setInterval(maybeClear, 30_000);
+    return () => window.clearInterval(timer);
+  }, [
+    user?.id,
+    (profile as { status_text_expires_at?: string | null } | null)
+      ?.status_text_expires_at,
   ]);
 
   return null;

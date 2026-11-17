@@ -1194,7 +1194,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         .from("dm_messages")
         .select("*")
         .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(100);
       if (cancelled) return;
       if (dmError || !data) {
@@ -1203,7 +1203,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setLoadingDmMessages(false);
         return;
       }
-      const rows = dmRowsToMessages(data);
+      const rows = dmRowsToMessages([...data].reverse());
       const present = new Set(rows.map((row) => row.id));
       const missing = [
         ...new Set(

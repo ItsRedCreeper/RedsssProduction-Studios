@@ -154,6 +154,7 @@ export type Database = {
           avatar_url: string | null
           status: string
           status_text: string | null
+          status_text_expires_at: string | null
           manual_status: string
           last_seen_at: string | null
           bio: string | null
@@ -167,6 +168,7 @@ export type Database = {
           avatar_url?: string | null
           status?: string
           status_text?: string | null
+          status_text_expires_at?: string | null
           manual_status?: string
           last_seen_at?: string | null
           bio?: string | null
@@ -330,7 +332,12 @@ export type Database = {
           p_manual_status: string
           p_status_text?: string | null
           p_clear_status_text?: boolean
+          p_clear_after_minutes?: number | null
         }
+        Returns: undefined
+      }
+      clear_expired_status_text: {
+        Args: Record<string, never>
         Returns: undefined
       }
       set_user_activity: {
