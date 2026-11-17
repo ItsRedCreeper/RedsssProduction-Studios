@@ -148,14 +148,16 @@ export function FriendsPanel({
     setSeenBlockedIds(seeded);
   }, [userId, loading, blockedUsers]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
     if (!userId) {
       setEdges([]);
       setBlockedUsers([]);
       setIgnoredUsers([]);
       return;
     }
-    setLoading(true);
+    // Only flash Loading on the first open; keep previous lists during realtime refreshes.
+    const silent = opts?.silent === true;
+    if (!silent) setLoading(true);
     const [
       { edges: next, error: loadError },
       blockedResult,
@@ -173,7 +175,7 @@ export function FriendsPanel({
     setBlockedUsers(blockedResult.users);
     setIgnoredUsers(ignoredResult.users);
     setError(loadError ?? blockedResult.error ?? ignoredResult.error);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [userId]);
 
   useEffect(() => {
@@ -186,7 +188,7 @@ export function FriendsPanel({
         "postgres_changes",
         { event: "*", schema: "public", table: "friends" },
         () => {
-          void refresh();
+          void refresh({ silent: true });
         },
       )
       .on(
@@ -198,7 +200,7 @@ export function FriendsPanel({
           filter: `blocker_id=eq.${userId}`,
         },
         () => {
-          void refresh();
+          void refresh({ silent: true });
         },
       )
       .on(
@@ -210,7 +212,7 @@ export function FriendsPanel({
           filter: `ignorer_id=eq.${userId}`,
         },
         () => {
-          void refresh();
+          void refresh({ silent: true });
         },
       )
       .on(
@@ -634,7 +636,12 @@ export function FriendsPanel({
 
           {tab === "pending" && (
             <div className="space-y-5">
-              <section>
+              {loading ? (
+                <p className="px-2 py-6 text-center text-sm text-muted">
+                  Loading requests…
+                </p>
+              ) : null}
+              <section className={loading ? "hidden" : undefined}>
                 <h3 className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
                   Incoming — {incoming.length}
                 </h3>
@@ -688,7 +695,7 @@ export function FriendsPanel({
                 )}
               </section>
 
-              <section>
+              <section className={loading ? "hidden" : undefined}>
                 <h3 className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
                   Outgoing — {outgoing.length}
                 </h3>

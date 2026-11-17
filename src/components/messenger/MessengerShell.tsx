@@ -732,13 +732,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const serverId = activeServerId;
     const supabase = createClient();
     let cancelled = false;
-    setChannels([]);
-    setCategories([]);
-    setServerRoles([]);
-    setMembers([]);
-    setMessages([]);
-    setReactions([]);
-    setLoadedServerId(null);
+    // Keep previous server chrome visible until the new one is fully ready,
+    // then swap channels + members + roles in one paint.
     setLoadingChannels(true);
 
     async function load() {
@@ -753,14 +748,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (cancelled) return;
       if (channelResult.error) setError(channelResult.error.message);
       const nextChannels = channelResult.data ?? [];
-      setChannels(nextChannels);
-      setCategories(categoryResult.data ?? []);
-      setServerRoles((rolesTable.data as Role[] | null) ?? []);
-      setChannelServerMap((prev) => {
-        const next = { ...prev };
-        for (const channel of nextChannels) next[channel.id] = serverId;
-        return next;
-      });
       const profiles = await loadProfiles(
         (memberResult.data ?? []).map((row) => row.user_id),
       );
@@ -772,32 +759,42 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         list.push(row.role_id);
         rolesByUser.set(row.user_id, list);
       }
-      setMembers(
-        (memberResult.data ?? []).map((row) => {
-          const memberProfile = profileMap.get(row.user_id);
-          const fromJunction = rolesByUser.get(row.user_id) ?? [];
-          const roleIds =
-            fromJunction.length > 0
-              ? fromJunction
-              : row.role_id
-                ? [row.role_id]
-                : [];
-          return {
-            user_id: row.user_id,
-            nickname: row.nickname,
-            joined_at: row.joined_at,
-            username: memberProfile?.username ?? "Unknown",
-            avatar_url: memberProfile?.avatar_url ?? null,
-            status: memberProfile?.status ?? "offline",
-            status_text: memberProfile?.status_text ?? null,
-            last_seen_at: memberProfile?.last_seen_at ?? null,
-            bio: memberProfile?.bio ?? null,
-            banner_url: memberProfile?.banner_url ?? null,
-            banner_color: memberProfile?.banner_color ?? null,
-            roleIds,
-          };
-        }),
-      );
+      const nextMembers = (memberResult.data ?? []).map((row) => {
+        const memberProfile = profileMap.get(row.user_id);
+        const fromJunction = rolesByUser.get(row.user_id) ?? [];
+        const roleIds =
+          fromJunction.length > 0
+            ? fromJunction
+            : row.role_id
+              ? [row.role_id]
+              : [];
+        return {
+          user_id: row.user_id,
+          nickname: row.nickname,
+          joined_at: row.joined_at,
+          username: memberProfile?.username ?? "Unknown",
+          avatar_url: memberProfile?.avatar_url ?? null,
+          status: memberProfile?.status ?? "offline",
+          status_text: memberProfile?.status_text ?? null,
+          last_seen_at: memberProfile?.last_seen_at ?? null,
+          bio: memberProfile?.bio ?? null,
+          banner_url: memberProfile?.banner_url ?? null,
+          banner_color: memberProfile?.banner_color ?? null,
+          roleIds,
+        };
+      });
+
+      setChannels(nextChannels);
+      setCategories(categoryResult.data ?? []);
+      setServerRoles((rolesTable.data as Role[] | null) ?? []);
+      setMembers(nextMembers);
+      setMessages([]);
+      setReactions([]);
+      setChannelServerMap((prev) => {
+        const next = { ...prev };
+        for (const channel of nextChannels) next[channel.id] = serverId;
+        return next;
+      });
       setLoadedServerId(serverId);
       setLoadingChannels(false);
     }
@@ -1044,24 +1041,26 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (result.error) {
         setError(result.error);
         setMessages([]);
-      } else {
-        setMessages(result.messages);
-        const newest = result.messages[result.messages.length - 1]?.created_at;
-        if (newest) {
-          setLastMessageAt((prev) => ({ ...prev, [channelId]: newest }));
-        }
+        setReactions([]);
+        setLoadingChannelMessages(false);
+        return;
       }
-      const ids = (result.messages ?? [])
+      const ids = result.messages
         .map((message) => message.id)
         .filter((id) => !id.startsWith("temp-"));
-      if (ids.length > 0) {
-        const { data } = await supabase
-          .from("message_reactions")
-          .select("*")
-          .in("message_id", ids);
-        if (!cancelled) setReactions(data ?? []);
-      } else if (!cancelled) {
-        setReactions([]);
+      const { data: reactionRows } =
+        ids.length > 0
+          ? await supabase
+              .from("message_reactions")
+              .select("*")
+              .in("message_id", ids)
+          : { data: [] as Tables<"message_reactions">[] };
+      if (cancelled) return;
+      setMessages(result.messages);
+      setReactions(reactionRows ?? []);
+      const newest = result.messages[result.messages.length - 1]?.created_at;
+      if (newest) {
+        setLastMessageAt((prev) => ({ ...prev, [channelId]: newest }));
       }
       setLoadingChannelMessages(false);
     }
@@ -2463,7 +2462,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             onCloseThread={(threadId) => void closeThread(threadId)}
             footer={sidebarFooter}
           />
-        ) : activeServer ? (
+        ) : activeServer && !channelPending ? (
           <ChannelSidebar
             serverId={activeServer.id}
             serverName={activeServer.name}
@@ -2474,7 +2473,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             voiceStates={displayVoiceStates}
             membersById={membersById}
             speakingUserIds={speakingUserIds}
-            loading={loadingChannels}
+            loading={false}
             canLeave={activeServer.owner_id !== user?.id}
             canManageChannels={canManageChannels || isServerOwner}
             connectedVoiceChannelId={connection?.channelId ?? null}
@@ -2527,15 +2526,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           <ChannelHeader
             icon={headerIcon}
             title={headerTitle}
-            topic={textMode ? activeChannel?.topic : null}
+            topic={textMode && !channelPending ? activeChannel?.topic : null}
             searchOpen={searchOpen}
             pinsOpen={pinsOpen}
             membersOpen={membersOpen}
             chatOpen={voiceChatOpen}
-            showSearch={textMode || dmMode}
-            showPins={textMode}
-            showMembers={textMode && !!activeServer}
-            showChat={voiceMode}
+            showSearch={(textMode || dmMode) && !channelPending}
+            showPins={textMode && !channelPending}
+            showMembers={textMode && !!activeServer && !channelPending}
+            showChat={voiceMode && !channelPending}
             pinCount={pinList.length}
             onToggleSearch={() => setSearchOpen((open) => !open)}
             onTogglePins={() => setPinsOpen((open) => !open)}
@@ -2543,7 +2542,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             onToggleChat={() => setVoiceChatOpen((open) => !open)}
           />
 
-          {searchOpen && (
+          {channelPending ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-sm text-muted">
+              Loading…
+            </div>
+          ) : null}
+
+          {searchOpen && !channelPending && (
             <div className="border-b border-black/20 px-4 py-2">
               <input
                 value={searchQuery}
@@ -2557,7 +2562,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             </div>
           )}
 
-          {pane === "server" && (
+          {pane === "server" && !channelPending && (
             <div className="flex gap-1 overflow-x-auto border-b border-black/20 px-2 py-2 sm:hidden">
               {channels.map((channel) => {
                 const active = channel.id === activeChannelId;
@@ -2644,7 +2649,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             </div>
           )}
 
-          {dmMode && (
+          {dmMode && !channelPending && (
             <ChatTimeline
               messages={visibleDmMessages}
               loading={loadingDmMessages}
@@ -2665,7 +2670,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             />
           )}
 
-          {textMode && (
+          {textMode && !channelPending && (
             <ChatTimeline
               messages={visibleMessages}
               loading={loadingChannelMessages}
@@ -2697,7 +2702,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             />
           )}
 
-          {voiceMode && activeChannel && (
+          {voiceMode && !channelPending && activeChannel && (
             <VoicePane
               channelName={activeChannel.name}
               joined={connectedHere}
@@ -2738,6 +2743,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           )}
 
           {(textMode || dmMode) &&
+            !channelPending &&
             (dmMode && dmBlocked ? (
               <div className="border-t border-border bg-[#2b2d31] px-4 py-3 text-sm text-[#f2b8b5]">
                 You blocked this user. Unblock them from Friends → Blocked to
@@ -2793,7 +2799,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             ))}
         </section>
 
-        {textMode && membersOpen && (
+        {textMode && !channelPending && membersOpen && (
           <button
             type="button"
             className="absolute inset-0 z-10 bg-black/40 lg:hidden"
@@ -2801,7 +2807,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             onClick={() => setMembersOpen(false)}
           />
         )}
-        {voiceMode && voiceChatOpen && (
+        {voiceMode && !channelPending && voiceChatOpen && (
           <button
             type="button"
             className="absolute inset-0 z-10 bg-black/40 lg:hidden"
@@ -2818,7 +2824,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             textMode && membersOpen ? "flex" : "hidden"
           } absolute inset-y-0 right-0 z-20 shadow-2xl shadow-black/40 lg:static lg:shadow-none`}
         />
-        {voiceMode && voiceChatOpen && (
+        {voiceMode && !channelPending && voiceChatOpen && (
           <aside
             className="absolute inset-y-0 right-0 z-20 flex flex-col border-l border-black/30 bg-[#2b2d31] shadow-2xl shadow-black/40 sm:relative sm:z-auto sm:shadow-none"
             style={{ width: `min(100%, ${voiceChatWidth}px)` }}

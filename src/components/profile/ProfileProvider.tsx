@@ -22,6 +22,7 @@ import {
 import type { NicknameMap } from "@/lib/nicknames";
 import {
   ensureDmConversation,
+  loadFriendsSince,
   loadFriendshipWith,
   loadMutualFriends,
   loadMutualServers,
@@ -35,7 +36,10 @@ import {
   type MutualFocus,
   type SmallProfileReadyData,
 } from "@/components/profile/SmallProfileCard";
-import { BigProfileModal } from "@/components/profile/BigProfileModal";
+import {
+  BigProfileModal,
+  type BigProfileReadyData,
+} from "@/components/profile/BigProfileModal";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
@@ -144,7 +148,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     left: number;
     ready: SmallProfileReadyData;
   } | null>(null);
-  const [big, setBig] = useState<FriendProfile | null>(null);
+  const [big, setBig] = useState<{
+    profile: FriendProfile;
+    ready: BigProfileReadyData;
+  } | null>(null);
   const [bigFocus, setBigFocus] = useState<MutualFocus | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [blockTarget, setBlockTarget] = useState<{
@@ -163,26 +170,30 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!current) return;
     setBig((prev) => {
-      if (!prev || prev.id !== current.id) return prev;
+      if (!prev || prev.profile.id !== current.id) return prev;
+      const p = prev.profile;
       if (
-        prev.status === current.status &&
-        prev.status_text === current.status_text &&
-        prev.last_seen_at === current.last_seen_at &&
-        prev.manual_status === current.manual_status
+        p.status === current.status &&
+        p.status_text === current.status_text &&
+        p.last_seen_at === current.last_seen_at &&
+        p.manual_status === current.manual_status
       ) {
         return prev;
       }
       return {
         ...prev,
-        status: current.status,
-        status_text: current.status_text,
-        last_seen_at: current.last_seen_at,
-        manual_status: current.manual_status,
-        avatar_url: current.avatar_url,
-        username: current.username,
-        bio: current.bio,
-        banner_url: current.banner_url,
-        banner_color: current.banner_color,
+        profile: {
+          ...p,
+          status: current.status,
+          status_text: current.status_text,
+          last_seen_at: current.last_seen_at,
+          manual_status: current.manual_status,
+          avatar_url: current.avatar_url,
+          username: current.username,
+          bio: current.bio,
+          banner_url: current.banner_url,
+          banner_color: current.banner_color,
+        },
       };
     });
     setSmall((prev) => {
@@ -310,18 +321,55 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     userId: string,
     focus: MutualFocus | null = null,
   ) => {
-    const profile = await fetchProfile(userId);
+    const isSelf = !!user && user.id === userId;
+    const [profile, blockedByResult] = await Promise.all([
+      fetchProfile(userId),
+      isSelf
+        ? Promise.resolve({ blockedByThem: false })
+        : loadIsBlockedBy(userId),
+    ]);
     if (!profile) return;
+
+    const restricted = blockedByResult.blockedByThem;
+    const emptyFriends = { friends: [] as MutualFriend[] };
+    const emptyServers = { servers: [] as MutualServer[] };
+
+    const [friendsResult, serversResult, friendship, sinceResult] =
+      await Promise.all([
+        isSelf || restricted
+          ? Promise.resolve(emptyFriends)
+          : loadMutualFriends(userId),
+        isSelf || restricted
+          ? Promise.resolve(emptyServers)
+          : loadMutualServers(userId),
+        isSelf || restricted
+          ? Promise.resolve({ status: "none" as const, edgeId: null })
+          : loadFriendshipWith(userId),
+        isSelf || restricted
+          ? Promise.resolve({ friendsSince: null as string | null })
+          : loadFriendsSince(userId),
+      ]);
+
     setSmall(null);
     setBigFocus(focus);
-    setBig(profile);
-  }, []);
+    setBig({
+      profile,
+      ready: {
+        mutualFriends: friendsResult.friends,
+        mutualServers: serversResult.servers,
+        friendsSince: sinceResult.friendsSince,
+        friendStatus: friendship.status,
+        friendEdgeId: friendship.edgeId,
+        restricted,
+      },
+    });
+  }, [user]);
 
   const openEditProfile = useCallback(async () => {
     if (!user) return;
     const profile =
-      big?.id === user.id
-        ? big
+      big?.profile.id === user.id
+        ? big.profile
         : (await fetchProfile(user.id)) ??
           (current
             ? {
@@ -339,7 +387,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
               }
             : null);
     if (!profile) return;
-    setBig(profile);
+    setBig((prev) =>
+      prev && prev.profile.id === profile.id
+        ? { ...prev, profile }
+        : {
+            profile,
+            ready: {
+              mutualFriends: [],
+              mutualServers: [],
+              friendsSince: null,
+              friendStatus: "none",
+              friendEdgeId: null,
+              restricted: false,
+            },
+          },
+    );
     setEditOpen(true);
   }, [user, big, current]);
 
@@ -369,7 +431,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     const blockedId = blockTarget.id;
     setBlockTarget(null);
     setSmall((prev) => (prev?.profile.id === blockedId ? null : prev));
-    setBig((prev) => (prev?.id === blockedId ? null : prev));
+    setBig((prev) => (prev?.profile.id === blockedId ? null : prev));
     setBigFocus(null);
     setEditOpen(false);
   }, [blockTarget, blockUser]);
@@ -483,19 +545,20 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       {big && (
         <BigProfileModal
-          profile={big}
-          isSelf={!!user && big.id === user.id}
-          isBlocked={isBlocked(big.id)}
-          isIgnored={isIgnored(big.id)}
-          displayName={nicknameFor(big.id) || big.username}
-          nickname={nicknameFor(big.id)}
+          profile={big.profile}
+          ready={big.ready}
+          isSelf={!!user && big.profile.id === user.id}
+          isBlocked={isBlocked(big.profile.id)}
+          isIgnored={isIgnored(big.profile.id)}
+          displayName={nicknameFor(big.profile.id) || big.profile.username}
+          nickname={nicknameFor(big.profile.id)}
           focusSection={bigFocus}
           onClose={() => {
             setBig(null);
             setBigFocus(null);
           }}
           onMessage={() => {
-            const id = big.id;
+            const id = big.profile.id;
             setBig(null);
             setBigFocus(null);
             void messageUser(id);
@@ -504,21 +567,25 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           onOpenProfile={(userId) => {
             void openBigProfile(userId);
           }}
-          onBlock={() => requestBlock(big.id, big.username)}
-          onUnblock={() => void unblockUserFn(big.id)}
-          onIgnore={() => requestIgnore(big.id, big.username)}
-          onUnignore={() => void unignoreUserFn(big.id)}
-          onSaveNickname={(nickname) => setNickname(big.id, nickname)}
+          onBlock={() => requestBlock(big.profile.id, big.profile.username)}
+          onUnblock={() => void unblockUserFn(big.profile.id)}
+          onIgnore={() => requestIgnore(big.profile.id, big.profile.username)}
+          onUnignore={() => void unignoreUserFn(big.profile.id)}
+          onSaveNickname={(nickname) => setNickname(big.profile.id, nickname)}
         />
       )}
 
-      {editOpen && big && user && big.id === user.id && (
+      {editOpen && big && user && big.profile.id === user.id && (
         <EditProfileModal
           open={editOpen}
-          profile={big}
+          profile={big.profile}
           onClose={() => setEditOpen(false)}
           onSaved={(next) => {
-            setBig(next);
+            setBig((prev) =>
+              prev && prev.profile.id === next.id
+                ? { ...prev, profile: next }
+                : prev,
+            );
             setSmall((prev) =>
               prev && prev.profile.id === next.id
                 ? { ...prev, profile: next }

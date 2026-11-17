@@ -19,13 +19,10 @@ import { statusDotClass } from "@/components/messenger/data";
 import { resolveDisplayStatus } from "@/lib/presence";
 import { avatarLetter } from "@/lib/avatar";
 import type { MutualFocus } from "@/components/profile/SmallProfileCard";
-import { loadIsBlockedBy } from "@/lib/blocking";
 import {
   formatSinceDate,
-  loadFriendsSince,
-  loadMutualFriends,
-  loadMutualServers,
   type FriendProfile,
+  type FriendStatus,
   type MutualFriend,
   type MutualServer,
 } from "@/lib/friends";
@@ -39,9 +36,20 @@ import {
 const VISIBLE_LIMIT = 6;
 const NICKNAME_MAX = 32;
 
+/** Preloaded payload so the modal paints as one finished piece. */
+export type BigProfileReadyData = {
+  mutualFriends: MutualFriend[];
+  mutualServers: MutualServer[];
+  friendsSince: string | null;
+  friendStatus: FriendStatus;
+  friendEdgeId: string | null;
+  restricted: boolean;
+};
+
 type BigProfileModalProps = {
   profile: FriendProfile;
   isSelf: boolean;
+  ready: BigProfileReadyData;
   isBlocked?: boolean;
   isIgnored?: boolean;
   displayName?: string;
@@ -61,6 +69,7 @@ type BigProfileModalProps = {
 export function BigProfileModal({
   profile,
   isSelf,
+  ready,
   isBlocked = false,
   isIgnored = false,
   displayName,
@@ -77,7 +86,7 @@ export function BigProfileModal({
   onSaveNickname,
 }: BigProfileModalProps) {
   const router = useRouter();
-  const [restricted, setRestricted] = useState(false);
+  const restricted = ready.restricted;
   const shownName = displayName || profile.username;
   const [liveStatus, setLiveStatus] = useState(profile.status);
   const [liveManual, setLiveManual] = useState(profile.manual_status ?? null);
@@ -85,10 +94,9 @@ export function BigProfileModal({
   const [liveLastSeen, setLiveLastSeen] = useState(profile.last_seen_at ?? null);
   const bio = restricted ? "" : profile.bio?.trim() || "";
   const statusText = restricted ? "" : liveStatusText?.trim() || "";
-  const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
-  const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
-  const [friendsSince, setFriendsSince] = useState<string | null>(null);
-  const [loadingMutuals, setLoadingMutuals] = useState(!isSelf);
+  const mutualFriends = ready.mutualFriends;
+  const mutualServers = ready.mutualServers;
+  const friendsSince = ready.friendsSince;
   const [showAllFriends, setShowAllFriends] = useState(false);
   const [showAllServers, setShowAllServers] = useState(false);
   const [highlight, setHighlight] = useState<MutualFocus | null>(null);
@@ -124,50 +132,11 @@ export function BigProfileModal({
   useEffect(() => {
     setShowAllFriends(false);
     setShowAllServers(false);
-    setFriendsSince(null);
     setHighlight(null);
-    if (isSelf) {
-      setRestricted(false);
-      setMutualFriends([]);
-      setMutualServers([]);
-      setLoadingMutuals(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadingMutuals(true);
-    setRestricted(false);
-
-    void (async () => {
-      const { blockedByThem } = await loadIsBlockedBy(profile.id);
-      if (cancelled) return;
-      setRestricted(blockedByThem);
-      if (blockedByThem) {
-        setMutualFriends([]);
-        setMutualServers([]);
-        setFriendsSince(null);
-        setLoadingMutuals(false);
-        return;
-      }
-      const [friendsResult, serversResult, sinceResult] = await Promise.all([
-        loadMutualFriends(profile.id),
-        loadMutualServers(profile.id),
-        loadFriendsSince(profile.id),
-      ]);
-      if (cancelled) return;
-      setMutualFriends(friendsResult.friends);
-      setMutualServers(serversResult.servers);
-      setFriendsSince(sinceResult.friendsSince);
-      setLoadingMutuals(false);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [profile.id, isSelf]);
+  }, [profile.id]);
 
   useEffect(() => {
-    if (isSelf || restricted || loadingMutuals || !focusSection) return;
+    if (isSelf || restricted || !focusSection) return;
     const target =
       focusSection === "friends"
         ? friendsSectionRef.current
@@ -184,7 +153,7 @@ export function BigProfileModal({
       window.clearTimeout(timer);
       window.clearTimeout(clear);
     };
-  }, [focusSection, loadingMutuals, isSelf, restricted, profile.id]);
+  }, [focusSection, isSelf, restricted, profile.id]);
 
   const visibleFriends = showAllFriends
     ? mutualFriends
@@ -361,6 +330,8 @@ export function BigProfileModal({
                 )}
                 <ProfileFriendButton
                   otherUserId={profile.id}
+                  initialStatus={ready.friendStatus}
+                  initialEdgeId={ready.friendEdgeId}
                   initialBlockedByThem={restricted}
                 />
                 <button
@@ -533,15 +504,11 @@ export function BigProfileModal({
                 >
                   <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
                     Mutual Friends
-                    {!loadingMutuals && (
-                      <span className="ml-1 text-[#6d6f78]">
-                        — {mutualFriends.length}
-                      </span>
-                    )}
+                    <span className="ml-1 text-[#6d6f78]">
+                      — {mutualFriends.length}
+                    </span>
                   </h3>
-                  {loadingMutuals ? (
-                    <p className="mt-2 text-sm text-[#6d6f78]">Loading…</p>
-                  ) : mutualFriends.length === 0 ? (
+                  {mutualFriends.length === 0 ? (
                     <p className="mt-2 text-sm text-[#6d6f78]">No mutual friends</p>
                   ) : (
                     <>
@@ -602,15 +569,11 @@ export function BigProfileModal({
                 >
                   <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
                     Mutual Servers
-                    {!loadingMutuals && (
-                      <span className="ml-1 text-[#6d6f78]">
-                        — {mutualServers.length}
-                      </span>
-                    )}
+                    <span className="ml-1 text-[#6d6f78]">
+                      — {mutualServers.length}
+                    </span>
                   </h3>
-                  {loadingMutuals ? (
-                    <p className="mt-2 text-sm text-[#6d6f78]">Loading…</p>
-                  ) : mutualServers.length === 0 ? (
+                  {mutualServers.length === 0 ? (
                     <p className="mt-2 text-sm text-[#6d6f78]">No mutual servers</p>
                   ) : (
                     <>
