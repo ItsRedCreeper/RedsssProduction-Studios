@@ -36,21 +36,30 @@ export function PresenceCaption({
   const feed = useOptionalPresenceFeed();
   const live = useUserPresence(userId);
 
-  // Seed the feed from props so first paint is correct before fetch returns.
   useEffect(() => {
     if (!feed || !userId) return;
     feed.watch(userId);
   }, [feed, userId]);
 
-  // Live feed is the source of truth for activity + heartbeat. Explicit props
-  // still win when provided (StatusPicker on own big profile).
-  const mergedStatus = status ?? live?.status ?? null;
-  const mergedLastSeen = live?.lastSeenAt ?? lastSeenAt ?? null;
+  // Prefer feed heartbeat; allow newer props (StatusPicker) to win briefly.
+  const propSeen = lastSeenAt ? Date.parse(lastSeenAt) : Number.NaN;
+  const liveSeen = live?.lastSeenAt ? Date.parse(live.lastSeenAt) : Number.NaN;
+  const propsNewer =
+    status != null &&
+    !Number.isNaN(propSeen) &&
+    (Number.isNaN(liveSeen) || propSeen >= liveSeen);
+
+  const mergedStatus = propsNewer
+    ? status
+    : (live?.status ?? status ?? null);
+  const mergedLastSeen = propsNewer
+    ? (lastSeenAt ?? live?.lastSeenAt ?? null)
+    : (live?.lastSeenAt ?? lastSeenAt ?? null);
   const mergedCustom =
-    customStatus !== undefined && customStatus !== null
-      ? customStatus
-      : (live?.statusText ?? null);
-  // Always prefer live activity label so own/true activity shows on profiles.
+    live?.statusText !== undefined && live?.statusText !== null
+      ? live.statusText
+      : (customStatus ?? null);
+  // Live feed owns activity text (self sees true private server / DM labels).
   const mergedActivity =
     live?.activityLabel ??
     (activityLabelProp !== undefined ? activityLabelProp : null);

@@ -10,10 +10,12 @@ import { PresenceFeedProvider } from "@/components/presence/PresenceFeed";
 import { VoiceSessionProvider } from "@/components/messenger/voice/VoiceSessionProvider";
 
 export function AppShell({ children }: { children: ReactNode }) {
+  // PresenceFeed must wrap ProfileProvider so small/big profile modals
+  // (rendered beside children inside ProfileProvider) can read live presence.
   return (
     <VoiceSessionProvider>
-      <ProfileProvider>
-        <PresenceFeedProvider>
+      <PresenceFeedProvider>
+        <ProfileProvider>
           <PresenceController />
           <Suspense
             fallback={
@@ -26,8 +28,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main className="relative z-10 flex min-h-0 flex-1 flex-col">
             {children}
           </main>
-        </PresenceFeedProvider>
-      </ProfileProvider>
+        </ProfileProvider>
+      </PresenceFeedProvider>
     </VoiceSessionProvider>
   );
 }

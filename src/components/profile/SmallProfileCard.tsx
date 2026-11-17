@@ -198,9 +198,9 @@ export function SmallProfileCard({
           {!restricted ? (
             <PresenceCaption
               userId={profile.id}
-              status={isSelf ? undefined : profile.status}
-              lastSeenAt={isSelf ? undefined : profile.last_seen_at}
-              customStatus={isSelf ? undefined : profile.status_text}
+              status={profile.status}
+              lastSeenAt={profile.last_seen_at}
+              customStatus={profile.status_text}
               className="mt-0.5"
             />
           ) : null}

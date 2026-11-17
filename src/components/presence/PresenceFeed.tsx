@@ -201,26 +201,27 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
     [fetchUsers],
   );
 
-  // Load viewer privacy context once, and always track self so own profiles
-  // show the true status/activity.
+  // Load viewer privacy context (friends + memberships), keep it fresh via
+  // realtime, and always track self so own profiles show true activity.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     watchedRef.current.add(user.id);
     void fetchUsers([user.id]);
-    void (async () => {
+
+    async function refreshPrivacy() {
       const [edges, membership] = await Promise.all([
-        loadFriendEdges(user.id),
+        loadFriendEdges(user!.id),
         createClient()
           .from("server_members")
           .select("server_id")
-          .eq("user_id", user.id),
+          .eq("user_id", user!.id),
       ]);
       if (cancelled) return;
       friendIdsRef.current = new Set(
         edges.edges
           .filter((edge) => edge.status === "accepted")
-          .map((edge) => edge.other.id),
+          .map((edge) => edge.other.id.toLowerCase()),
       );
       serverIdsRef.current = new Set(
         (membership.data ?? []).map((row) => row.server_id),
@@ -229,9 +230,32 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
       for (const [id, snap] of snapsRef.current) {
         upsert(id, { activity: snap.activity });
       }
-    })();
+    }
+
+    void refreshPrivacy();
+
+    const supabase = createClient();
+    const privacyChannel = supabase
+      .channel(`presence-privacy:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "friends" },
+        () => {
+          void refreshPrivacy();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "server_members" },
+        () => {
+          void refreshPrivacy();
+        },
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
+      void supabase.removeChannel(privacyChannel);
     };
   }, [user?.id, upsert, fetchUsers]);
 

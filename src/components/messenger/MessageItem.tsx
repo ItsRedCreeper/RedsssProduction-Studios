@@ -157,7 +157,7 @@ export function MessageItem({
               <span className="min-w-0 truncate text-xs italic text-[#949ba4]">
                 {replyBlocked
                   ? "Original message was sent by a blocked user."
-                  : "Original message is hidden."}
+                  : "Original message was sent by an ignored user."}
               </span>
             </div>
           ) : (
