@@ -71,6 +71,7 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
           <ChevronDown className="h-4 w-4" strokeWidth={2} />
         </button>
         <StatusPicker
+          mode="presence"
           open={pickerOpen}
           status={profile.status}
           manualStatus={profile.manual_status}

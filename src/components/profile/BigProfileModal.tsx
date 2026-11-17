@@ -103,7 +103,8 @@ export function BigProfileModal({
   const [showAllFriends, setShowAllFriends] = useState(false);
   const [showAllServers, setShowAllServers] = useState(false);
   const [highlight, setHighlight] = useState<MutualFocus | null>(null);
-  const [statusOpen, setStatusOpen] = useState(false);
+  const [presenceOpen, setPresenceOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
   const [editingNick, setEditingNick] = useState(false);
   const [nickDraft, setNickDraft] = useState(nickname ?? "");
   const [nickBusy, setNickBusy] = useState(false);
@@ -275,27 +276,63 @@ export function BigProfileModal({
                 <div className="relative z-30">
                   <button
                     type="button"
-                    onClick={() => setStatusOpen((open) => !open)}
+                    onClick={() => {
+                      setCustomOpen(false);
+                      setPresenceOpen((open) => !open);
+                    }}
                     className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
                   >
                     <span
                       className={`relative h-2.5 w-2.5 rounded-full ${statusDotClass(resolveDisplayStatus(liveStatus, liveLastSeen))}`}
                     />
-                    Status
+                    Online Status
                   </button>
                   <StatusPicker
-                    open={statusOpen}
+                    mode="presence"
+                    open={presenceOpen}
                     status={liveStatus}
                     manualStatus={liveManual}
                     statusText={liveStatusText}
                     placement="below"
-                    onClose={() => setStatusOpen(false)}
+                    onClose={() => setPresenceOpen(false)}
                     onSaved={(next) => {
                       setLiveStatus(next.status);
                       setLiveManual(next.status);
                       setLiveStatusText(next.statusText);
                       setLiveLastSeen(new Date().toISOString());
-                      setStatusOpen(false);
+                      setPresenceOpen(false);
+                    }}
+                  />
+                </div>
+                <div className="relative z-30">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPresenceOpen(false);
+                      setCustomOpen((open) => !open);
+                    }}
+                    className="inline-flex max-w-[11rem] items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
+                    title={liveStatusText?.trim() || "Set a custom status"}
+                  >
+                    <MessageSquare className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                    <span className="truncate">
+                      {liveStatusText?.trim() || "Custom Status"}
+                    </span>
+                  </button>
+                  <StatusPicker
+                    mode="custom"
+                    open={customOpen}
+                    status={liveStatus}
+                    manualStatus={liveManual}
+                    statusText={liveStatusText}
+                    placement="below"
+                    onClose={() => setCustomOpen(false)}
+                    onSaved={(next) => {
+                      setLiveStatus(next.status);
+                      setLiveManual(next.status);
+                      setLiveStatusText(next.statusText);
+                      setLiveLastSeen(new Date().toISOString());
+                      setCustomOpen(false);
                     }}
                   />
                 </div>
