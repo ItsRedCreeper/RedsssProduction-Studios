@@ -23,6 +23,7 @@ export type UserActivityRow = {
 };
 
 const ACTIVITY_CHANGED = "redsss-activity-changed";
+const ACTIVITY_REPUBLISH = "redsss-activity-republish";
 
 export function notifyActivityChanged() {
   if (typeof window === "undefined") return;
@@ -32,6 +33,17 @@ export function notifyActivityChanged() {
 export function onActivityChanged(handler: () => void) {
   window.addEventListener(ACTIVITY_CHANGED, handler);
   return () => window.removeEventListener(ACTIVITY_CHANGED, handler);
+}
+
+/** Ask messenger ActivityTracker to overwrite a stale site-activity write. */
+export function requestActivityRepublish() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(ACTIVITY_REPUBLISH));
+}
+
+export function onActivityRepublish(handler: () => void) {
+  window.addEventListener(ACTIVITY_REPUBLISH, handler);
+  return () => window.removeEventListener(ACTIVITY_REPUBLISH, handler);
 }
 
 export async function setUserActivity(opts: {

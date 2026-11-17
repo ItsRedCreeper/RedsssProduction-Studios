@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { setUserActivity } from "@/lib/activity";
+import { onActivityRepublish, setUserActivity } from "@/lib/activity";
 import type { Channel, DmThread, Server } from "@/components/messenger/types";
 
 type ActivityTrackerProps = {
@@ -58,9 +58,11 @@ function buildActivity(opts: {
     if (opts.activeChannel?.type === "voice") {
       type = "voice";
     }
-  } else if (opts.pane === "server") {
-    // Server route still loading — don't overwrite a real site activity yet.
-    return null;
+  } else {
+    // Server still loading / unknown pane — never leave a stale Games/Home row.
+    type = "other";
+    contextName = "In Messenger";
+    isPublic = true;
   }
 
   return { type, contextId, contextName, contextExtra, isPublic };
@@ -110,7 +112,6 @@ export function ActivityTracker({
 
     async function publish(force = false) {
       const built = buildActivity(propsRef.current);
-      if (!built) return;
       const key = [
         built.type,
         built.contextId ?? "",
@@ -135,13 +136,19 @@ export function ActivityTracker({
         void publish(true);
       }
     }
+    function onRepublish() {
+      lastKey.current = "";
+      void publish(true);
+    }
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
+    const offRepublish = onActivityRepublish(onRepublish);
 
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
+      offRepublish();
     };
   }, [
     pane,

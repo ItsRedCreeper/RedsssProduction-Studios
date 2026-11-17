@@ -67,7 +67,8 @@ export function presenceCaption(opts: {
 
   let status = resolveDisplayStatus(opts.status, opts.lastSeenAt);
   // Heartbeat can lag a beat during navigation; if activity just updated, stay present.
-  if (status === "offline" && stored !== "offline" && opts.activityUpdatedAt) {
+  // (stored is already non-offline here — handled above.)
+  if (status === "offline" && opts.activityUpdatedAt) {
     const act = Date.parse(opts.activityUpdatedAt);
     if (!Number.isNaN(act) && Date.now() - act < PRESENCE_STALE_MS) {
       status = stored;

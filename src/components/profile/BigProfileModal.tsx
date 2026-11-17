@@ -397,7 +397,7 @@ export function BigProfileModal({
                 userId={profile.id}
                 status={liveStatus}
                 lastSeenAt={liveLastSeen}
-                customStatus={statusText}
+                customStatus={statusText || null}
                 className="mt-1"
               />
             ) : null}

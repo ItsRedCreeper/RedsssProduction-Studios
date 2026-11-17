@@ -2,7 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { setUserActivity, type ActivityType } from "@/lib/activity";
+import {
+  requestActivityRepublish,
+  setUserActivity,
+  type ActivityType,
+} from "@/lib/activity";
 
 function activityForPath(pathname: string): {
   type: ActivityType;
@@ -27,25 +31,39 @@ export function SiteActivityTracker() {
   useEffect(() => {
     const next = activityForPath(pathname);
     if (!next) {
-      // Entering messenger — clear local lock so ActivityTracker always wins.
+      // Entering messenger — drop local lock and ask messenger tracker to win.
       lastKey.current = "";
+      requestActivityRepublish();
       return;
     }
     const key = next.type;
     if (key === lastKey.current) return;
     let cancelled = false;
+    let wrote = false;
+
     void (async () => {
+      // Let route transitions cancel before we hit the network.
+      await Promise.resolve();
+      if (cancelled) return;
       const { error } = await setUserActivity({
         type: next.type,
         contextName: next.name ?? null,
         isPublic: true,
       });
-      if (!cancelled && !error) lastKey.current = key;
+      wrote = true;
+      if (cancelled) {
+        // Stale site write may have landed after leaving — force messenger to overwrite.
+        requestActivityRepublish();
+        return;
+      }
+      if (!error) lastKey.current = key;
     })();
 
     function onVisible() {
       if (document.visibilityState !== "visible") return;
-      const again = activityForPath(pathname);
+      const again = activityForPath(
+        typeof window !== "undefined" ? window.location.pathname : pathname,
+      );
       if (!again || again.type !== key) return;
       lastKey.current = "";
       void setUserActivity({
@@ -61,6 +79,7 @@ export function SiteActivityTracker() {
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisible);
+      if (wrote) requestActivityRepublish();
     };
   }, [pathname]);
 

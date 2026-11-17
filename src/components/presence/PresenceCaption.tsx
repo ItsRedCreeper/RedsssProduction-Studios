@@ -42,17 +42,18 @@ export function PresenceCaption({
     feed.watch(userId);
   }, [feed, userId]);
 
-  // Props win for status (own profile StatusPicker), feed wins for activity text.
+  // Live feed is the source of truth for activity + heartbeat. Explicit props
+  // still win when provided (StatusPicker on own big profile).
   const mergedStatus = status ?? live?.status ?? null;
-  const mergedLastSeen = lastSeenAt ?? live?.lastSeenAt ?? null;
+  const mergedLastSeen = live?.lastSeenAt ?? lastSeenAt ?? null;
   const mergedCustom =
     customStatus !== undefined && customStatus !== null
       ? customStatus
       : (live?.statusText ?? null);
+  // Always prefer live activity label so own/true activity shows on profiles.
   const mergedActivity =
-    activityLabelProp !== undefined && activityLabelProp !== null
-      ? activityLabelProp
-      : (live?.activityLabel ?? null);
+    live?.activityLabel ??
+    (activityLabelProp !== undefined ? activityLabelProp : null);
 
   const displayStatus = resolveDisplayStatus(mergedStatus, mergedLastSeen);
   const caption = presenceCaption({
