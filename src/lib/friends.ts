@@ -11,6 +11,10 @@ export type FriendProfile = {
   status_text: string | null;
   last_seen_at?: string | null;
   manual_status?: string | null;
+  /** Only meaningful for your own profile UI — when idle/dnd/offline clears. */
+  manual_status_expires_at?: string | null;
+  /** Only meaningful for your own profile UI — when custom status clears. */
+  status_text_expires_at?: string | null;
   bio: string | null;
   banner_url: string | null;
   banner_color: string | null;
@@ -30,6 +34,8 @@ function asProfile(row: Partial<FriendProfile> & { id: string; username: string 
     status_text: row.status_text ?? null,
     last_seen_at: row.last_seen_at ?? null,
     manual_status: row.manual_status ?? null,
+    manual_status_expires_at: row.manual_status_expires_at ?? null,
+    status_text_expires_at: row.status_text_expires_at ?? null,
     bio: row.bio ?? null,
     banner_url: row.banner_url ?? null,
     banner_color: row.banner_color ?? null,

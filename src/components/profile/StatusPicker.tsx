@@ -5,7 +5,10 @@ import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import {
   CUSTOM_STATUS_CLEAR_AFTER_OPTIONS,
   PRESENCE_CLEAR_AFTER_OPTIONS,
+  clearAfterToExpiryDate,
   clearAfterToMinutes,
+  formatClearAfterPreview,
+  formatStatusExpiry,
   setManualStatus,
   type ManualStatus,
   type StatusClearAfter,
@@ -19,8 +22,17 @@ type StatusPickerBase = {
   /** Preferred: the user's chosen status (manual_status). Falls back to status. */
   manualStatus?: string | null | undefined;
   statusText: string | null | undefined;
+  /** Saved custom-status expiry (own profile only). */
+  statusTextExpiresAt?: string | null;
+  /** Saved presence expiry (own profile only). */
+  manualStatusExpiresAt?: string | null;
   onClose: () => void;
-  onSaved?: (next: { status: string; statusText: string | null }) => void;
+  onSaved?: (next: {
+    status: string;
+    statusText: string | null;
+    manualStatusExpiresAt?: string | null;
+    statusTextExpiresAt?: string | null;
+  }) => void;
   /** Anchor panel above (sidebar) or below (navbar / big profile). */
   placement?: "above" | "below";
 };
@@ -50,12 +62,19 @@ function panelClass(placement: "above" | "below") {
   }`;
 }
 
+function expiryIsoFromClearAfter(value: StatusClearAfter): string | null {
+  const end = clearAfterToExpiryDate(value);
+  return end ? end.toISOString() : null;
+}
+
 export function StatusPicker({
   open,
   mode,
   status,
   manualStatus,
   statusText,
+  statusTextExpiresAt = null,
+  manualStatusExpiresAt = null,
   onClose,
   onSaved,
   placement = "above",
@@ -63,13 +82,17 @@ export function StatusPicker({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [draftStatus, setDraftStatus] = useState<ManualStatus>("online");
   const [draftText, setDraftText] = useState("");
-  // Presence defaults forever; custom defaults to 24h.
+  /** After picking Idle/DND/Offline — ask how long before applying. */
+  const [pendingPresence, setPendingPresence] = useState<ManualStatus | null>(
+    null,
+  );
   const [presenceClearAfter, setPresenceClearAfter] =
-    useState<StatusClearAfter>(null);
+    useState<StatusClearAfter>(240);
   const [customClearAfter, setCustomClearAfter] =
     useState<StatusClearAfter>(1440);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   useEffect(() => {
     if (!open) return;
@@ -80,10 +103,18 @@ export function StatusPicker({
         : "online") as ManualStatus,
     );
     setDraftText(statusText ?? "");
-    setPresenceClearAfter(null);
+    setPendingPresence(null);
+    setPresenceClearAfter(240);
     setCustomClearAfter(1440);
     setError(null);
+    setNowTick(Date.now());
   }, [open, status, manualStatus, statusText, mode]);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = window.setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -91,7 +122,14 @@ export function StatusPicker({
       if (!rootRef.current?.contains(event.target as Node)) onClose();
     }
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        if (pendingPresence) {
+          setPendingPresence(null);
+          setError(null);
+          return;
+        }
+        onClose();
+      }
     }
     window.addEventListener("mousedown", onPointer);
     window.addEventListener("keydown", onKey);
@@ -99,23 +137,28 @@ export function StatusPicker({
       window.removeEventListener("mousedown", onPointer);
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+  }, [open, onClose, pendingPresence]);
 
   if (!open) return null;
 
-  const presenceMinutes = clearAfterToMinutes(presenceClearAfter);
   const customMinutes = clearAfterToMinutes(customClearAfter);
   const currentPresence = (manualStatus ?? status ?? "online").toLowerCase();
+  const savedCustomExpiry = formatStatusExpiry(statusTextExpiresAt, nowTick);
+  const presencePreview = formatClearAfterPreview(presenceClearAfter, nowTick);
+  const customPreview = formatClearAfterPreview(customClearAfter, nowTick);
 
-  async function savePresence(nextStatus: ManualStatus) {
+  async function savePresence(
+    nextStatus: ManualStatus,
+    clearAfter: StatusClearAfter,
+  ) {
     setBusy(true);
     setError(null);
     setDraftStatus(nextStatus);
+    const minutes =
+      nextStatus === "online" ? 0 : clearAfterToMinutes(clearAfter) ?? 0;
     const { error: saveError } = await setManualStatus({
       manualStatus: nextStatus,
-      // Presence timer only — leave custom text alone.
-      manualClearAfterMinutes:
-        nextStatus === "online" ? 0 : presenceMinutes ?? 0,
+      manualClearAfterMinutes: minutes,
       clearAfterMinutes: null,
     });
     setBusy(false);
@@ -126,8 +169,28 @@ export function StatusPicker({
     onSaved?.({
       status: nextStatus,
       statusText: statusText?.trim() || null,
+      manualStatusExpiresAt:
+        nextStatus === "online" ? null : expiryIsoFromClearAfter(clearAfter),
+      statusTextExpiresAt: statusTextExpiresAt ?? null,
     });
+    setPendingPresence(null);
     onClose();
+  }
+
+  function onPickPresence(value: ManualStatus) {
+    if (value === "online") {
+      void savePresence("online", null);
+      return;
+    }
+    // Prompt for duration — nothing saved until Confirm.
+    setPendingPresence(value);
+    setPresenceClearAfter(240);
+    setError(null);
+  }
+
+  function cancelPresencePrompt() {
+    setPendingPresence(null);
+    setError(null);
   }
 
   async function saveCustom(clearText = false) {
@@ -138,7 +201,6 @@ export function StatusPicker({
         ? currentPresence
         : "online") as ManualStatus;
     const { error: saveError } = await setManualStatus({
-      // Keep current presence; only change custom text + its timer.
       manualStatus: presence,
       manualClearAfterMinutes: null,
       ...(clearText
@@ -159,7 +221,14 @@ export function StatusPicker({
     }
     const cleaned = clearText ? null : draftText.trim() || null;
     if (clearText) setDraftText("");
-    onSaved?.({ status: presence, statusText: cleaned });
+    onSaved?.({
+      status: presence,
+      statusText: cleaned,
+      manualStatusExpiresAt: manualStatusExpiresAt ?? null,
+      statusTextExpiresAt: clearText
+        ? null
+        : expiryIsoFromClearAfter(customClearAfter),
+    });
     onClose();
   }
 
@@ -171,66 +240,109 @@ export function StatusPicker({
         role="dialog"
         aria-label="Set online status"
       >
-        <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-          Online status
-        </p>
-        <ul>
-          {STATUSES.map((value) => {
-            const active = draftStatus === value;
-            return (
-              <li key={value}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void savePresence(value)}
-                  className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm ${
-                    active
-                      ? "bg-accent/15 text-white"
-                      : "text-[#dbdee1] hover:bg-white/5"
-                  }`}
+        {pendingPresence ? (
+          <div className="px-3 pb-1 pt-1">
+            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+              How long?
+            </p>
+            <div className="mb-2 flex items-center gap-2 rounded-md bg-[#1e1f22] px-2.5 py-2">
+              <span
+                className={`h-3 w-3 shrink-0 rounded-full ${statusDotClass(pendingPresence)}`}
+              />
+              <span className="text-sm font-medium text-white">
+                {statusLabel(pendingPresence)}
+              </span>
+            </div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+              Clear status after
+            </label>
+            <select
+              value={clearAfterSelectValue(presenceClearAfter)}
+              disabled={busy}
+              onChange={(event) =>
+                setPresenceClearAfter(parseClearAfter(event.target.value))
+              }
+              className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] focus:ring-accent"
+            >
+              {PRESENCE_CLEAR_AFTER_OPTIONS.map((opt) => (
+                <option
+                  key={opt.label}
+                  value={
+                    opt.minutes === null
+                      ? "none"
+                      : typeof opt.minutes === "string"
+                        ? opt.minutes
+                        : String(opt.minutes)
+                  }
                 >
-                  <span
-                    className={`h-3 w-3 shrink-0 rounded-full ${statusDotClass(value)}`}
-                  />
-                  <span className="font-medium">{statusLabel(value)}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="px-3 pb-2 pt-1">
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-            Clear status after
-          </label>
-          <p className="mb-1 text-[10px] leading-snug text-[#6d6f78]">
-            For Idle / DND / Offline — reverts to Online. Default is forever.
-          </p>
-          <select
-            value={clearAfterSelectValue(presenceClearAfter)}
-            disabled={busy}
-            onChange={(event) =>
-              setPresenceClearAfter(parseClearAfter(event.target.value))
-            }
-            className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] focus:ring-accent"
-          >
-            {PRESENCE_CLEAR_AFTER_OPTIONS.map((opt) => (
-              <option
-                key={opt.label}
-                value={
-                  opt.minutes === null
-                    ? "none"
-                    : typeof opt.minutes === "string"
-                      ? opt.minutes
-                      : String(opt.minutes)
-                }
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-[11px] leading-snug text-[#b5bac1]">
+              {presencePreview}
+            </p>
+            <p className="mt-0.5 text-[10px] leading-snug text-[#6d6f78]">
+              Uses your local time. Only you see this timer.
+            </p>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={cancelPresencePrompt}
+                className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-[#949ba4] hover:bg-white/5 hover:text-white disabled:opacity-50"
               >
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        {error && (
-          <p className="px-3 pb-1 text-xs text-accent">{error}</p>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void savePresence(pendingPresence, presenceClearAfter)
+                }
+                className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+              >
+                {busy ? "Saving…" : "Confirm"}
+              </button>
+            </div>
+            {error && <p className="mt-2 text-xs text-accent">{error}</p>}
+          </div>
+        ) : (
+          <>
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+              Online status
+            </p>
+            <ul>
+              {STATUSES.map((value) => {
+                const active = draftStatus === value;
+                return (
+                  <li key={value}>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onPickPresence(value)}
+                      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm ${
+                        active
+                          ? "bg-accent/15 text-white"
+                          : "text-[#dbdee1] hover:bg-white/5"
+                      }`}
+                    >
+                      <span
+                        className={`h-3 w-3 shrink-0 rounded-full ${statusDotClass(value)}`}
+                      />
+                      <span className="font-medium">{statusLabel(value)}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="px-3 pt-1 text-[10px] leading-snug text-[#6d6f78]">
+              Online applies right away. Idle, DND, and Offline ask how long.
+            </p>
+            {error && (
+              <p className="px-3 pb-1 text-xs text-accent">{error}</p>
+            )}
+          </>
         )}
       </div>
     );
@@ -251,6 +363,11 @@ export function StatusPicker({
           Separate from online status. Shows under your name; activity is
           hidden while this is set.
         </p>
+        {savedCustomExpiry && statusText?.trim() && (
+          <p className="mb-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5 text-[11px] text-[#b5bac1]">
+            Current: {savedCustomExpiry}
+          </p>
+        )}
         <input
           value={draftText}
           maxLength={128}
@@ -292,6 +409,12 @@ export function StatusPicker({
             </option>
           ))}
         </select>
+        <p className="mt-2 text-[11px] leading-snug text-[#b5bac1]">
+          {customPreview}
+        </p>
+        <p className="mt-0.5 text-[10px] leading-snug text-[#6d6f78]">
+          Preview uses your local time. Only you see this timer.
+        </p>
         <div className="mt-2 flex items-center justify-between gap-2">
           <button
             type="button"

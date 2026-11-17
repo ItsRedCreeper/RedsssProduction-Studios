@@ -100,7 +100,7 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
   const { data } = await supabase
     .from("profiles")
     .select(
-      "id, username, avatar_url, status, status_text, last_seen_at, manual_status, bio, banner_url, banner_color, created_at",
+      "id, username, avatar_url, status, status_text, last_seen_at, manual_status, manual_status_expires_at, status_text_expires_at, bio, banner_url, banner_color, created_at",
     )
     .eq("id", userId)
     .maybeSingle();
@@ -113,6 +113,8 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
     status_text: data.status_text,
     last_seen_at: data.last_seen_at,
     manual_status: data.manual_status,
+    manual_status_expires_at: data.manual_status_expires_at,
+    status_text_expires_at: data.status_text_expires_at,
     bio: data.bio,
     banner_url: data.banner_url,
     banner_color: data.banner_color,

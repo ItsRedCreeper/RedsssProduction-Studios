@@ -144,6 +144,97 @@ export function clearAfterToMinutes(value: StatusClearAfter): number | null {
   return Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 60_000));
 }
 
+/** Absolute local expiry for a Clear-after choice; null = forever. */
+export function clearAfterToExpiryDate(
+  value: StatusClearAfter,
+  from = Date.now(),
+): Date | null {
+  if (value === null) return null;
+  if (typeof value === "number") {
+    return new Date(from + value * 60_000);
+  }
+  const start = new Date(from);
+  if (value === "today") {
+    const end = new Date(start);
+    end.setHours(23, 59, 59, 999);
+    return end;
+  }
+  const end = new Date(start);
+  const day = end.getDay();
+  const daysUntilSunday = day === 0 ? 0 : 7 - day;
+  end.setDate(end.getDate() + daysUntilSunday);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+function sameLocalDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function startOfLocalDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * Client-local expiry copy using the viewer's timezone / time of day.
+ * Examples: "Expires at 3:45 PM", "Expires tomorrow at 9:00 AM",
+ * "Expires Friday at 4:00 PM", "Expires Nov 20 at 4:00 PM".
+ */
+export function formatStatusExpiry(
+  expiresAt: string | Date | null | undefined,
+  now = Date.now(),
+): string | null {
+  if (!expiresAt) return null;
+  const end = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
+  if (Number.isNaN(end.getTime())) return null;
+  if (end.getTime() <= now) return "Expired";
+
+  const current = new Date(now);
+  const time = end.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  if (sameLocalDay(end, current)) {
+    return `Expires at ${time}`;
+  }
+
+  const tomorrow = new Date(current);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (sameLocalDay(end, tomorrow)) {
+    return `Expires tomorrow at ${time}`;
+  }
+
+  const daysOut = Math.round(
+    (startOfLocalDay(end).getTime() - startOfLocalDay(current).getTime()) /
+      86_400_000,
+  );
+  if (daysOut > 1 && daysOut < 7) {
+    const weekday = end.toLocaleDateString(undefined, { weekday: "long" });
+    return `Expires ${weekday} at ${time}`;
+  }
+
+  const date = end.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  return `Expires ${date} at ${time}`;
+}
+
+/** Preview line for a Clear-after draft (before save). */
+export function formatClearAfterPreview(
+  value: StatusClearAfter,
+  from = Date.now(),
+): string {
+  const end = clearAfterToExpiryDate(value, from);
+  if (!end) return "Doesn't expire";
+  return formatStatusExpiry(end, from) ?? "Doesn't expire";
+}
+
 export async function setManualStatus(opts: {
   manualStatus: ManualStatus;
   statusText?: string | null;

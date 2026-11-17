@@ -18,7 +18,7 @@ import { PresenceCaption } from "@/components/presence/PresenceCaption";
 import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import { useUserPresence } from "@/components/presence/PresenceFeed";
 import { statusDotClass } from "@/components/messenger/data";
-import { resolveDisplayStatus } from "@/lib/presence";
+import { formatStatusExpiry, resolveDisplayStatus } from "@/lib/presence";
 import { avatarLetter } from "@/lib/avatar";
 import type { MutualFocus } from "@/components/profile/SmallProfileCard";
 import {
@@ -95,6 +95,13 @@ export function BigProfileModal({
   const [liveManual, setLiveManual] = useState(profile.manual_status ?? null);
   const [liveStatusText, setLiveStatusText] = useState(profile.status_text);
   const [liveLastSeen, setLiveLastSeen] = useState(profile.last_seen_at ?? null);
+  const [liveManualExpiresAt, setLiveManualExpiresAt] = useState(
+    profile.manual_status_expires_at ?? null,
+  );
+  const [liveCustomExpiresAt, setLiveCustomExpiresAt] = useState(
+    profile.status_text_expires_at ?? null,
+  );
+  const [expiryTick, setExpiryTick] = useState(() => Date.now());
   const bio = restricted ? "" : profile.bio?.trim() || "";
   const statusText = restricted ? "" : liveStatusText?.trim() || "";
   const mutualFriends = ready.mutualFriends;
@@ -119,13 +126,32 @@ export function BigProfileModal({
     setLiveManual(profile.manual_status ?? null);
     setLiveStatusText(profile.status_text);
     setLiveLastSeen(profile.last_seen_at ?? null);
+    setLiveManualExpiresAt(profile.manual_status_expires_at ?? null);
+    setLiveCustomExpiresAt(profile.status_text_expires_at ?? null);
   }, [
     profile.id,
     profile.status,
     profile.manual_status,
     profile.status_text,
     profile.last_seen_at,
+    profile.manual_status_expires_at,
+    profile.status_text_expires_at,
   ]);
+
+  useEffect(() => {
+    if (!isSelf) return;
+    const id = window.setInterval(() => setExpiryTick(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [isSelf]);
+
+  const presenceExpiryLabel =
+    isSelf && liveManual && liveManual !== "online"
+      ? formatStatusExpiry(liveManualExpiresAt, expiryTick)
+      : null;
+  const customExpiryLabel =
+    isSelf && liveStatusText?.trim()
+      ? formatStatusExpiry(liveCustomExpiresAt, expiryTick)
+      : null;
 
   // Keep status circle + caption synced from PresenceFeed for self and others.
   useEffect(() => {
@@ -293,6 +319,8 @@ export function BigProfileModal({
                     status={liveStatus}
                     manualStatus={liveManual}
                     statusText={liveStatusText}
+                    manualStatusExpiresAt={liveManualExpiresAt}
+                    statusTextExpiresAt={liveCustomExpiresAt}
                     placement="below"
                     onClose={() => setPresenceOpen(false)}
                     onSaved={(next) => {
@@ -300,6 +328,12 @@ export function BigProfileModal({
                       setLiveManual(next.status);
                       setLiveStatusText(next.statusText);
                       setLiveLastSeen(new Date().toISOString());
+                      if (next.manualStatusExpiresAt !== undefined) {
+                        setLiveManualExpiresAt(next.manualStatusExpiresAt);
+                      }
+                      if (next.statusTextExpiresAt !== undefined) {
+                        setLiveCustomExpiresAt(next.statusTextExpiresAt);
+                      }
                       setPresenceOpen(false);
                     }}
                   />
@@ -325,6 +359,8 @@ export function BigProfileModal({
                     status={liveStatus}
                     manualStatus={liveManual}
                     statusText={liveStatusText}
+                    manualStatusExpiresAt={liveManualExpiresAt}
+                    statusTextExpiresAt={liveCustomExpiresAt}
                     placement="below"
                     onClose={() => setCustomOpen(false)}
                     onSaved={(next) => {
@@ -332,6 +368,12 @@ export function BigProfileModal({
                       setLiveManual(next.status);
                       setLiveStatusText(next.statusText);
                       setLiveLastSeen(new Date().toISOString());
+                      if (next.manualStatusExpiresAt !== undefined) {
+                        setLiveManualExpiresAt(next.manualStatusExpiresAt);
+                      }
+                      if (next.statusTextExpiresAt !== undefined) {
+                        setLiveCustomExpiresAt(next.statusTextExpiresAt);
+                      }
                       setCustomOpen(false);
                     }}
                   />
@@ -432,6 +474,23 @@ export function BigProfileModal({
                 customStatus={statusText || null}
                 className="mt-1"
               />
+            ) : null}
+            {isSelf && (presenceExpiryLabel || customExpiryLabel) ? (
+              <div className="mt-2 space-y-0.5 rounded-md bg-black/25 px-2.5 py-2 text-[11px] leading-snug text-[#949ba4]">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#6d6f78]">
+                  Only you can see this
+                </p>
+                {presenceExpiryLabel ? (
+                  <p>
+                    Online status · {presenceExpiryLabel}
+                  </p>
+                ) : null}
+                {customExpiryLabel ? (
+                  <p>
+                    Custom status · {customExpiryLabel}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
             {!isSelf && !restricted && onSaveNickname && (
               <div className="mt-3 border-t border-white/10 pt-3">
