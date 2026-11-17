@@ -15,6 +15,8 @@ type HomeSidebarProps = {
   loadingThreads: boolean;
   /** Users currently typing in the open DM (status badge → animated dots). */
   typingUserIds?: Set<string>;
+  /** Forces re-render when typing membership changes. */
+  typingUserIdsKey?: string;
   onSelectThread: (threadId: string) => void;
   onCloseThread?: (threadId: string) => void;
   footer?: ReactNode;
@@ -25,10 +27,12 @@ export function HomeSidebar({
   activeThreadId,
   loadingThreads,
   typingUserIds,
+  typingUserIdsKey = "",
   onSelectThread,
   onCloseThread,
   footer,
 }: HomeSidebarProps) {
+  void typingUserIdsKey;
   const profileUi = useOptionalProfileUi();
   const feed = useOptionalPresenceFeed();
   void feed?.version;
@@ -70,7 +74,7 @@ export function HomeSidebar({
                         : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
                     }`}
                   >
-                    <span className="relative shrink-0">
+                    <span className="relative shrink-0 overflow-visible">
                       <UserAvatar
                         username={name}
                         avatarUrl={thread.avatar_url}

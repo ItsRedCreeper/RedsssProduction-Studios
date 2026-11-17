@@ -50,11 +50,14 @@ import {
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { ActivityTracker } from "@/components/messenger/ActivityTracker";
 import {
+  CHANNEL_MESSAGE_PAGE_SIZE,
   dmRowsToMessages,
   fetchLastMessageMap,
   groupReactions,
   hydrateMessages,
   loadChannelMessages,
+  loadOlderChannelMessages,
+  loadOlderDmMessages,
   loadProfiles,
   loadSingleMessage,
   saveChannelRead,
@@ -237,6 +240,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [loadedServerId, setLoadedServerId] = useState<string | null>(null);
   const [loadingChannelMessages, setLoadingChannelMessages] = useState(false);
   const [loadingDmMessages, setLoadingDmMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [channelHasMore, setChannelHasMore] = useState(false);
+  const [dmHasMore, setDmHasMore] = useState(false);
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -254,6 +260,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     ReturnType<typeof createClient>["channel"]
   > | null>(null);
   const lastTypingSentRef = useRef(0);
+  const typingWantedRef = useRef(false);
+  const blockedIdsRef = useRef(blockedIds);
+  const ignoredIdsRef = useRef(ignoredIds);
+  blockedIdsRef.current = blockedIds;
+  ignoredIdsRef.current = ignoredIds;
 
   paneRef.current = pane;
   routeServerRef.current = routeServerId;
@@ -1046,6 +1057,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setError(result.error);
         setMessages([]);
         setReactions([]);
+        setChannelHasMore(false);
         setLoadingChannelMessages(false);
         return;
       }
@@ -1062,6 +1074,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (cancelled) return;
       setMessages(result.messages);
       setReactions(reactionRows ?? []);
+      setChannelHasMore(result.hasMore);
       const newest = result.messages[result.messages.length - 1]?.created_at;
       if (newest) {
         setLastMessageAt((prev) => ({ ...prev, [channelId]: newest }));
@@ -1199,11 +1212,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         .select("*")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(CHANNEL_MESSAGE_PAGE_SIZE);
       if (cancelled) return;
       if (dmError || !data) {
         setError(dmError?.message ?? "Failed to load direct messages");
         setDmMessages([]);
+        setDmHasMore(false);
         setLoadingDmMessages(false);
         return;
       }
@@ -1226,6 +1240,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       );
       if (cancelled) return;
       setDmMessages(hydrateMessages(rows, profiles, parents));
+      setDmHasMore(data.length >= CHANNEL_MESSAGE_PAGE_SIZE);
       setLoadingDmMessages(false);
     }
 
@@ -1328,6 +1343,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [user, pane, activeChannelId, activeChannel?.type, activeLast]);
 
   // Live typing for the open text/voice channel OR the open DM conversation.
+  // Discord: member-list / DM-list dots only for THIS open conversation/channel.
   useEffect(() => {
     const typingKey =
       pane === "home" && activeConversationId
@@ -1346,7 +1362,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const selfId = user.id;
     const supabase = createClient();
     const channel = supabase
-      .channel(`typing:${typingKey}`)
+      .channel(`typing:${typingKey}`, {
+        config: { broadcast: { ack: false, self: false } },
+      })
       .on("broadcast", { event: "typing" }, ({ payload }) => {
         const data = payload as {
           userId?: string;
@@ -1356,7 +1374,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         };
         const userId = data.userId;
         if (!userId || userId === selfId) return;
-        if (blockedIds.includes(userId) || ignoredIds.includes(userId)) return;
+        if (
+          blockedIdsRef.current.includes(userId) ||
+          ignoredIdsRef.current.includes(userId)
+        ) {
+          return;
+        }
         if (data.stop) {
           setTypingUsers((prev) => {
             if (!prev[userId]) return prev;
@@ -1377,8 +1400,27 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           },
         }));
       })
-      .subscribe();
-    typingChannelRef.current = channel;
+      .subscribe((status) => {
+        // Only publish once Realtime has joined — early sends were dropped.
+        if (status === "SUBSCRIBED") {
+          typingChannelRef.current = channel;
+          // Flush a pending "I'm typing" that fired before join completed.
+          if (typingWantedRef.current && user?.id) {
+            lastTypingSentRef.current = 0;
+            void channel.send({
+              type: "broadcast",
+              event: "typing",
+              payload: {
+                userId: user.id,
+                username: profile?.username ?? "Someone",
+                avatarUrl: profile?.avatar_url ?? null,
+                stop: false,
+              },
+            });
+            lastTypingSentRef.current = Date.now();
+          }
+        }
+      });
     const tick = window.setInterval(() => {
       const now = Date.now();
       setTypingUsers((prev) => {
@@ -1393,7 +1435,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }, 400);
     return () => {
       window.clearInterval(tick);
-      typingChannelRef.current = null;
+      typingWantedRef.current = false;
+      if (typingChannelRef.current === channel) {
+        typingChannelRef.current = null;
+      }
       void supabase.removeChannel(channel);
     };
   }, [
@@ -1402,8 +1447,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     activeChannelId,
     activeChannel?.type,
     user,
-    blockedIds,
-    ignoredIds,
+    profile?.username,
+    profile?.avatar_url,
   ]);
 
   useEffect(() => {
@@ -1590,9 +1635,85 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         .map(([userId]) => userId),
     );
   }, [typingUsers, isMessageHidden]);
+  // Stable string so sidebars re-render when membership changes even if Set identity is reused.
+  const typingUserIdsKey = useMemo(
+    () => [...typingUserIds].sort().join(","),
+    [typingUserIds],
+  );
+
+  const loadOlderChannel = useCallback(async () => {
+    if (!activeChannelId || loadingOlderMessages || !channelHasMore) return;
+    const oldest = messages[0]?.created_at;
+    if (!oldest) return;
+    setLoadingOlderMessages(true);
+    const result = await loadOlderChannelMessages(activeChannelId, oldest);
+    if (result.error) {
+      setError(result.error);
+      setLoadingOlderMessages(false);
+      return;
+    }
+    const ids = result.messages
+      .map((message) => message.id)
+      .filter((id) => !id.startsWith("temp-"));
+    const supabase = createClient();
+    const { data: reactionRows } =
+      ids.length > 0
+        ? await supabase
+            .from("message_reactions")
+            .select("*")
+            .in("message_id", ids)
+        : { data: [] as Tables<"message_reactions">[] };
+    setMessages((prev) => {
+      const seen = new Set(prev.map((message) => message.id));
+      const older = result.messages.filter((message) => !seen.has(message.id));
+      return [...older, ...prev];
+    });
+    if (reactionRows?.length) {
+      setReactions((prev) => {
+        let next = prev;
+        for (const row of reactionRows) {
+          next = upsertReaction(next, row);
+        }
+        return next;
+      });
+    }
+    setChannelHasMore(result.hasMore);
+    setLoadingOlderMessages(false);
+  }, [
+    activeChannelId,
+    loadingOlderMessages,
+    channelHasMore,
+    messages,
+  ]);
+
+  const loadOlderDm = useCallback(async () => {
+    if (!activeConversationId || loadingOlderMessages || !dmHasMore) return;
+    const oldest = dmMessages[0]?.created_at;
+    if (!oldest) return;
+    setLoadingOlderMessages(true);
+    const result = await loadOlderDmMessages(activeConversationId, oldest);
+    if (result.error) {
+      setError(result.error);
+      setLoadingOlderMessages(false);
+      return;
+    }
+    setDmMessages((prev) => {
+      const seen = new Set(prev.map((message) => message.id));
+      const older = result.messages.filter((message) => !seen.has(message.id));
+      return [...older, ...prev];
+    });
+    setDmHasMore(result.hasMore);
+    setLoadingOlderMessages(false);
+  }, [
+    activeConversationId,
+    loadingOlderMessages,
+    dmHasMore,
+    dmMessages,
+  ]);
 
   const publishTyping = useCallback(() => {
     const userId = user?.id;
+    typingWantedRef.current = true;
     const channel = typingChannelRef.current;
     if (!userId || !channel) return;
     const now = Date.now();
@@ -1613,6 +1734,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const publishTypingStop = useCallback(() => {
     const userId = user?.id;
+    typingWantedRef.current = false;
     const channel = typingChannelRef.current;
     if (!userId || !channel) return;
     lastTypingSentRef.current = 0;
@@ -2498,6 +2620,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             activeThreadId={activeConversationId}
             loadingThreads={loadingThreads}
             typingUserIds={typingUserIds}
+            typingUserIdsKey={typingUserIdsKey}
             onSelectThread={selectThread}
             onCloseThread={(threadId) => void closeThread(threadId)}
             footer={sidebarFooter}
@@ -2703,6 +2826,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               scrollKey={activeConversationId ?? ""}
               currentUserId={user?.id ?? null}
               reactionMap={{}}
+              hasMore={!searchNeedle && dmHasMore}
+              loadingOlder={loadingOlderMessages}
+              onLoadOlder={() => void loadOlderDm()}
               onReply={setReplyTo}
               onEdit={editDm}
               onDelete={deleteDm}
@@ -2733,6 +2859,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               mentionMaps={mentionMaps}
               canDeleteOthers={canManageMessages}
               reactionMap={reactionMap}
+              hasMore={!searchNeedle && channelHasMore}
+              loadingOlder={loadingOlderMessages}
+              onLoadOlder={() => void loadOlderChannel()}
               onReply={setReplyTo}
               onEdit={editChannel}
               onDelete={deleteChannel}
@@ -2860,6 +2989,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           ownerId={activeServer?.owner_id ?? null}
           currentUserId={user?.id ?? null}
           typingUserIds={typingUserIds}
+          typingUserIdsKey={typingUserIdsKey}
           onMessage={startDm}
           className={`${
             textMode && membersOpen ? "flex" : "hidden"
@@ -2900,6 +3030,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 mentionMaps={mentionMaps}
                 canDeleteOthers={canManageMessages}
                 reactionMap={reactionMap}
+                hasMore={channelHasMore}
+                loadingOlder={loadingOlderMessages}
+                onLoadOlder={() => void loadOlderChannel()}
                 onReply={setReplyTo}
                 onEdit={editChannel}
                 onDelete={deleteChannel}

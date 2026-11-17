@@ -23,8 +23,8 @@ const DOT_SIZE = {
 } as const;
 
 const TYPING_SIZE = {
-  sm: "bottom-0 right-0 h-3.5 w-[18px]",
-  md: "bottom-0 right-0 h-4 w-5",
+  sm: "bottom-0 right-0 h-4 w-[22px]",
+  md: "bottom-0 right-0 h-4 w-6",
   lg: "bottom-2 right-2 h-5 w-7",
 } as const;
 
@@ -55,9 +55,9 @@ export function StatusPresenceBadge({
         aria-label="Typing"
         className={`absolute z-[1] flex items-center justify-center gap-[2px] rounded-full ring-2 ${TYPING_SIZE[size]} ${ringClassName} ${colorClass} ${className}`}
       >
-        <span className="typing-dot h-[3px] w-[3px] rounded-full bg-[#111214]" />
-        <span className="typing-dot typing-dot-delay-1 h-[3px] w-[3px] rounded-full bg-[#111214]" />
-        <span className="typing-dot typing-dot-delay-2 h-[3px] w-[3px] rounded-full bg-[#111214]" />
+        <span className="typing-dot h-[3.5px] w-[3.5px] rounded-full bg-[#111214]" />
+        <span className="typing-dot typing-dot-delay-1 h-[3.5px] w-[3.5px] rounded-full bg-[#111214]" />
+        <span className="typing-dot typing-dot-delay-2 h-[3.5px] w-[3.5px] rounded-full bg-[#111214]" />
       </span>
     );
   }

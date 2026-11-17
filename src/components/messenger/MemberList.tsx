@@ -16,6 +16,8 @@ type MemberListProps = {
   currentUserId: string | null;
   /** Users typing in the open channel — status badge becomes animated dots. */
   typingUserIds?: Set<string>;
+  /** Forces re-render when typing membership changes. */
+  typingUserIdsKey?: string;
   onMessage: (userId: string) => void;
   className?: string;
 };
@@ -42,7 +44,7 @@ function MemberButton({
       onClick={(event) => onClick(event.currentTarget)}
       className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
     >
-      <span className="relative shrink-0">
+      <span className="relative shrink-0 overflow-visible">
         <UserAvatar
           username={displayName}
           avatarUrl={member.avatar_url}
@@ -81,9 +83,11 @@ export function MemberList({
   ownerId,
   currentUserId: _currentUserId,
   typingUserIds,
+  typingUserIdsKey = "",
   onMessage: _onMessage,
   className = "",
 }: MemberListProps) {
+  void typingUserIdsKey;
   const profileUi = useOptionalProfileUi();
   const feed = useOptionalPresenceFeed();
   const feedVersion = feed?.version ?? 0;

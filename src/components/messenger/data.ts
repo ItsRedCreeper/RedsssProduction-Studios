@@ -140,8 +140,38 @@ export function hydrateMessages(
   });
 }
 
-/** Newest messages loaded per channel open (keeps channel load fast). */
+/** Newest messages loaded per channel/DM open; scroll-up fetches the next page. */
 export const CHANNEL_MESSAGE_PAGE_SIZE = 100;
+
+async function hydrateMessageRows(
+  rowsNewestFirst: Tables<"messages">[],
+) {
+  const rows = [...rowsNewestFirst].reverse();
+  const present = new Set(rows.map((row) => row.id));
+  const missingParentIds = [
+    ...new Set(
+      rows
+        .map((row) => row.reply_to_id)
+        .filter((id): id is string => !!id && !present.has(id)),
+    ),
+  ];
+
+  const supabase = createClient();
+  let parents: Tables<"messages">[] = [];
+  if (missingParentIds.length > 0) {
+    const parentResult = await supabase
+      .from("messages")
+      .select("*")
+      .in("id", missingParentIds);
+    parents = parentResult.data ?? [];
+  }
+
+  const profiles = await loadProfiles([
+    ...rows.map((row) => row.user_id),
+    ...parents.map((row) => row.user_id),
+  ]);
+  return hydrateMessages(rows, profiles, parents);
+}
 
 export async function loadChannelMessages(channelId: string) {
   const supabase = createClient();
@@ -154,34 +184,79 @@ export async function loadChannelMessages(channelId: string) {
     .limit(CHANNEL_MESSAGE_PAGE_SIZE);
 
   if (error || !data) {
-    return { messages: [] as ChatMessage[], error: error?.message ?? "Failed to load messages" };
+    return {
+      messages: [] as ChatMessage[],
+      hasMore: false,
+      error: error?.message ?? "Failed to load messages",
+    };
   }
 
-  const rows = [...data].reverse();
-  const present = new Set(rows.map((row) => row.id));
-  const missingParentIds = [
-    ...new Set(
-      rows
-        .map((row) => row.reply_to_id)
-        .filter((id): id is string => !!id && !present.has(id)),
-    ),
-  ];
+  const messages = await hydrateMessageRows(data);
+  return {
+    messages,
+    hasMore: data.length >= CHANNEL_MESSAGE_PAGE_SIZE,
+    error: null as string | null,
+  };
+}
 
-  let parents: Tables<"messages">[] = [];
-  if (missingParentIds.length > 0) {
-    const parentResult = await supabase
-      .from("messages")
-      .select("*")
-      .in("id", missingParentIds);
-    parents = parentResult.data ?? [];
+/** Older page: messages strictly before `beforeCreatedAt` (oldest currently loaded). */
+export async function loadOlderChannelMessages(
+  channelId: string,
+  beforeCreatedAt: string,
+) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("channel_id", channelId)
+    .lt("created_at", beforeCreatedAt)
+    .order("created_at", { ascending: false })
+    .limit(CHANNEL_MESSAGE_PAGE_SIZE);
+
+  if (error || !data) {
+    return {
+      messages: [] as ChatMessage[],
+      hasMore: false,
+      error: error?.message ?? "Failed to load older messages",
+    };
   }
 
-  const profileIds = [
-    ...rows.map((row) => row.user_id),
-    ...parents.map((row) => row.user_id),
-  ];
-  const profiles = await loadProfiles(profileIds);
-  return { messages: hydrateMessages(rows, profiles, parents), error: null };
+  const messages = await hydrateMessageRows(data);
+  return {
+    messages,
+    hasMore: data.length >= CHANNEL_MESSAGE_PAGE_SIZE,
+    error: null as string | null,
+  };
+}
+
+export async function loadOlderDmMessages(
+  conversationId: string,
+  beforeCreatedAt: string,
+) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("dm_messages")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .lt("created_at", beforeCreatedAt)
+    .order("created_at", { ascending: false })
+    .limit(CHANNEL_MESSAGE_PAGE_SIZE);
+
+  if (error || !data) {
+    return {
+      messages: [] as ChatMessage[],
+      hasMore: false,
+      error: error?.message ?? "Failed to load older messages",
+    };
+  }
+
+  const rows = dmRowsToMessages(data);
+  const messages = await hydrateMessageRows(rows);
+  return {
+    messages,
+    hasMore: data.length >= CHANNEL_MESSAGE_PAGE_SIZE,
+    error: null as string | null,
+  };
 }
 
 export async function loadSingleMessage(messageId: string) {
