@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { publicRequestOrigin } from "@/lib/request-origin";
 
 function getSupabaseKey() {
   return (
@@ -54,6 +55,7 @@ export async function updateSession(request: NextRequest) {
   const user = data?.claims;
 
   const path = request.nextUrl.pathname;
+  const origin = publicRequestOrigin(request);
   const isAuthRoute =
     path === "/login" ||
     path.startsWith("/login/") ||
@@ -61,24 +63,22 @@ export async function updateSession(request: NextRequest) {
 
   // Unauthenticated: only auth screens are allowed.
   if (!user && !isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", path === "/" ? "/" : path);
+    const next = path === "/" ? "/" : path;
+    const loginUrl = new URL("/login", `${origin}/`);
+    loginUrl.searchParams.set("next", next);
     return withSessionCookies(
       supabaseResponse,
-      NextResponse.redirect(url),
+      NextResponse.redirect(loginUrl),
     );
   }
 
   // Authenticated users leave auth screens (Home by default).
   if (user && isAuthRoute && !path.startsWith("/auth/callback")) {
     const next = request.nextUrl.searchParams.get("next");
-    const url = request.nextUrl.clone();
-    url.pathname = next && next.startsWith("/") ? next : "/";
-    url.search = "";
+    const safeNext = next && next.startsWith("/") ? next : "/";
     return withSessionCookies(
       supabaseResponse,
-      NextResponse.redirect(url),
+      NextResponse.redirect(new URL(safeNext, `${origin}/`)),
     );
   }
 

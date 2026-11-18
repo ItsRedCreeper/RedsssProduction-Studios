@@ -44,7 +44,9 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
   useEffect(() => {
     const authError = searchParams.get("error");
     if (authError === "auth_callback") {
-      setError("Google sign-in was cancelled or failed. Try again.");
+      setError(
+        "Google sign-in didn’t finish on this link. Stay on the same BunnyCDN / site URL you started from and try again.",
+      );
     }
   }, [searchParams]);
 
