@@ -108,7 +108,17 @@ export function EditProfileModal({
       .single();
     setSaving(false);
     if (updateError || !data) {
-      setError(updateError?.message ?? "Could not save profile.");
+      const raw = updateError?.message ?? "";
+      const lower = raw.toLowerCase();
+      if (
+        lower.includes("duplicate") ||
+        lower.includes("unique") ||
+        lower.includes("profiles_username")
+      ) {
+        setError("That username is already taken.");
+      } else {
+        setError(raw || "Could not save profile.");
+      }
       return;
     }
     onSaved({

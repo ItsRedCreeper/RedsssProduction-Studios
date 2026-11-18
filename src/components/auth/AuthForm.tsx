@@ -24,6 +24,13 @@ function friendlyAuthError(message: string) {
     return "An account with this email already exists. Sign in instead.";
   }
   if (
+    lower.includes("duplicate") ||
+    lower.includes("unique") ||
+    lower.includes("profiles_username")
+  ) {
+    return "That username is already taken.";
+  }
+  if (
     lower.includes("provider is not enabled") ||
     lower.includes("unsupported provider")
   ) {
