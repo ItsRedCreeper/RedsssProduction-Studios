@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   Check,
   Copy,
@@ -30,6 +39,64 @@ import {
   type ChatMessage,
   type ReactionGroup,
 } from "@/components/messenger/types";
+
+/** Fixed portal menu so dropdowns never stretch the chat scroll area. */
+function MessageFloatingMenu({
+  open,
+  anchorRef,
+  menuRef,
+  estimatedHeight,
+  className,
+  children,
+}: {
+  open: boolean;
+  anchorRef: RefObject<HTMLElement | null>;
+  menuRef: RefObject<HTMLDivElement | null>;
+  estimatedHeight: number;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [style, setStyle] = useState<CSSProperties | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !anchorRef.current) {
+      setStyle(null);
+      return;
+    }
+    function place() {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const gap = 4;
+      const spaceBelow = window.innerHeight - rect.bottom - gap;
+      const openUp = spaceBelow < estimatedHeight && rect.top > spaceBelow;
+      setStyle({
+        position: "fixed",
+        right: Math.max(8, window.innerWidth - rect.right),
+        zIndex: 80,
+        ...(openUp
+          ? { bottom: Math.max(8, window.innerHeight - rect.top + gap) }
+          : { top: Math.min(window.innerHeight - 8, rect.bottom + gap) }),
+      });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, anchorRef, estimatedHeight]);
+
+  if (!open || !style || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div ref={menuRef} style={style} className={className}>
+      {children}
+    </div>,
+    document.body,
+  );
+}
 
 type MessageItemProps = {
   message: ChatMessage;
@@ -85,6 +152,10 @@ export function MessageItem({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const moreBtnRef = useRef<HTMLButtonElement | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
+  const emojiMenuRef = useRef<HTMLDivElement | null>(null);
   const profileUi = useOptionalProfileUi();
   const authorBase = message.profiles?.username ?? "Unknown";
   const author = preferFriendNickname
@@ -111,10 +182,16 @@ export function MessageItem({
   useEffect(() => {
     if (!menuOpen && !fullPickerOpen) return;
     function onPointerDown(event: MouseEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        setMenuOpen(false);
-        setFullPickerOpen(false);
+      const target = event.target as Node;
+      if (
+        menuRef.current?.contains(target) ||
+        moreMenuRef.current?.contains(target) ||
+        emojiMenuRef.current?.contains(target)
+      ) {
+        return;
       }
+      setMenuOpen(false);
+      setFullPickerOpen(false);
     }
     window.addEventListener("mousedown", onPointerDown);
     return () => window.removeEventListener("mousedown", onPointerDown);
@@ -401,6 +478,7 @@ export function MessageItem({
               <div className="relative">
                 <HoverTip label="Add Reaction" delayMs={40}>
                   <button
+                    ref={emojiBtnRef}
                     type="button"
                     onClick={() => {
                       setFullPickerOpen((open) => !open);
@@ -412,21 +490,25 @@ export function MessageItem({
                     <Plus className="h-4 w-4" strokeWidth={2} />
                   </button>
                 </HoverTip>
-                {fullPickerOpen && (
-                  <div className="absolute right-0 top-full z-20 mt-1 grid w-[15rem] grid-cols-6 gap-0.5 rounded-md border border-[#1e1f22] bg-[#111214] p-1.5 shadow-xl">
-                    {EXTRA_EMOJIS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => react(emoji)}
-                        className="rounded-md px-1 py-1 text-base hover:bg-white/10"
-                        aria-label={`React with ${emoji}`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <MessageFloatingMenu
+                  open={fullPickerOpen}
+                  anchorRef={emojiBtnRef}
+                  menuRef={emojiMenuRef}
+                  estimatedHeight={220}
+                  className="grid w-[15rem] grid-cols-6 gap-0.5 rounded-md border border-[#1e1f22] bg-[#111214] p-1.5 shadow-xl"
+                >
+                  {EXTRA_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => react(emoji)}
+                      className="rounded-md px-1 py-1 text-base hover:bg-white/10"
+                      aria-label={`React with ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </MessageFloatingMenu>
               </div>
             </>
           )}
@@ -479,6 +561,7 @@ export function MessageItem({
           <div className="relative">
             <HoverTip label="More" delayMs={40}>
               <button
+                ref={moreBtnRef}
                 type="button"
                 onClick={() => {
                   setMenuOpen((open) => !open);
@@ -491,80 +574,84 @@ export function MessageItem({
                 <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
               </button>
             </HoverTip>
-            {menuOpen && (
-              <div className="absolute right-0 top-full z-20 mt-1 min-w-[11rem] overflow-hidden rounded-md border border-border bg-[#111214] py-1.5 shadow-xl shadow-black/50">
-                <button
-                  type="button"
-                  onClick={() => void copyText()}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4" strokeWidth={2} />
-                  ) : (
-                    <Copy className="h-4 w-4" strokeWidth={1.75} />
-                  )}
-                  {copied ? "Copied" : "Copy Text"}
-                </button>
+            <MessageFloatingMenu
+              open={menuOpen}
+              anchorRef={moreBtnRef}
+              menuRef={moreMenuRef}
+              estimatedHeight={260}
+              className="min-w-[11rem] overflow-hidden rounded-md border border-border bg-[#111214] py-1.5 shadow-xl shadow-black/50"
+            >
+              <button
+                type="button"
+                onClick={() => void copyText()}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+              >
+                {copied ? (
+                  <Check className="h-4 w-4" strokeWidth={2} />
+                ) : (
+                  <Copy className="h-4 w-4" strokeWidth={1.75} />
+                )}
+                {copied ? "Copied" : "Copy Text"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onReply(message);
+                  setMenuOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+              >
+                <Reply className="h-4 w-4" strokeWidth={1.75} />
+                Reply
+              </button>
+              {onTogglePin && (
                 <button
                   type="button"
                   onClick={() => {
-                    onReply(message);
+                    onTogglePin();
                     setMenuOpen(false);
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
                 >
-                  <Reply className="h-4 w-4" strokeWidth={1.75} />
-                  Reply
+                  {message.pinned ? (
+                    <PinOff className="h-4 w-4" strokeWidth={1.75} />
+                  ) : (
+                    <Pin className="h-4 w-4" strokeWidth={1.75} />
+                  )}
+                  {message.pinned ? "Unpin Message" : "Pin Message"}
                 </button>
-                {onTogglePin && (
+              )}
+              {isOwn && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditDraft(message.content);
+                    setEditing(true);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                >
+                  <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                  Edit Message
+                </button>
+              )}
+              {(isOwn || canDeleteOthers) && (
+                <>
+                  <div className="my-1 border-t border-border" />
                   <button
                     type="button"
                     onClick={() => {
-                      onTogglePin();
                       setMenuOpen(false);
+                      setDeleteOpen(true);
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent hover:bg-accent hover:text-white"
                   >
-                    {message.pinned ? (
-                      <PinOff className="h-4 w-4" strokeWidth={1.75} />
-                    ) : (
-                      <Pin className="h-4 w-4" strokeWidth={1.75} />
-                    )}
-                    {message.pinned ? "Unpin Message" : "Pin Message"}
+                    <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                    Delete Message
                   </button>
-                )}
-                {isOwn && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditDraft(message.content);
-                      setEditing(true);
-                      setMenuOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
-                  >
-                    <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                    Edit Message
-                  </button>
-                )}
-                {(isOwn || canDeleteOthers) && (
-                  <>
-                    <div className="my-1 border-t border-border" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        setDeleteOpen(true);
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent hover:bg-accent hover:text-white"
-                    >
-                      <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                      Delete Message
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+                </>
+              )}
+            </MessageFloatingMenu>
           </div>
         </div>
       )}
