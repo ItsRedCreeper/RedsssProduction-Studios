@@ -40,6 +40,8 @@ export function EditProfileModal({
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<"avatar" | "banner" | null>(null);
 
+  // Seed drafts only when the editor opens (or the profile identity changes).
+  // Presence heartbeats refresh `profile` every few seconds — do not wipe unsaved edits.
   useEffect(() => {
     if (!open) return;
     setUsername(profile.username);
@@ -48,7 +50,8 @@ export function EditProfileModal({
     setBannerUrl(profile.banner_url);
     setBannerColor(resolveBannerColor(profile.banner_color));
     setError(null);
-  }, [open, profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally ignore heartbeat profile refreshes
+  }, [open, profile.id]);
 
   const dirty =
     username.trim() !== profile.username ||

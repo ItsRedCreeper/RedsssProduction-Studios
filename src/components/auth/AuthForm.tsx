@@ -21,6 +21,12 @@ function friendlyAuthError(message: string) {
   if (lower.includes("already registered") || lower.includes("already been registered")) {
     return "An account with this email already exists. Sign in instead.";
   }
+  if (
+    lower.includes("provider is not enabled") ||
+    lower.includes("unsupported provider")
+  ) {
+    return "Google sign-in isn’t enabled yet. In the Supabase dashboard, open Authentication → Providers → Google, turn it on, and add your Google Client ID and Secret.";
+  }
   return message;
 }
 

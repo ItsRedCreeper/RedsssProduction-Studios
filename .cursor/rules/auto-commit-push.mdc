@@ -1,0 +1,15 @@
+---
+description: After completing code changes, commit and push so Vercel deploys
+alwaysApply: true
+---
+
+# Auto commit and push
+
+After finishing a batch of code changes the user asked for (bugfix, feature, polish), always:
+
+1. Commit the relevant files with a concise message matching the repo style
+2. Push to `origin` on the current branch so Vercel can deploy
+
+Do this without waiting to be asked, unless the user explicitly says not to commit/push, or the only edits are local secrets / `.env` files.
+
+Follow the existing git safety rules (no force push, no amending others' commits, no skipping hooks).
