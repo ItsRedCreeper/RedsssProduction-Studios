@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { messageForAuthError } from "@/lib/auth-oauth";
 import { createClient } from "@/lib/supabase/client";
 
@@ -276,13 +277,11 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
           <span className="text-xs font-medium uppercase tracking-wide text-muted">
             Password
           </span>
-          <input
-            type="password"
+          <PasswordInput
             required
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-accent/60 focus:ring-1 focus:ring-accent-ring"
             placeholder="••••••••"
             autoComplete={
               mode === "login" ? "current-password" : "new-password"

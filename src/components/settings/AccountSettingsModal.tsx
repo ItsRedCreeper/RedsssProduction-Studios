@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { createClient } from "@/lib/supabase/client";
 
 type AccountSettingsModalProps = {
@@ -231,38 +232,35 @@ export function AccountSettingsModal({
                   <span className="text-xs font-medium uppercase tracking-wide text-[#949ba4]">
                     Current password
                   </span>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="current-password"
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
-                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-white outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent"
+                    className="border-[#3f4147] bg-[#1e1f22] text-white focus:ring-accent"
                   />
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium uppercase tracking-wide text-[#949ba4]">
                     New password
                   </span>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     minLength={6}
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
-                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-white outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent"
+                    className="border-[#3f4147] bg-[#1e1f22] text-white focus:ring-accent"
                   />
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium uppercase tracking-wide text-[#949ba4]">
                     Confirm new password
                   </span>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     minLength={6}
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
-                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-white outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent"
+                    className="border-[#3f4147] bg-[#1e1f22] text-white focus:ring-accent"
                   />
                 </label>
 
