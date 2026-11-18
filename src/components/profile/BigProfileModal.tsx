@@ -47,10 +47,12 @@ import {
   messengerServerPath,
   recallServerChannel,
 } from "@/lib/messenger-routes";
+import {
+  FRIEND_NOTE_MAX as NOTE_MAX,
+  NICKNAME_MAX,
+} from "@/lib/field-limits";
 
 const VISIBLE_LIMIT = 6;
-const NICKNAME_MAX = 32;
-const NOTE_MAX = 500;
 
 /** Preloaded payload so the modal paints as one finished piece. */
 export type BigProfileReadyData = {

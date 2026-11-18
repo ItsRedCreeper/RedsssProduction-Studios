@@ -5,6 +5,11 @@ import { ImagePlus, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { uploadProfileAsset, type FriendProfile } from "@/lib/friends";
 import {
+  BIO_MAX,
+  USERNAME_MAX,
+  USERNAME_MIN,
+} from "@/lib/field-limits";
+import {
   BANNER_COLOR_PRESETS,
   DEFAULT_BANNER_COLOR,
   normalizeBannerColor,
@@ -84,8 +89,12 @@ export function EditProfileModal({
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     const trimmed = username.trim();
-    if (!trimmed) {
-      setError("Username is required.");
+    if (trimmed.length < USERNAME_MIN) {
+      setError(`Username must be at least ${USERNAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > USERNAME_MAX) {
+      setError(`Username must be ${USERNAME_MAX} characters or fewer.`);
       return;
     }
     const color = normalizeBannerColor(bannerColor) ?? DEFAULT_BANNER_COLOR;
@@ -291,7 +300,8 @@ export function EditProfileModal({
               <input
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                maxLength={32}
+                minLength={USERNAME_MIN}
+                maxLength={USERNAME_MAX}
                 className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none focus:border-accent/50"
               />
             </div>
@@ -304,7 +314,7 @@ export function EditProfileModal({
             <textarea
               value={bio}
               onChange={(event) => setBio(event.target.value)}
-              maxLength={190}
+              maxLength={BIO_MAX}
               rows={4}
               className="w-full resize-none rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none focus:border-accent/50"
               placeholder="Tell people a bit about yourself"

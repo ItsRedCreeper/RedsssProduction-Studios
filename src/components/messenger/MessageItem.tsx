@@ -20,6 +20,7 @@ import { formatTimestamp } from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { displayMentionText, type MentionMaps } from "@/lib/mentions";
+import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import {
   QUICK_REACTIONS,
   type ChatMessage,
@@ -80,6 +81,7 @@ export function MessageItem({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(message.content);
+  const [editError, setEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -124,9 +126,15 @@ export function MessageItem({
     if (!next || next === message.content) {
       setEditing(false);
       setEditDraft(message.content);
+      setEditError(null);
+      return;
+    }
+    if (next.length > MESSAGE_MAX) {
+      setEditError(MESSAGE_MAX_REACHED);
       return;
     }
     setSaving(true);
+    setEditError(null);
     const ok = await onEdit(message.id, next);
     setSaving(false);
     if (ok) setEditing(false);
@@ -239,14 +247,24 @@ export function MessageItem({
           <div className="mt-1 space-y-2">
             <textarea
               value={editDraft}
-              onChange={(event) => setEditDraft(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value.length > MESSAGE_MAX) {
+                  setEditDraft(value.slice(0, MESSAGE_MAX));
+                  setEditError(MESSAGE_MAX_REACHED);
+                  return;
+                }
+                setEditError(null);
+                setEditDraft(value);
+              }}
               rows={2}
-              className="w-full resize-y rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent-ring"
+              className="w-full resize-y rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm text-foreground outline-none [overflow-wrap:anywhere] whitespace-pre-wrap focus:border-accent/50 focus:ring-1 focus:ring-accent-ring"
               autoFocus
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   setEditing(false);
                   setEditDraft(message.content);
+                  setEditError(null);
                 }
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
@@ -254,6 +272,9 @@ export function MessageItem({
                 }
               }}
             />
+            {editError && (
+              <p className="text-xs text-accent">{editError}</p>
+            )}
             <div className="flex items-center gap-2">
               <button
                 type="button"

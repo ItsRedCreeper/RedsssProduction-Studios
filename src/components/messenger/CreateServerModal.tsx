@@ -4,6 +4,11 @@ import { FormEvent, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { makeInviteCode } from "@/components/messenger/data";
+import {
+  SERVER_DESCRIPTION_MAX,
+  SERVER_NAME_MAX,
+  SERVER_NAME_MIN,
+} from "@/lib/field-limits";
 
 type CreateServerModalProps = {
   open: boolean;
@@ -37,8 +42,12 @@ export function CreateServerModal({
     event.preventDefault();
     if (locked) return;
     const trimmed = name.trim();
-    if (trimmed.length < 2) {
-      setError("Server name must be at least 2 characters.");
+    if (trimmed.length < SERVER_NAME_MIN) {
+      setError(`Server name must be at least ${SERVER_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > SERVER_NAME_MAX) {
+      setError(`Server name must be ${SERVER_NAME_MAX} characters or fewer.`);
       return;
     }
 
@@ -186,7 +195,8 @@ export function CreateServerModal({
               value={name}
               onChange={(event) => setName(event.target.value)}
               required
-              maxLength={64}
+              minLength={SERVER_NAME_MIN}
+              maxLength={SERVER_NAME_MAX}
               disabled={locked}
               className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent-ring disabled:opacity-60"
               placeholder="My Cool Server"
@@ -202,7 +212,7 @@ export function CreateServerModal({
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               rows={3}
-              maxLength={200}
+              maxLength={SERVER_DESCRIPTION_MAX}
               disabled={locked}
               className="w-full resize-none rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent-ring disabled:opacity-60"
               placeholder="What is this server about?"

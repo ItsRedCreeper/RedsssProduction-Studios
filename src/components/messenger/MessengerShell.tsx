@@ -72,6 +72,7 @@ import {
   fitImageToMaxBytes,
   MESSAGE_ATTACHMENT_MAX_BYTES,
 } from "@/lib/compress-image";
+import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import { can, mergeRolePermissions, PERMISSIONS } from "@/lib/permissions";
 import {
   displayMentionText,
@@ -2331,6 +2332,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const content = draft.trim();
     const file = pendingFile;
     if (!content && !file) return;
+    if (content.length > MESSAGE_MAX) {
+      setError(MESSAGE_MAX_REACHED);
+      return;
+    }
     if (file && file.size > MESSAGE_ATTACHMENT_MAX_BYTES) {
       setError("File is too large.");
       return;
@@ -2490,6 +2495,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const conversationId = activeConversationId;
     const content = draft.trim();
     if (!content) return;
+    if (content.length > MESSAGE_MAX) {
+      setError(MESSAGE_MAX_REACHED);
+      return;
+    }
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const optimistic: ChatMessage = {
@@ -3376,6 +3385,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onClearFile={() => setPendingFile(null)}
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
+                onLimitReached={setError}
                 onSubmit={() => {
                   if (dmMode) void sendDm();
                   else void sendChannel();
@@ -3494,6 +3504,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onClearFile={() => setPendingFile(null)}
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
+                onLimitReached={setError}
                 onSubmit={() => void sendChannel()}
               />
             </div>

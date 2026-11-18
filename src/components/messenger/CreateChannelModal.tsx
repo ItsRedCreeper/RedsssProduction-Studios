@@ -3,6 +3,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Hash, Volume2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  CHANNEL_NAME_MAX,
+  CHANNEL_NAME_MIN,
+} from "@/lib/field-limits";
 import type { Category, Channel } from "@/components/messenger/types";
 
 type CreateChannelModalProps = {
@@ -64,8 +68,12 @@ export function CreateChannelModal({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const trimmed = name.trim().toLowerCase().replace(/\s+/g, "-");
-    if (!trimmed) {
-      setError("Enter a channel name.");
+    if (trimmed.length < CHANNEL_NAME_MIN) {
+      setError(`Channel name must be at least ${CHANNEL_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > CHANNEL_NAME_MAX) {
+      setError(`Channel name must be ${CHANNEL_NAME_MAX} characters or fewer.`);
       return;
     }
     setSaving(true);
@@ -188,7 +196,8 @@ export function CreateChannelModal({
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="new-channel"
-              maxLength={40}
+              minLength={CHANNEL_NAME_MIN}
+              maxLength={CHANNEL_NAME_MAX}
               autoFocus
               className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50"
             />

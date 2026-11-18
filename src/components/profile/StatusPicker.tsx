@@ -16,6 +16,7 @@ import {
   type ManualStatus,
   type StatusClearAfter,
 } from "@/lib/presence";
+import { STATUS_TEXT_MAX } from "@/lib/field-limits";
 
 const STATUSES: ManualStatus[] = ["online", "idle", "dnd", "offline"];
 
@@ -389,7 +390,7 @@ export function StatusPicker({
         )}
         <input
           value={draftText}
-          maxLength={128}
+          maxLength={STATUS_TEXT_MAX}
           disabled={busy}
           autoFocus
           onChange={(event) => setDraftText(event.target.value)}

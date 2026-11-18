@@ -22,6 +22,17 @@ import {
   makeInviteCode,
   statusLabel,
 } from "@/components/messenger/data";
+import {
+  CATEGORY_NAME_MAX,
+  CATEGORY_NAME_MIN,
+  CHANNEL_NAME_MAX,
+  CHANNEL_NAME_MIN,
+  ROLE_NAME_MAX,
+  ROLE_NAME_MIN,
+  SERVER_DESCRIPTION_MAX,
+  SERVER_NAME_MAX,
+  SERVER_NAME_MIN,
+} from "@/lib/field-limits";
 import { PERMISSIONS, type Permission } from "@/lib/permissions";
 import type {
   Category,
@@ -204,8 +215,12 @@ export function ServerSettingsModal({
   async function saveOverview(event: FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
-    if (trimmed.length < 2) {
-      setError("Server name must be at least 2 characters.");
+    if (trimmed.length < SERVER_NAME_MIN) {
+      setError(`Server name must be at least ${SERVER_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > SERVER_NAME_MAX) {
+      setError(`Server name must be ${SERVER_NAME_MAX} characters or fewer.`);
       return;
     }
     setSaving(true);
@@ -232,7 +247,14 @@ export function ServerSettingsModal({
   async function createRole(event: FormEvent) {
     event.preventDefault();
     const trimmed = roleName.trim();
-    if (!trimmed) return;
+    if (trimmed.length < ROLE_NAME_MIN) {
+      setError(`Role name must be at least ${ROLE_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > ROLE_NAME_MAX) {
+      setError(`Role name must be ${ROLE_NAME_MAX} characters or fewer.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = createClient();
@@ -263,7 +285,14 @@ export function ServerSettingsModal({
     nextPermissions: Record<string, boolean>,
   ) {
     const trimmed = nextName.trim();
-    if (!trimmed) return;
+    if (trimmed.length < ROLE_NAME_MIN) {
+      setError(`Role name must be at least ${ROLE_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > ROLE_NAME_MAX) {
+      setError(`Role name must be ${ROLE_NAME_MAX} characters or fewer.`);
+      return;
+    }
     setError(null);
     const supabase = createClient();
     const { data, error: updateError } = await supabase
@@ -407,7 +436,14 @@ export function ServerSettingsModal({
   async function createCategory(event: FormEvent) {
     event.preventDefault();
     const trimmed = categoryName.trim();
-    if (!trimmed) return;
+    if (trimmed.length < CATEGORY_NAME_MIN) {
+      setError(`Category name must be at least ${CATEGORY_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > CATEGORY_NAME_MAX) {
+      setError(`Category name must be ${CATEGORY_NAME_MAX} characters or fewer.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = createClient();
@@ -432,6 +468,14 @@ export function ServerSettingsModal({
   async function renameCategory(category: Category, nextName: string) {
     const trimmed = nextName.trim();
     if (!trimmed || trimmed === category.name) return;
+    if (trimmed.length < CATEGORY_NAME_MIN) {
+      setError(`Category name must be at least ${CATEGORY_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > CATEGORY_NAME_MAX) {
+      setError(`Category name must be ${CATEGORY_NAME_MAX} characters or fewer.`);
+      return;
+    }
     setError(null);
     const supabase = createClient();
     const { data, error: updateError } = await supabase
@@ -479,7 +523,14 @@ export function ServerSettingsModal({
   async function createChannel(event: FormEvent) {
     event.preventDefault();
     const trimmed = channelName.trim().toLowerCase().replace(/\s+/g, "-");
-    if (!trimmed) return;
+    if (trimmed.length < CHANNEL_NAME_MIN) {
+      setError(`Channel name must be at least ${CHANNEL_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > CHANNEL_NAME_MAX) {
+      setError(`Channel name must be ${CHANNEL_NAME_MAX} characters or fewer.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = createClient();
@@ -505,7 +556,14 @@ export function ServerSettingsModal({
 
   async function renameChannel(channelId: string) {
     const trimmed = editChannelName.trim().toLowerCase().replace(/\s+/g, "-");
-    if (!trimmed) return;
+    if (trimmed.length < CHANNEL_NAME_MIN) {
+      setError(`Channel name must be at least ${CHANNEL_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > CHANNEL_NAME_MAX) {
+      setError(`Channel name must be ${CHANNEL_NAME_MAX} characters or fewer.`);
+      return;
+    }
     setError(null);
     const supabase = createClient();
     const { data, error: updateError } = await supabase
@@ -624,7 +682,8 @@ export function ServerSettingsModal({
                   <input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    maxLength={64}
+                    minLength={SERVER_NAME_MIN}
+                    maxLength={SERVER_NAME_MAX}
                     className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50"
                   />
                 </label>
@@ -636,7 +695,7 @@ export function ServerSettingsModal({
                     value={description}
                     onChange={(event) => setDescription(event.target.value)}
                     rows={4}
-                    maxLength={200}
+                    maxLength={SERVER_DESCRIPTION_MAX}
                     className="w-full resize-none rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50"
                   />
                 </label>
@@ -688,7 +747,7 @@ export function ServerSettingsModal({
                       value={roleName}
                       onChange={(event) => setRoleName(event.target.value)}
                       placeholder="Role name"
-                      maxLength={40}
+                      maxLength={ROLE_NAME_MAX}
                       className="block w-48 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
                     />
                   </label>
@@ -854,7 +913,7 @@ export function ServerSettingsModal({
                       value={categoryName}
                       onChange={(event) => setCategoryName(event.target.value)}
                       placeholder="Category name"
-                      maxLength={40}
+                      maxLength={ROLE_NAME_MAX}
                       className="block w-52 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
                     />
                   </label>
@@ -895,7 +954,7 @@ export function ServerSettingsModal({
                       value={channelName}
                       onChange={(event) => setChannelName(event.target.value)}
                       placeholder="channel-name"
-                      maxLength={40}
+                      maxLength={ROLE_NAME_MAX}
                       className="block w-52 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
                     />
                   </label>
@@ -1196,7 +1255,7 @@ function CategoryRow({
       <input
         value={name}
         onChange={(event) => setName(event.target.value)}
-        maxLength={40}
+        maxLength={ROLE_NAME_MAX}
         className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm uppercase tracking-wide text-white outline-none focus:border-accent/40"
       />
       <DirtySaveButton

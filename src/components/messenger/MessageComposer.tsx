@@ -7,6 +7,7 @@ import {
   type TypingPerson,
 } from "@/components/messenger/TypingIndicator";
 import { HoverTip } from "@/components/ui/HoverTip";
+import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 
 export type MentionSuggestion = {
   id: string;
@@ -33,7 +34,14 @@ type MessageComposerProps = {
   onTyping?: () => void;
   /** Fired shortly after keystrokes pause, and before send. */
   onTypingStop?: () => void;
+  onLimitReached?: (message: string) => void;
 };
+
+function resizeTextarea(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "0px";
+  el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+}
 
 export function MessageComposer({
   placeholder,
@@ -53,9 +61,10 @@ export function MessageComposer({
   onSubmit,
   onTyping,
   onTypingStop,
+  onLimitReached,
 }: MessageComposerProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const typingStopTimer = useRef<number | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const replying = !!replyAuthor;
@@ -68,12 +77,15 @@ export function MessageComposer({
     };
   }, []);
 
+  useEffect(() => {
+    resizeTextarea(inputRef.current);
+  }, [draft]);
+
   function bumpTyping() {
     onTyping?.();
     if (typingStopTimer.current != null) {
       window.clearTimeout(typingStopTimer.current);
     }
-    // After ~1.1s of no keys, tell peers we stopped (Discord-ish).
     typingStopTimer.current = window.setTimeout(() => {
       typingStopTimer.current = null;
       onTypingStop?.();
@@ -88,11 +100,18 @@ export function MessageComposer({
     onTypingStop?.();
   }
 
+  function setDraftValue(value: string) {
+    if (value.length > MESSAGE_MAX) {
+      onDraft(value.slice(0, MESSAGE_MAX));
+      onLimitReached?.(MESSAGE_MAX_REACHED);
+      return;
+    }
+    onDraft(value);
+  }
+
   const mentionQuery = useMemo(() => {
     const cursor = inputRef.current?.selectionStart ?? draft.length;
     const before = draft.slice(0, cursor);
-    // Discord keeps the picker open while you type a display name — including spaces.
-    // Query runs from the trigger to the cursor (no second @/#, no newline).
     const match = before.match(/(^|[\s])([@#])([^\n@#]*)$/);
     if (!match) return null;
     return {
@@ -115,7 +134,6 @@ export function MessageComposer({
       .filter((item) => {
         const label = item.label.toLowerCase();
         if (!queryCompact) return true;
-        // Match full label or each whitespace-separated chunk (Discord-like filter).
         if (label.includes(queryCompact)) return true;
         const parts = queryCompact.split(" ").filter(Boolean);
         return parts.every((part) => label.includes(part));
@@ -129,14 +147,16 @@ export function MessageComposer({
 
   function applyMention(item: MentionSuggestion) {
     if (!mentionQuery) return;
-    // Insert the full display label (spaces included). On send we encode to <@id> tokens.
     const prefix = item.kind === "channel" ? "#" : "@";
     const before = draft.slice(0, mentionQuery.start);
     const after = draft.slice(inputRef.current?.selectionStart ?? draft.length);
     const next = `${before}${prefix}${item.label} ${after}`;
-    onDraft(next);
+    setDraftValue(next);
     requestAnimationFrame(() => {
-      const pos = before.length + prefix.length + item.label.length + 1;
+      const pos = Math.min(
+        before.length + prefix.length + item.label.length + 1,
+        MESSAGE_MAX,
+      );
       inputRef.current?.setSelectionRange(pos, pos);
       inputRef.current?.focus();
     });
@@ -242,7 +262,7 @@ export function MessageComposer({
         )}
         <form
           onSubmit={handleSubmit}
-          className={`flex items-center gap-3 bg-[#383a40] px-4 py-3 ${
+          className={`flex items-end gap-3 bg-[#383a40] px-4 py-3 ${
             replying || pendingFileName ? "rounded-b-md" : "rounded-md"
           }`}
         >
@@ -263,7 +283,7 @@ export function MessageComposer({
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={disabled || sending}
-                  className="shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
+                  className="mb-0.5 shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
                   aria-label="Attach file"
                 >
                   <Plus className="h-5 w-5" strokeWidth={2.25} />
@@ -271,40 +291,59 @@ export function MessageComposer({
               </HoverTip>
             </>
           )}
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
+            rows={1}
             value={draft}
             onChange={(event) => {
-              onDraft(event.target.value);
+              setDraftValue(event.target.value);
               if (event.target.value.trim()) bumpTyping();
               else clearTypingSoon();
+              resizeTextarea(event.currentTarget);
             }}
             onKeyDown={(event) => {
-              if (filteredMentions.length === 0) return;
-              if (event.key === "ArrowDown") {
+              if (filteredMentions.length > 0) {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setMentionIndex((i) => (i + 1) % filteredMentions.length);
+                  return;
+                }
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setMentionIndex(
+                    (i) =>
+                      (i - 1 + filteredMentions.length) % filteredMentions.length,
+                  );
+                  return;
+                }
+                if (event.key === "Enter" || event.key === "Tab") {
+                  event.preventDefault();
+                  applyMention(
+                    filteredMentions[mentionIndex] ?? filteredMentions[0],
+                  );
+                  return;
+                }
+                if (event.key === "Escape") {
+                  onDraft(`${draft} `);
+                  return;
+                }
+              }
+              if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                setMentionIndex((i) => (i + 1) % filteredMentions.length);
-              } else if (event.key === "ArrowUp") {
-                event.preventDefault();
-                setMentionIndex(
-                  (i) => (i - 1 + filteredMentions.length) % filteredMentions.length,
-                );
-              } else if (event.key === "Enter" || event.key === "Tab") {
-                event.preventDefault();
-                applyMention(filteredMentions[mentionIndex] ?? filteredMentions[0]);
-              } else if (event.key === "Escape") {
-                onDraft(draft + " ");
+                if (!disabled && !sending && (draft.trim() || pendingFileName)) {
+                  clearTypingSoon();
+                  onSubmit();
+                }
               }
             }}
             placeholder={placeholder}
             disabled={disabled || sending}
-            className="min-w-0 flex-1 bg-transparent text-[15px] text-[#dbdee1] outline-none placeholder:text-[#6d6f78]"
+            className="max-h-40 min-h-[24px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-[#dbdee1] outline-none placeholder:text-[#6d6f78] [overflow-wrap:anywhere] whitespace-pre-wrap"
           />
           <button
             type="submit"
             disabled={disabled || sending || (!draft.trim() && !pendingFileName)}
-            className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+            className="mb-0.5 shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
             {sending ? "Sending…" : "Send"}
           </button>

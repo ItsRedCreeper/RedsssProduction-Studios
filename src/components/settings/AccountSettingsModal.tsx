@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { PasswordInput } from "@/components/ui/PasswordInput";
+import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/field-limits";
 import { createClient } from "@/lib/supabase/client";
 
 type AccountSettingsModalProps = {
@@ -108,8 +109,12 @@ export function AccountSettingsModal({
       setError("All password fields are required.");
       return;
     }
-    if (newPassword.length < 6) {
-      setError("New password must be at least 6 characters.");
+    if (newPassword.length < PASSWORD_MIN) {
+      setError(`New password must be at least ${PASSWORD_MIN} characters.`);
+      return;
+    }
+    if (newPassword.length > PASSWORD_MAX) {
+      setError(`New password must be ${PASSWORD_MAX} characters or fewer.`);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -234,6 +239,7 @@ export function AccountSettingsModal({
                   </span>
                   <PasswordInput
                     autoComplete="current-password"
+                    maxLength={PASSWORD_MAX}
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
                     className="border-[#3f4147] bg-[#1e1f22] text-white focus:ring-accent"
@@ -245,7 +251,8 @@ export function AccountSettingsModal({
                   </span>
                   <PasswordInput
                     autoComplete="new-password"
-                    minLength={6}
+                    minLength={PASSWORD_MIN}
+                    maxLength={PASSWORD_MAX}
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                     className="border-[#3f4147] bg-[#1e1f22] text-white focus:ring-accent"
@@ -257,7 +264,8 @@ export function AccountSettingsModal({
                   </span>
                   <PasswordInput
                     autoComplete="new-password"
-                    minLength={6}
+                    minLength={PASSWORD_MIN}
+                    maxLength={PASSWORD_MAX}
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     className="border-[#3f4147] bg-[#1e1f22] text-white focus:ring-accent"

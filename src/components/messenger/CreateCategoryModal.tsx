@@ -3,6 +3,10 @@
 import { FormEvent, useEffect, useState } from "react";
 import { FolderPlus, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  CATEGORY_NAME_MAX,
+  CATEGORY_NAME_MIN,
+} from "@/lib/field-limits";
 import type { Category } from "@/components/messenger/types";
 
 type CreateCategoryModalProps = {
@@ -44,8 +48,12 @@ export function CreateCategoryModal({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed) {
-      setError("Enter a category name.");
+    if (trimmed.length < CATEGORY_NAME_MIN) {
+      setError(`Category name must be at least ${CATEGORY_NAME_MIN} characters.`);
+      return;
+    }
+    if (trimmed.length > CATEGORY_NAME_MAX) {
+      setError(`Category name must be ${CATEGORY_NAME_MAX} characters or fewer.`);
       return;
     }
     setSaving(true);
@@ -111,7 +119,8 @@ export function CreateCategoryModal({
               autoFocus
               value={name}
               onChange={(event) => setName(event.target.value)}
-              maxLength={40}
+              minLength={CATEGORY_NAME_MIN}
+              maxLength={CATEGORY_NAME_MAX}
               placeholder="Text Channels"
               className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm text-white outline-none focus:border-accent/50"
             />

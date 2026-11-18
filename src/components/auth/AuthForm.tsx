@@ -4,6 +4,12 @@ import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { messageForAuthError } from "@/lib/auth-oauth";
+import {
+  PASSWORD_MAX,
+  PASSWORD_MIN,
+  USERNAME_MAX,
+  USERNAME_MIN,
+} from "@/lib/field-limits";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "login" | "signup";
@@ -97,8 +103,20 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
     try {
       if (mode === "signup") {
         const trimmedUsername = username.trim();
-        if (trimmedUsername.length < 3) {
-          setError("Username must be at least 3 characters.");
+        if (trimmedUsername.length < USERNAME_MIN) {
+          setError(`Username must be at least ${USERNAME_MIN} characters.`);
+          return;
+        }
+        if (trimmedUsername.length > USERNAME_MAX) {
+          setError(`Username must be ${USERNAME_MAX} characters or fewer.`);
+          return;
+        }
+        if (password.length < PASSWORD_MIN) {
+          setError(`Password must be at least ${PASSWORD_MIN} characters.`);
+          return;
+        }
+        if (password.length > PASSWORD_MAX) {
+          setError(`Password must be ${PASSWORD_MAX} characters or fewer.`);
           return;
         }
 
@@ -254,8 +272,8 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
             <input
               type="text"
               required
-              minLength={3}
-              maxLength={32}
+              minLength={USERNAME_MIN}
+              maxLength={USERNAME_MAX}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-accent/60 focus:ring-1 focus:ring-accent-ring"
@@ -286,7 +304,8 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
           </span>
           <PasswordInput
             required
-            minLength={6}
+            minLength={PASSWORD_MIN}
+            maxLength={PASSWORD_MAX}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"

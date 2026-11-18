@@ -360,6 +360,7 @@ export function ChannelSidebar({
                           }
                         }}
                         maxLength={40}
+                        minLength={2}
                         className="min-w-0 flex-1 rounded-md border border-accent/40 bg-[#1e1f22] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white outline-none"
                       />
                     </form>
