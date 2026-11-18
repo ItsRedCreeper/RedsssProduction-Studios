@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { HoverTip } from "@/components/ui/HoverTip";
 import type { DmThread } from "@/components/messenger/types";
 import { StatusPresenceBadge } from "@/components/messenger/StatusPresenceBadge";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
@@ -89,9 +90,16 @@ export function HomeSidebar({
                       />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">
-                        {name}
-                      </span>
+                      <HoverTip
+                        label={name}
+                        onlyIfTruncated
+                        delayMs={40}
+                        className="block min-w-0"
+                      >
+                        <span className="block truncate text-sm font-medium">
+                          {name}
+                        </span>
+                      </HoverTip>
                       <PresenceCaption
                         userId={thread.otherUserId}
                         status={thread.status}
@@ -101,22 +109,27 @@ export function HomeSidebar({
                     </span>
                   </button>
                   {onCloseThread && (
-                    <button
-                      type="button"
-                      title="Close DM"
-                      aria-label={`Close DM with ${name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onCloseThread(thread.id);
-                      }}
-                      className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#949ba4] hover:bg-black/30 hover:text-white ${
+                    <HoverTip
+                      label="Close DM"
+                      delayMs={40}
+                      className={`absolute right-1 top-1/2 z-10 -translate-y-1/2 ${
                         active
                           ? "opacity-100"
                           : "opacity-0 group-hover/thread:opacity-100 focus-visible:opacity-100"
                       }`}
                     >
-                      <X className="h-3.5 w-3.5" strokeWidth={2} />
-                    </button>
+                      <button
+                        type="button"
+                        aria-label={`Close DM with ${name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onCloseThread(thread.id);
+                        }}
+                        className="rounded-md p-1 text-[#949ba4] hover:bg-black/30 hover:text-white"
+                      >
+                        <X className="h-3.5 w-3.5" strokeWidth={2} />
+                      </button>
+                    </HoverTip>
                   )}
                 </li>
               );

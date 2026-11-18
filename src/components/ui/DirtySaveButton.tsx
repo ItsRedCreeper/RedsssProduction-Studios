@@ -41,13 +41,6 @@ export function DirtySaveButton({
       disabled={!canSave}
       onClick={onClick}
       aria-disabled={!canSave}
-      title={
-        saving
-          ? savingLabel
-          : dirty
-            ? "Save changes"
-            : "No unsaved changes"
-      }
       className={`${sizeClass} transition-colors ${
         canSave
           ? "bg-accent text-white hover:bg-accent-hover"

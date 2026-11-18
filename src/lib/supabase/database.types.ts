@@ -89,6 +89,40 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["friend_nicknames"]["Insert"]>
         Relationships: []
       }
+      friend_notes: {
+        Row: {
+          id: string
+          user_id: string
+          friend_id: string
+          note: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          friend_id: string
+          note?: string
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["friend_notes"]["Insert"]>
+        Relationships: []
+      }
+      friend_favorites: {
+        Row: {
+          id: string
+          user_id: string
+          friend_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          friend_id: string
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["friend_favorites"]["Insert"]>
+        Relationships: []
+      }
       user_activity: {
         Row: {
           user_id: string

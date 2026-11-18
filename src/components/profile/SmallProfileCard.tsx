@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Ban, MessageSquare, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { HoverTip } from "@/components/ui/HoverTip";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
@@ -191,13 +192,22 @@ export function SmallProfileCard({
           onClick={onViewProfile}
           className="block w-full text-left"
         >
-          <p className="truncate text-base font-semibold text-white">
-            {shownName}
-          </p>
-          {displayName && displayName !== profile.username && (
-            <p className="truncate text-[11px] text-[#6d6f78]">
-              @{profile.username}
+          <HoverTip label={shownName} onlyIfTruncated delayMs={40} className="block min-w-0">
+            <p className="truncate text-base font-semibold text-white">
+              {shownName}
             </p>
+          </HoverTip>
+          {displayName && displayName !== profile.username && (
+            <HoverTip
+              label={`@${profile.username}`}
+              onlyIfTruncated
+              delayMs={40}
+              className="block min-w-0"
+            >
+              <p className="truncate text-[11px] text-[#6d6f78]">
+                @{profile.username}
+              </p>
+            </HoverTip>
           )}
           {!restricted ? (
             <PresenceCaption
@@ -228,22 +238,20 @@ export function SmallProfileCard({
                 <span className="flex -space-x-1.5">
                   {previewServers.map((server) =>
                     server.icon_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={server.id}
-                        src={server.icon_url}
-                        alt=""
-                        title={server.name}
-                        className="h-6 w-6 rounded-[6px] object-cover ring-2 ring-[#111214]"
-                      />
+                      <HoverTip key={server.id} label={server.name} delayMs={40}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={server.icon_url}
+                          alt=""
+                          className="h-6 w-6 rounded-[6px] object-cover ring-2 ring-[#111214]"
+                        />
+                      </HoverTip>
                     ) : (
-                      <span
-                        key={server.id}
-                        title={server.name}
-                        className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#313338] text-[10px] font-bold text-accent ring-2 ring-[#111214]"
-                      >
-                        {avatarLetter(server.name)}
-                      </span>
+                      <HoverTip key={server.id} label={server.name} delayMs={40}>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#313338] text-[10px] font-bold text-accent ring-2 ring-[#111214]">
+                          {avatarLetter(server.name)}
+                        </span>
+                      </HoverTip>
                     ),
                   )}
                 </span>
@@ -263,18 +271,21 @@ export function SmallProfileCard({
               >
                 <span className="flex -space-x-1.5">
                   {previewFriends.map((friend) => (
-                    <span
+                    <HoverTip
                       key={friend.id}
+                      label={friend.username}
+                      delayMs={40}
                       className="rounded-full ring-2 ring-[#111214]"
-                      title={friend.username}
                     >
-                      <UserAvatar
-                        username={friend.username}
-                        avatarUrl={friend.avatar_url}
-                        size="xs"
-                        className="!h-6 !w-6"
-                      />
-                    </span>
+                      <span className="block">
+                        <UserAvatar
+                          username={friend.username}
+                          avatarUrl={friend.avatar_url}
+                          size="xs"
+                          className="!h-6 !w-6"
+                        />
+                      </span>
+                    </HoverTip>
                   ))}
                 </span>
                 <span className="text-xs font-medium text-[#b5bac1] hover:underline">

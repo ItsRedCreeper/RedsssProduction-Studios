@@ -141,7 +141,6 @@ export function ProfileFriendButton({
       <button
         type="button"
         disabled
-        title="This user has blocked you"
         className={`${base} cursor-not-allowed bg-[#3f4147] text-[#f2b8b5] opacity-90 ${className}`}
       >
         <Ban className="h-4 w-4" strokeWidth={1.75} />
@@ -155,7 +154,6 @@ export function ProfileFriendButton({
       <button
         type="button"
         disabled
-        title="You are already friends"
         className={`${base} cursor-default bg-[#3f4147] text-[#b5bac1] ${className}`}
       >
         <Check className="h-4 w-4" strokeWidth={2} />
@@ -172,7 +170,6 @@ export function ProfileFriendButton({
       <button
         type="button"
         disabled
-        title="Friend request already sent"
         className={`${base} cursor-default bg-[#3f4147] text-[#b5bac1] ${className}`}
       >
         Request Sent

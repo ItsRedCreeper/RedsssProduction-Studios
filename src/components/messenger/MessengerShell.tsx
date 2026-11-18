@@ -3179,11 +3179,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               messages={visibleDmMessages}
               loading={loadingDmMessages}
               emptyIcon="dm"
-              emptyTitle={activeThread?.username ?? "Direct message"}
+              emptyTitle={
+                searchNeedle
+                  ? "No matches"
+                  : (activeThread?.username ?? "Direct message")
+              }
               emptyBody={
                 searchNeedle
                   ? "No messages match that search."
-                  : `This is the beginning of your conversation with ${activeThread?.username ?? "this user"}.`
+                  : `This is the beginning of your direct message history with ${activeThread?.username ?? "this user"}.`
               }
               scrollKey={activeConversationId ?? ""}
               currentUserId={user?.id ?? null}
@@ -3192,6 +3196,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               loadingOlder={loadingOlderMessages}
               onLoadOlder={() => void loadOlderDm()}
               preferFriendNickname
+              showChannelStart={!searchNeedle}
               onReply={setReplyTo}
               onEdit={editDm}
               onDelete={deleteDm}
@@ -3227,6 +3232,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               loadingOlder={loadingOlderMessages}
               onLoadOlder={() => void loadOlderChannel()}
               readOnly={previewMode}
+              showChannelStart={!searchNeedle}
               onReply={setReplyTo}
               onEdit={editChannel}
               onDelete={deleteChannel}

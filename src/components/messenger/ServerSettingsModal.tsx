@@ -761,7 +761,7 @@ export function ServerSettingsModal({
                               key={roleId}
                               type="button"
                               onClick={() => void removeRole(member.user_id, roleId)}
-                              title="Remove role"
+                              aria-label={`Remove role ${role.name}`}
                               className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium text-white"
                               style={{ backgroundColor: `${role.color || "#dc2626"}33` }}
                             >

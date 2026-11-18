@@ -13,7 +13,6 @@ type LiveStatusDotProps = {
   className?: string;
   /** Dot size — big profile uses lg. */
   size?: "sm" | "md" | "lg";
-  title?: string;
 };
 
 /**
@@ -28,7 +27,6 @@ export function LiveStatusDot({
   ringClassName,
   className = "",
   size = "sm",
-  title,
 }: LiveStatusDotProps) {
   const live = useUserPresence(userId);
 
@@ -54,7 +52,6 @@ export function LiveStatusDot({
       ringClassName={ringClassName}
       className={className}
       size={size}
-      title={title}
     />
   );
 }

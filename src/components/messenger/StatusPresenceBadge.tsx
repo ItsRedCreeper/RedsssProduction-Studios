@@ -11,6 +11,7 @@ type StatusPresenceBadgeProps = {
   /** Outer ring color matching the parent surface. */
   ringClassName?: string;
   className?: string;
+  /** Kept for callers; status dots are not tipped (not icon-buttons / truncated labels). */
   title?: string;
   /** sm = lists, md = navbar, lg = big profile avatar. */
   size?: "sm" | "md" | "lg";
@@ -39,7 +40,6 @@ export function StatusPresenceBadge({
   typing = false,
   ringClassName = "ring-[#2b2d31]",
   className = "",
-  title,
   size = "sm",
 }: StatusPresenceBadgeProps) {
   // Discord: typing badge inherits the status color; don't gray out mid-type.
@@ -51,7 +51,6 @@ export function StatusPresenceBadge({
   if (typing) {
     return (
       <span
-        title={title ?? "Typing…"}
         aria-label="Typing"
         className={`absolute z-[1] flex items-center justify-center gap-0.5 rounded-full ring-2 ${TYPING_SIZE[size]} ${ringClassName} ${colorClass} ${className}`}
       >
@@ -64,7 +63,6 @@ export function StatusPresenceBadge({
 
   return (
     <span
-      title={title}
       className={`absolute rounded-full ring-2 ${DOT_SIZE[size]} ${ringClassName} ${colorClass} ${className}`}
       aria-hidden
     />

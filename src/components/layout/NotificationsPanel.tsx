@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { HoverTip } from "@/components/ui/HoverTip";
 
 export type AppNotification = {
   id: string;
@@ -151,23 +152,26 @@ export function NotificationsPanel({
           <h2 className="flex-1 text-sm font-semibold text-foreground">
             Notifications
           </h2>
-          <button
-            type="button"
-            onClick={() => void markAllRead()}
-            className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-foreground"
-            title="Mark all as read"
-            aria-label="Mark all as read"
-          >
-            <CheckCheck className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-foreground"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" strokeWidth={2} />
-          </button>
+          <HoverTip label="Mark All as Read" delayMs={40}>
+            <button
+              type="button"
+              onClick={() => void markAllRead()}
+              className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-foreground"
+              aria-label="Mark all as read"
+            >
+              <CheckCheck className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          </HoverTip>
+          <HoverTip label="Close" delayMs={40}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md p-1.5 text-muted hover:bg-surface-hover hover:text-foreground"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </HoverTip>
         </div>
         <div className="max-h-[min(70vh,24rem)] overflow-y-auto">
           {loading && items.length === 0 ? (

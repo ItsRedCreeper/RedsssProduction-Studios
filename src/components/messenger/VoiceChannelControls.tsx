@@ -16,12 +16,13 @@ import {
   SignalZero,
 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef } from "react";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import {
   useVoiceMenu,
   type VoiceMenuPanel,
 } from "@/components/messenger/voice/voiceMenuStore";
+import { HoverTip } from "@/components/ui/HoverTip";
 
 type DeviceOption = {
   deviceId: string;
@@ -299,10 +300,8 @@ export function VoiceChannelControls({
 }: VoiceChannelControlsProps) {
   const ownerId = useId();
   const { menu, open, close, closeAny } = useVoiceMenu(ownerId);
-  const [tip, setTip] = useState<{ top: number; left: number } | null>(null);
   const inputTriggerRef = useRef<HTMLButtonElement | null>(null);
   const outputTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const tipId = useId();
 
   function triggerRect(kind: "input" | "output") {
     const node = kind === "input" ? inputTriggerRef.current : outputTriggerRef.current;
@@ -343,136 +342,132 @@ export function VoiceChannelControls({
         compact ? "mt-1 mb-2 ml-2 rounded-md bg-[#1e1f22]/80 px-1.5 py-1.5" : ""
       }`}
     >
-      <button
-        type="button"
-        className={`relative rounded-md p-1.5 ${quality.colorClass} hover:bg-white/5`}
-        aria-label={quality.tip}
-        aria-describedby={tip ? tipId : undefined}
-        onPointerEnter={(event) => {
-          const rect = event.currentTarget.getBoundingClientRect();
-          setTip({ top: rect.top - 8, left: rect.left + rect.width / 2 });
-        }}
-        onPointerLeave={() => setTip(null)}
-        onFocus={(event) => {
-          const rect = event.currentTarget.getBoundingClientRect();
-          setTip({ top: rect.top - 8, left: rect.left + rect.width / 2 });
-        }}
-        onBlur={() => setTip(null)}
-      >
-        <QualityIcon level={quality.level} className="h-4 w-4" />
-      </button>
-
-      <div className="flex items-center">
+      <HoverTip label={quality.tip} delayMs={40}>
         <button
           type="button"
-          onClick={onToggleMute}
-          className={`relative rounded-l-md p-1.5 ${
-            muted ? "bg-accent/20 text-accent" : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
-          }`}
-          aria-label={muted ? "Unmute" : "Mute"}
-          title={micError ? micError : muted ? "Unmute" : "Mute"}
+          className={`relative rounded-md p-1.5 ${quality.colorClass} hover:bg-white/5`}
+          aria-label={quality.tip}
         >
-          {muted ? (
-            <MicOff className="h-4 w-4" strokeWidth={2} />
-          ) : (
-            <Mic className="h-4 w-4" strokeWidth={2} />
-          )}
-          {!muted && (
-            <span
-              className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-5 -translate-x-1/2 overflow-hidden rounded-full bg-black/50"
-              aria-hidden
-            >
-              <span
-                className="block h-full origin-left rounded-full bg-[#23a559] transition-[transform] duration-75"
-                style={{
-                  transform: `scaleX(${Math.min(1, Math.max(0.04, micLevel * inputVolume))})`,
-                }}
-              />
-            </span>
-          )}
+          <QualityIcon level={quality.level} className="h-4 w-4" />
         </button>
-        {onInputDeviceChange && onInputVolumeChange && (
+      </HoverTip>
+
+      <div className="flex items-center">
+        <HoverTip label={micError ? micError : muted ? "Unmute" : "Mute"} delayMs={40}>
           <button
-            ref={inputTriggerRef}
             type="button"
-            data-voice-device-trigger
-            onClick={() => togglePanel("input")}
-            className={`rounded-r-md p-1 ${
+            onClick={onToggleMute}
+            className={`relative rounded-l-md p-1.5 ${
               muted ? "bg-accent/20 text-accent" : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
             }`}
-            aria-label="Input settings"
-            title="Input settings"
-            aria-expanded={panelOpen === "input" || devicePicker === "input"}
-            aria-haspopup="menu"
+            aria-label={muted ? "Unmute" : "Mute"}
           >
-            <ChevronDown
-              className={`h-3 w-3 transition-transform duration-200 ${
-                panelOpen === "input" || devicePicker === "input"
-                  ? "rotate-180"
-                  : "rotate-0"
-              }`}
-              strokeWidth={2.5}
-            />
+            {muted ? (
+              <MicOff className="h-4 w-4" strokeWidth={2} />
+            ) : (
+              <Mic className="h-4 w-4" strokeWidth={2} />
+            )}
+            {!muted && (
+              <span
+                className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-5 -translate-x-1/2 overflow-hidden rounded-full bg-black/50"
+                aria-hidden
+              >
+                <span
+                  className="block h-full origin-left rounded-full bg-[#23a559] transition-[transform] duration-75"
+                  style={{
+                    transform: `scaleX(${Math.min(1, Math.max(0.04, micLevel * inputVolume))})`,
+                  }}
+                />
+              </span>
+            )}
           </button>
+        </HoverTip>
+        {onInputDeviceChange && onInputVolumeChange && (
+          <HoverTip label="Input Settings" delayMs={40}>
+            <button
+              ref={inputTriggerRef}
+              type="button"
+              data-voice-device-trigger
+              onClick={() => togglePanel("input")}
+              className={`rounded-r-md p-1 ${
+                muted ? "bg-accent/20 text-accent" : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
+              }`}
+              aria-label="Input settings"
+              aria-expanded={panelOpen === "input" || devicePicker === "input"}
+              aria-haspopup="menu"
+            >
+              <ChevronDown
+                className={`h-3 w-3 transition-transform duration-200 ${
+                  panelOpen === "input" || devicePicker === "input"
+                    ? "rotate-180"
+                    : "rotate-0"
+                }`}
+                strokeWidth={2.5}
+              />
+            </button>
+          </HoverTip>
         )}
       </div>
 
       <div className="flex items-center">
-        <button
-          type="button"
-          onClick={onToggleDeafen}
-          className={`rounded-l-md p-1.5 ${
-            deafened
-              ? "bg-accent/20 text-accent"
-              : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
-          }`}
-          aria-label={deafened ? "Undeafen" : "Deafen"}
-          title={deafened ? "Undeafen" : "Deafen"}
-        >
-          {deafened ? (
-            <HeadphoneOff className="h-4 w-4" strokeWidth={2} />
-          ) : (
-            <Headphones className="h-4 w-4" strokeWidth={2} />
-          )}
-        </button>
-        {onOutputDeviceChange && onOutputVolumeChange && (
+        <HoverTip label={deafened ? "Undeafen" : "Deafen"} delayMs={40}>
           <button
-            ref={outputTriggerRef}
             type="button"
-            data-voice-device-trigger
-            onClick={() => togglePanel("output")}
-            className={`rounded-r-md p-1 ${
+            onClick={onToggleDeafen}
+            className={`rounded-l-md p-1.5 ${
               deafened
                 ? "bg-accent/20 text-accent"
                 : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
             }`}
-            aria-label="Output settings"
-            title="Output settings"
-            aria-expanded={panelOpen === "output" || devicePicker === "output"}
-            aria-haspopup="menu"
+            aria-label={deafened ? "Undeafen" : "Deafen"}
           >
-            <ChevronDown
-              className={`h-3 w-3 transition-transform duration-200 ${
-                panelOpen === "output" || devicePicker === "output"
-                  ? "rotate-180"
-                  : "rotate-0"
-              }`}
-              strokeWidth={2.5}
-            />
+            {deafened ? (
+              <HeadphoneOff className="h-4 w-4" strokeWidth={2} />
+            ) : (
+              <Headphones className="h-4 w-4" strokeWidth={2} />
+            )}
           </button>
+        </HoverTip>
+        {onOutputDeviceChange && onOutputVolumeChange && (
+          <HoverTip label="Output Settings" delayMs={40}>
+            <button
+              ref={outputTriggerRef}
+              type="button"
+              data-voice-device-trigger
+              onClick={() => togglePanel("output")}
+              className={`rounded-r-md p-1 ${
+                deafened
+                  ? "bg-accent/20 text-accent"
+                  : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
+              }`}
+              aria-label="Output settings"
+              aria-expanded={panelOpen === "output" || devicePicker === "output"}
+              aria-haspopup="menu"
+            >
+              <ChevronDown
+                className={`h-3 w-3 transition-transform duration-200 ${
+                  panelOpen === "output" || devicePicker === "output"
+                    ? "rotate-180"
+                    : "rotate-0"
+                }`}
+                strokeWidth={2.5}
+              />
+            </button>
+          </HoverTip>
         )}
       </div>
 
       {showLeave && (
-        <button
-          type="button"
-          onClick={onLeave}
-          className="rounded-md p-1.5 text-[#b5bac1] hover:bg-accent/15 hover:text-accent"
-          aria-label="Disconnect"
-          title="Disconnect"
-        >
-          <PhoneOff className="h-4 w-4" strokeWidth={2} />
-        </button>
+        <HoverTip label="Disconnect" delayMs={40}>
+          <button
+            type="button"
+            onClick={onLeave}
+            className="rounded-md p-1.5 text-[#b5bac1] hover:bg-accent/15 hover:text-accent"
+            aria-label="Disconnect"
+          >
+            <PhoneOff className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </HoverTip>
       )}
 
       <SettingsPanel
@@ -519,22 +514,6 @@ export function VoiceChannelControls({
         onClose={closeAny}
       />
 
-      {tip &&
-        createPortal(
-          <span
-            id={tipId}
-            role="tooltip"
-            style={{ top: tip.top, left: tip.left }}
-            className="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-accent/45 bg-[#111214] px-2.5 py-1.5 text-[11px] font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.55)]"
-          >
-            <span
-              className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-accent/45 bg-[#111214]"
-              aria-hidden
-            />
-            {quality.tip}
-          </span>,
-          document.body,
-        )}
     </div>
   );
 }

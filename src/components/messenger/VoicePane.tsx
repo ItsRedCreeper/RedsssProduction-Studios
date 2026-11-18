@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { HeadphoneOff, MicOff, PhoneOff, Volume2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { HoverTip } from "@/components/ui/HoverTip";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
 import { avatarAccentColor } from "@/lib/avatar";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
@@ -126,7 +127,6 @@ function VoiceTile({
           ? `Exit focus on ${name}`
           : `Focus ${name} in the voice grid`
       }
-      title={size === "focus" ? "Click to show everyone" : "Click to focus"}
       className={`relative aspect-video w-full overflow-hidden rounded-md bg-[#1e1f22] text-left ring-2 transition-[box-shadow,filter] duration-200 hover:brightness-110 ${
         speaking
           ? "ring-[#23a559]"
@@ -201,18 +201,25 @@ function VoiceTile({
             compact ? "px-2 py-1.5" : "px-3 py-2"
           }`}
         >
-          <p
-            className={`min-w-0 truncate font-semibold text-white drop-shadow ${
-              compact ? "text-[11px]" : "text-sm"
-            }`}
+          <HoverTip
+            label={isSelf ? `${name} (You)` : name}
+            onlyIfTruncated
+            delayMs={40}
+            className="min-w-0"
           >
-            {name}
-            {isSelf ? (
-              <span className="ml-1 text-[10px] font-normal text-[#dbdee1]">
-                (You)
-              </span>
-            ) : null}
-          </p>
+            <p
+              className={`min-w-0 truncate font-semibold text-white drop-shadow ${
+                compact ? "text-[11px]" : "text-sm"
+              }`}
+            >
+              {name}
+              {isSelf ? (
+                <span className="ml-1 text-[10px] font-normal text-[#dbdee1]">
+                  (You)
+                </span>
+              ) : null}
+            </p>
+          </HoverTip>
           {!compact && (
             <div className="flex shrink-0 items-center gap-1.5 text-[#dbdee1]">
               {(state.muted || state.deafened) && (
@@ -314,18 +321,21 @@ export function VoicePane({
                   const name =
                     member?.nickname || member?.username || "Unknown";
                   return (
-                    <span
+                    <HoverTip
                       key={state.user_id}
+                      label={name}
+                      delayMs={40}
                       className="rounded-full ring-2 ring-[#1e1f22]"
-                      title={name}
                     >
-                      <UserAvatar
-                        username={name}
-                        avatarUrl={member?.avatar_url}
-                        size="sm"
-                        className="!h-8 !w-8 !text-[11px]"
-                      />
-                    </span>
+                      <span className="block">
+                        <UserAvatar
+                          username={name}
+                          avatarUrl={member?.avatar_url}
+                          size="sm"
+                          className="!h-8 !w-8 !text-[11px]"
+                        />
+                      </span>
+                    </HoverTip>
                   );
                 })}
               </span>

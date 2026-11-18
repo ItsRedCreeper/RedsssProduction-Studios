@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "login" | "signup";
@@ -17,10 +18,14 @@ function friendlyAuthError(message: string) {
   if (lower.includes("invalid login credentials")) {
     return "Invalid email or password.";
   }
+  if (lower.includes("already registered") || lower.includes("already been registered")) {
+    return "An account with this email already exists. Sign in instead.";
+  }
   return message;
 }
 
 export function AuthForm({ nextPath = "/" }: AuthFormProps) {
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,11 +33,43 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    const authError = searchParams.get("error");
+    if (authError === "auth_callback") {
+      setError("Google sign-in was cancelled or failed. Try again.");
+    }
+  }, [searchParams]);
 
   function goAfterAuth() {
     const target = nextPath.startsWith("/") ? nextPath : "/";
     // Full navigation so the proxy reliably reads the new session cookies.
     window.location.assign(target);
+  }
+
+  async function handleGoogle() {
+    setError(null);
+    setMessage(null);
+    setGoogleLoading(true);
+    const supabase = createClient();
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+      nextPath.startsWith("/") ? nextPath : "/",
+    )}`;
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+    if (oauthError) {
+      setError(friendlyAuthError(oauthError.message));
+      setGoogleLoading(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -108,6 +145,8 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
     }
   }
 
+  const busy = loading || googleLoading;
+
   return (
     <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl shadow-black/40">
       <div className="mb-6">
@@ -152,6 +191,45 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
         >
           Sign up
         </button>
+      </div>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void handleGoogle()}
+        className="mb-4 inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#3f4147] bg-[#1e1f22] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2b2d31] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="h-4 w-4 shrink-0"
+        >
+          <path
+            fill="#EA4335"
+            d="M12 10.2v3.9h5.5c-.2 1.3-.9 2.4-2 3.1l3.2 2.5c1.9-1.7 3-4.3 3-7.3 0-.7-.1-1.4-.2-2H12z"
+          />
+          <path
+            fill="#34A853"
+            d="M6.6 14.3l-.8.6-2.7 2.1C4.9 20.3 8.2 22.2 12 22.2c2.7 0 5-.9 6.7-2.4l-3.2-2.5c-.9.6-2 .9-3.5.9-2.7 0-5-1.8-5.8-4.3z"
+          />
+          <path
+            fill="#4A90E2"
+            d="M3.1 7.1C2.4 8.5 2 10 2 11.7c0 1.7.4 3.2 1.1 4.6l3.5-2.7c-.2-.6-.3-1.2-.3-1.9s.1-1.3.3-1.9z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M12 5.3c1.5 0 2.8.5 3.8 1.5l2.8-2.8C16.9 2.3 14.7 1.3 12 1.3 8.2 1.3 4.9 3.2 3.1 7.1l3.5 2.7C7 7.2 9.3 5.3 12 5.3z"
+          />
+        </svg>
+        {googleLoading ? "Redirecting…" : "Continue with Google"}
+      </button>
+
+      <div className="mb-4 flex items-center gap-3">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">
+          or
+        </span>
+        <span className="h-px flex-1 bg-border" />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -220,7 +298,7 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={busy}
           className="w-full rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading

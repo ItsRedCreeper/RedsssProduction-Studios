@@ -104,6 +104,8 @@ export function computeAutoEffectiveStatus(opts: {
 export type StatusClearAfter = null | number | "today" | "week";
 
 /** Presence (Online / Idle / DND / Invisible) — default Don't clear (forever). */
+export const PRESENCE_CLEAR_AFTER_DEFAULT: StatusClearAfter = null;
+
 export const PRESENCE_CLEAR_AFTER_OPTIONS = [
   { label: "Don't clear", minutes: null },
   { label: "30 minutes", minutes: 30 },
@@ -114,6 +116,8 @@ export const PRESENCE_CLEAR_AFTER_OPTIONS = [
 ] as const;
 
 /** Custom status text — default 24 hours. */
+export const CUSTOM_STATUS_CLEAR_AFTER_DEFAULT: StatusClearAfter = 1440;
+
 export const CUSTOM_STATUS_CLEAR_AFTER_OPTIONS = [
   { label: "24 hours", minutes: 1440 },
   { label: "Today", minutes: "today" as const },
@@ -233,6 +237,20 @@ export function formatClearAfterPreview(
   const end = clearAfterToExpiryDate(value, from);
   if (!end) return "Doesn't expire";
   return formatStatusExpiry(end, from) ?? "Doesn't expire";
+}
+
+/** Label for a saved presence timer without opening the duration prompt. */
+export function formatPresenceClearLabel(
+  expiresAt: string | Date | null | undefined,
+  now = Date.now(),
+  opts?: { isOnline?: boolean },
+): string | null {
+  if (opts?.isOnline) return null;
+  const formatted = formatStatusExpiry(expiresAt, now);
+  if (formatted) return formatted;
+  // Non-online with no expiry timestamp = forever / don't clear.
+  if (expiresAt == null) return "Doesn't clear";
+  return null;
 }
 
 export async function setManualStatus(opts: {

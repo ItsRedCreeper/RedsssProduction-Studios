@@ -13,6 +13,7 @@ import {
 import { notifyProfileUpdated } from "@/hooks/useCurrentProfile";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DirtySaveButton } from "@/components/ui/DirtySaveButton";
+import { HoverTip } from "@/components/ui/HoverTip";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 
 type EditProfileModalProps = {
@@ -197,40 +198,39 @@ export function EditProfileModal({
                     const selected =
                       bannerColor.toLowerCase() === swatch.toLowerCase();
                     return (
-                      <button
-                        key={swatch}
-                        type="button"
-                        title={swatch}
-                        aria-label={`Banner color ${swatch}`}
-                        aria-pressed={selected}
-                        disabled={saving}
-                        onClick={() => setBannerColor(swatch)}
-                        className={`h-7 w-7 rounded-full border-2 transition ${
-                          selected
-                            ? "border-white scale-110"
-                            : "border-transparent hover:border-white/50"
-                        }`}
-                        style={{ backgroundColor: swatch }}
-                      />
+                      <HoverTip key={swatch} label={swatch} delayMs={40}>
+                        <button
+                          type="button"
+                          aria-label={`Banner color ${swatch}`}
+                          aria-pressed={selected}
+                          disabled={saving}
+                          onClick={() => setBannerColor(swatch)}
+                          className={`h-7 w-7 rounded-full border-2 transition ${
+                            selected
+                              ? "border-white scale-110"
+                              : "border-transparent hover:border-white/50"
+                          }`}
+                          style={{ backgroundColor: swatch }}
+                        />
+                      </HoverTip>
                     );
                   })}
-                  <label
-                    className="relative h-7 w-7 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-[#4e5058] hover:border-white/50"
-                    title="Custom color"
-                  >
-                    <span
-                      className="absolute inset-0"
-                      style={{ backgroundColor: bannerColor }}
-                    />
-                    <input
-                      type="color"
-                      value={bannerColor}
-                      disabled={saving}
-                      onChange={(event) => setBannerColor(event.target.value)}
-                      className="absolute inset-0 cursor-pointer opacity-0"
-                      aria-label="Custom banner color"
-                    />
-                  </label>
+                  <HoverTip label="Custom Color" delayMs={40}>
+                    <label className="relative h-7 w-7 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-[#4e5058] hover:border-white/50">
+                      <span
+                        className="absolute inset-0"
+                        style={{ backgroundColor: bannerColor }}
+                      />
+                      <input
+                        type="color"
+                        value={bannerColor}
+                        disabled={saving}
+                        onChange={(event) => setBannerColor(event.target.value)}
+                        className="absolute inset-0 cursor-pointer opacity-0"
+                        aria-label="Custom banner color"
+                      />
+                    </label>
+                  </HoverTip>
                 </div>
               </div>
             )}

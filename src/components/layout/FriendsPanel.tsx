@@ -7,10 +7,14 @@ import {
   EyeOff,
   MessageSquare,
   Search,
+  Star,
   UserMinus,
   UserPlus,
   X,
 } from "lucide-react";
+import { useFriendFavorites } from "@/hooks/useFriendFavorites";
+import { useFriendNotes } from "@/hooks/useFriendNotes";
+import { HoverTip } from "@/components/ui/HoverTip";
 import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -103,8 +107,11 @@ export function FriendsPanel({
 }: FriendsPanelProps) {
   const profileUi = useOptionalProfileUi();
   const presenceFeed = useOptionalPresenceFeed();
+  const { isFavorite, setFavorite } = useFriendFavorites();
+  const { noteFor } = useFriendNotes();
   const { width, beginResize } = useFriendsPanelWidth();
   const [tab, setTab] = useState<FriendsTab>(initialTab);
+  const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
   const [edges, setEdges] = useState<FriendEdge[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -307,10 +314,33 @@ export function FriendsPanel({
     return splitFriendEdges(userId, edges);
   }, [userId, edges]);
 
+  const sortedFriends = useMemo(() => {
+    const list = [...friends];
+    list.sort((a, b) => {
+      const aFav = isFavorite(a.other.id) ? 0 : 1;
+      const bFav = isFavorite(b.other.id) ? 0 : 1;
+      if (aFav !== bFav) return aFav - bFav;
+      const aName = (
+        profileUi?.nicknameFor(a.other.id) || a.other.username
+      ).toLowerCase();
+      const bName = (
+        profileUi?.nicknameFor(b.other.id) || b.other.username
+      ).toLowerCase();
+      return aName.localeCompare(bName);
+    });
+    return list;
+  }, [friends, isFavorite, profileUi]);
+
   useEffect(() => {
     if (!open) return;
     presenceFeed?.watchMany(friends.map((edge) => edge.other.id));
   }, [open, friends, presenceFeed]);
+
+  async function handleToggleFavorite(friendId: string) {
+    setFavoriteBusyId(friendId);
+    await setFavorite(friendId, !isFavorite(friendId));
+    setFavoriteBusyId(null);
+  }
 
   function changeTab(next: FriendsTab) {
     setTab(next);
@@ -577,10 +607,13 @@ export function FriendsPanel({
                 </li>
               )}
               {!loading &&
-                friends.map((edge) => (
+                sortedFriends.map((edge) => {
+                  const favorited = isFavorite(edge.other.id);
+                  const privateNote = noteFor(edge.other.id);
+                  return (
                   <li
                     key={edge.id}
-                    className="mb-1 flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-surface-hover"
+                    className="group mb-1 flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-surface-hover"
                   >
                     <button
                       type="button"
@@ -601,9 +634,29 @@ export function FriendsPanel({
                         />
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-foreground">
-                          {profileUi?.nicknameFor(edge.other.id) ||
-                            edge.other.username}
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <HoverTip
+                            label={
+                              profileUi?.nicknameFor(edge.other.id) ||
+                              edge.other.username
+                            }
+                            onlyIfTruncated
+                            delayMs={40}
+                            className="min-w-0"
+                          >
+                            <span className="block truncate text-sm font-medium text-foreground">
+                              {profileUi?.nicknameFor(edge.other.id) ||
+                                edge.other.username}
+                            </span>
+                          </HoverTip>
+                          {favorited && (
+                            <Star
+                              className="h-3 w-3 shrink-0 text-accent"
+                              strokeWidth={2}
+                              fill="currentColor"
+                              aria-label="Favorite"
+                            />
+                          )}
                         </span>
                         <PresenceCaption
                           userId={edge.other.id}
@@ -612,28 +665,70 @@ export function FriendsPanel({
                           customStatus={edge.other.status_text}
                           className="mt-0.5"
                         />
+                        {privateNote ? (
+                          <HoverTip
+                            label={privateNote}
+                            onlyIfTruncated
+                            delayMs={40}
+                            className="mt-0.5 block min-w-0"
+                          >
+                            <span className="block truncate text-[11px] text-[#6d6f78]">
+                              {privateNote}
+                            </span>
+                          </HoverTip>
+                        ) : null}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      title="Message"
-                      aria-label={`Message ${edge.other.username}`}
-                      onClick={() => void handleMessage(edge.other)}
-                      className="rounded-md p-2 text-muted hover:bg-surface-raised hover:text-accent"
+                    <HoverTip
+                      label={favorited ? "Unfavorite" : "Favorite"}
+                      delayMs={40}
                     >
-                      <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
-                    </button>
-                    <button
-                      type="button"
-                      title="Remove friend"
-                      aria-label={`Remove ${edge.other.username}`}
-                      onClick={() => setRemoveTarget(edge)}
-                      className="rounded-md p-2 text-muted hover:bg-surface-raised hover:text-accent"
-                    >
-                      <UserMinus className="h-4 w-4" strokeWidth={1.75} />
-                    </button>
+                      <button
+                        type="button"
+                        aria-label={
+                          favorited
+                            ? `Unfavorite ${edge.other.username}`
+                            : `Favorite ${edge.other.username}`
+                        }
+                        aria-pressed={favorited}
+                        disabled={favoriteBusyId === edge.other.id}
+                        onClick={() => void handleToggleFavorite(edge.other.id)}
+                        className={`rounded-md p-2 transition-colors disabled:opacity-50 ${
+                          favorited
+                            ? "text-accent hover:bg-surface-raised"
+                            : "text-muted opacity-0 hover:bg-surface-raised hover:text-accent group-hover:opacity-100 focus:opacity-100"
+                        }`}
+                      >
+                        <Star
+                          className="h-4 w-4"
+                          strokeWidth={1.75}
+                          fill={favorited ? "currentColor" : "none"}
+                        />
+                      </button>
+                    </HoverTip>
+                    <HoverTip label="Message" delayMs={40}>
+                      <button
+                        type="button"
+                        aria-label={`Message ${edge.other.username}`}
+                        onClick={() => void handleMessage(edge.other)}
+                        className="rounded-md p-2 text-muted hover:bg-surface-raised hover:text-accent"
+                      >
+                        <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                    </HoverTip>
+                    <HoverTip label="Remove Friend" delayMs={40}>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${edge.other.username}`}
+                        onClick={() => setRemoveTarget(edge)}
+                        className="rounded-md p-2 text-muted hover:bg-surface-raised hover:text-accent"
+                      >
+                        <UserMinus className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                    </HoverTip>
                   </li>
-                ))}
+                  );
+                })}
             </ul>
           )}
 
@@ -828,7 +923,6 @@ export function FriendsPanel({
                         <button
                           type="button"
                           disabled
-                          title="This user has blocked you"
                           className="inline-flex cursor-not-allowed items-center gap-1 rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-[#f2b8b5] opacity-90"
                         >
                           <Ban className="h-3.5 w-3.5" strokeWidth={2} />

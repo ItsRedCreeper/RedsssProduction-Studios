@@ -19,6 +19,7 @@ import type {
   VoiceState,
 } from "@/components/messenger/types";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
+import { HoverTip } from "@/components/ui/HoverTip";
 
 type ChannelSidebarProps = {
   serverId: string;
@@ -62,32 +63,40 @@ function ChannelButton({
   onClick: () => void;
 }) {
   const voice = channel.type === "voice";
+  const tip = channel.topic?.trim() || channel.name;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={channel.topic ?? channel.name}
-      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[15px] transition-colors ${
-        active
-          ? "bg-[#404249] text-white"
-          : unread
-            ? "font-semibold text-white hover:bg-white/5"
-            : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
-      }`}
+    <HoverTip
+      label={tip}
+      onlyIfTruncated
+      side="right"
+      delayMs={60}
+      className="block w-full"
     >
-      {voice ? (
-        <Volume2
-          className={`h-4 w-4 shrink-0 ${active ? "text-accent" : "opacity-70"}`}
-          strokeWidth={2}
-        />
-      ) : (
-        <Hash className="h-4 w-4 shrink-0 opacity-70" strokeWidth={2.25} />
-      )}
-      <span className="min-w-0 flex-1 truncate">{channel.name}</span>
-      {unread && !active && (
-        <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
-      )}
-    </button>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[15px] transition-colors ${
+          active
+            ? "bg-[#404249] text-white"
+            : unread
+              ? "font-semibold text-white hover:bg-white/5"
+              : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
+        }`}
+      >
+        {voice ? (
+          <Volume2
+            className={`h-4 w-4 shrink-0 ${active ? "text-accent" : "opacity-70"}`}
+            strokeWidth={2}
+          />
+        ) : (
+          <Hash className="h-4 w-4 shrink-0 opacity-70" strokeWidth={2.25} />
+        )}
+        <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+        {unread && !active && (
+          <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
+        )}
+      </button>
+    </HoverTip>
   );
 }
 
@@ -355,61 +364,65 @@ export function ChannelSidebar({
                       />
                     </form>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => toggle(section.id)}
-                      onDoubleClick={() => {
-                        if (!section.real || !canManageChannels || !onRenameCategory) return;
-                        setEditingCategoryId(section.id);
-                        setEditName(section.name);
-                      }}
-                      className="flex min-w-0 flex-1 items-center gap-0.5 rounded-md px-0.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1]"
-                      aria-expanded={!isCollapsed}
-                      title={
-                        section.real && canManageChannels
-                          ? "Double-click to rename"
-                          : undefined
-                      }
+                    <HoverTip
+                      label={section.name}
+                      onlyIfTruncated
+                      delayMs={60}
+                      className="min-w-0 flex-1"
                     >
-                      <ChevronDown
-                        className={`h-3 w-3 shrink-0 transition-transform duration-200 ${
-                          isCollapsed ? "-rotate-90" : "rotate-0"
-                        }`}
-                        strokeWidth={2.5}
-                      />
-                      <span className="truncate">{section.name}</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => toggle(section.id)}
+                        onDoubleClick={() => {
+                          if (!section.real || !canManageChannels || !onRenameCategory) return;
+                          setEditingCategoryId(section.id);
+                          setEditName(section.name);
+                        }}
+                        className="flex w-full min-w-0 items-center gap-0.5 rounded-md px-0.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1]"
+                        aria-expanded={!isCollapsed}
+                      >
+                        <ChevronDown
+                          className={`h-3 w-3 shrink-0 transition-transform duration-200 ${
+                            isCollapsed ? "-rotate-90" : "rotate-0"
+                          }`}
+                          strokeWidth={2.5}
+                        />
+                        <span className="truncate">{section.name}</span>
+                      </button>
+                    </HoverTip>
                   )}
                   {section.real && canManageChannels && onRenameCategory && !editing && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingCategoryId(section.id);
-                        setEditName(section.name);
-                      }}
-                      className="rounded-md p-1 text-[#949ba4] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
-                      aria-label={`Rename ${section.name}`}
-                      title="Edit Category"
-                    >
-                      <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-                    </button>
+                    <HoverTip label="Edit Category" delayMs={40}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCategoryId(section.id);
+                          setEditName(section.name);
+                        }}
+                        className="rounded-md p-1 text-[#949ba4] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
+                        aria-label={`Rename ${section.name}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                      </button>
+                    </HoverTip>
                   )}
                   {!previewMode && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onCreateChannel({
-                          type: preferredType,
-                          categoryId:
-                            section.id === "uncategorized" ? null : section.id,
-                        })
-                      }
-                      className="rounded-md p-1 text-[#949ba4] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
-                      aria-label={`Create channel in ${section.name}`}
-                      title="Create Channel"
-                    >
-                      <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
-                    </button>
+                    <HoverTip label="Create Channel" delayMs={40}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onCreateChannel({
+                            type: preferredType,
+                            categoryId:
+                              section.id === "uncategorized" ? null : section.id,
+                          })
+                        }
+                        className="rounded-md p-1 text-[#949ba4] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
+                        aria-label={`Create channel in ${section.name}`}
+                      >
+                        <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
+                      </button>
+                    </HoverTip>
                   )}
                 </div>
                 {!isCollapsed && (

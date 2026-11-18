@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LogOut, Users } from "lucide-react";
+import { Bell, LogOut, Settings, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { SiteLogo } from "@/components/layout/SiteLogo";
 import {
@@ -10,6 +10,7 @@ import {
   type FriendListItem,
 } from "@/components/layout/FriendsPanel";
 import { NotificationsPanel } from "@/components/layout/NotificationsPanel";
+import { AccountSettingsModal } from "@/components/settings/AccountSettingsModal";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -19,6 +20,7 @@ import { statusLabel } from "@/components/messenger/data";
 import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import { resolveDisplayStatus } from "@/lib/presence";
 import { NAV_LINKS } from "@/lib/nav";
+import { HoverTip } from "@/components/ui/HoverTip";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -34,6 +36,7 @@ export function Navbar() {
   const speaking = !!voice?.selfSpeaking;
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -98,48 +101,73 @@ export function Navbar() {
           </nav>
 
           <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
-            <button
-              type="button"
-              className={`relative rounded-md p-2 transition-colors ${
-                notificationsOpen
-                  ? "bg-accent-muted text-accent"
-                  : "text-muted hover:bg-surface-hover hover:text-foreground"
-              }`}
-              aria-label="Notifications"
-              aria-expanded={notificationsOpen}
-              onClick={() => setNotificationsOpen(true)}
-            >
-              <Bell className="h-5 w-5" strokeWidth={1.75} />
-              {unreadNotifications > 0 && (
-                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
-                  {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              className={`rounded-md p-2 transition-colors ${
-                profileUi.friendsOpen
-                  ? "bg-accent-muted text-accent"
-                  : "text-muted hover:bg-surface-hover hover:text-foreground"
-              }`}
-              aria-label="Friends"
-              aria-expanded={profileUi.friendsOpen}
-              onClick={() => profileUi.openFriends("friends")}
-            >
-              <Users className="h-5 w-5" strokeWidth={1.75} />
-            </button>
+            <HoverTip label="Notifications">
+              <button
+                type="button"
+                className={`relative rounded-md p-2 transition-colors ${
+                  notificationsOpen
+                    ? "bg-accent-muted text-accent"
+                    : "text-muted hover:bg-surface-hover hover:text-foreground"
+                }`}
+                aria-label="Notifications"
+                aria-expanded={notificationsOpen}
+                onClick={() => setNotificationsOpen(true)}
+              >
+                <Bell className="h-5 w-5" strokeWidth={1.75} />
+                {unreadNotifications > 0 && (
+                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
+                    {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                  </span>
+                )}
+              </button>
+            </HoverTip>
+            <HoverTip label="Friends">
+              <button
+                type="button"
+                className={`rounded-md p-2 transition-colors ${
+                  profileUi.friendsOpen
+                    ? "bg-accent-muted text-accent"
+                    : "text-muted hover:bg-surface-hover hover:text-foreground"
+                }`}
+                aria-label="Friends"
+                aria-expanded={profileUi.friendsOpen}
+                onClick={() => profileUi.openFriends("friends")}
+              >
+                <Users className="h-5 w-5" strokeWidth={1.75} />
+              </button>
+            </HoverTip>
 
-            <div className="ml-1 flex items-center gap-2.5">
+            <div className="ml-1 flex items-center gap-1.5 sm:gap-2.5">
+              {user && (
+                <HoverTip label="User Settings">
+                  <button
+                    type="button"
+                    className={`rounded-md p-2 transition-colors ${
+                      accountSettingsOpen
+                        ? "bg-accent-muted text-accent"
+                        : "text-muted hover:bg-surface-hover hover:text-foreground"
+                    }`}
+                    aria-label="Account settings"
+                    aria-expanded={accountSettingsOpen}
+                    onClick={() => setAccountSettingsOpen(true)}
+                  >
+                    <Settings className="h-5 w-5" strokeWidth={1.75} />
+                  </button>
+                </HoverTip>
+              )}
               <button
                 type="button"
                 className="relative shrink-0"
-                title={statusLabel(
-                  resolveDisplayStatus(
-                    profile?.status,
-                    profile?.last_seen_at,
-                  ),
-                )}
+                aria-label={
+                  user
+                    ? statusLabel(
+                        resolveDisplayStatus(
+                          profile?.status,
+                          profile?.last_seen_at,
+                        ),
+                      )
+                    : "Profile"
+                }
                 onClick={() => {
                   if (!user) return;
                   void profileUi.openBigProfile(user.id);
@@ -159,34 +187,36 @@ export function Navbar() {
                     lastSeenAt={profile?.last_seen_at}
                     size="md"
                     ringClassName="ring-2 ring-background"
-                    title={statusLabel(
-                      resolveDisplayStatus(
-                        profile?.status,
-                        profile?.last_seen_at,
-                      ),
-                    )}
                   />
                 )}
               </button>
-              <button
-                type="button"
-                className="hidden max-w-[10rem] truncate text-sm font-semibold text-foreground sm:inline"
-                onClick={() => {
-                  if (!user) return;
-                  void profileUi.openBigProfile(user.id);
-                }}
+              <HoverTip
+                label={displayName}
+                onlyIfTruncated
+                delayMs={40}
+                className="hidden max-w-[10rem] sm:inline-flex"
               >
-                {displayName}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSignOut()}
-                className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
-                aria-label="Sign out"
-                title="Sign out"
-              >
-                <LogOut className="h-4 w-4" strokeWidth={2} />
-              </button>
+                <button
+                  type="button"
+                  className="max-w-[10rem] truncate text-sm font-semibold text-foreground"
+                  onClick={() => {
+                    if (!user) return;
+                    void profileUi.openBigProfile(user.id);
+                  }}
+                >
+                  {displayName}
+                </button>
+              </HoverTip>
+              <HoverTip label="Log Out" delayMs={40}>
+                <button
+                  type="button"
+                  onClick={() => void handleSignOut()}
+                  className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                  aria-label="Sign out"
+                >
+                  <LogOut className="h-4 w-4" strokeWidth={2} />
+                </button>
+              </HoverTip>
             </div>
           </div>
         </div>
@@ -231,6 +261,12 @@ export function Navbar() {
           setNotificationsOpen(false);
           profileUi.openFriends(tab);
         }}
+      />
+
+      <AccountSettingsModal
+        open={accountSettingsOpen}
+        user={user}
+        onClose={() => setAccountSettingsOpen(false)}
       />
 
       {toast && (

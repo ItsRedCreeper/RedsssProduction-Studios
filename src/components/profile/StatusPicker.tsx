@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import {
+  CUSTOM_STATUS_CLEAR_AFTER_DEFAULT,
   CUSTOM_STATUS_CLEAR_AFTER_OPTIONS,
+  PRESENCE_CLEAR_AFTER_DEFAULT,
   PRESENCE_CLEAR_AFTER_OPTIONS,
   clearAfterToExpiryDate,
   clearAfterToMinutes,
   formatClearAfterPreview,
+  formatPresenceClearLabel,
   formatStatusExpiry,
   setManualStatus,
   type ManualStatus,
@@ -87,9 +90,10 @@ export function StatusPicker({
     null,
   );
   const [presenceClearAfter, setPresenceClearAfter] =
-    useState<StatusClearAfter>(240);
-  const [customClearAfter, setCustomClearAfter] =
-    useState<StatusClearAfter>(1440);
+    useState<StatusClearAfter>(PRESENCE_CLEAR_AFTER_DEFAULT);
+  const [customClearAfter, setCustomClearAfter] = useState<StatusClearAfter>(
+    CUSTOM_STATUS_CLEAR_AFTER_DEFAULT,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -104,8 +108,8 @@ export function StatusPicker({
     );
     setDraftText(statusText ?? "");
     setPendingPresence(null);
-    setPresenceClearAfter(240);
-    setCustomClearAfter(1440);
+    setPresenceClearAfter(PRESENCE_CLEAR_AFTER_DEFAULT);
+    setCustomClearAfter(CUSTOM_STATUS_CLEAR_AFTER_DEFAULT);
     setError(null);
     setNowTick(Date.now());
   }, [open, status, manualStatus, statusText, mode]);
@@ -144,6 +148,11 @@ export function StatusPicker({
   const customMinutes = clearAfterToMinutes(customClearAfter);
   const currentPresence = (manualStatus ?? status ?? "online").toLowerCase();
   const savedCustomExpiry = formatStatusExpiry(statusTextExpiresAt, nowTick);
+  const savedPresenceClear = formatPresenceClearLabel(
+    manualStatusExpiresAt,
+    nowTick,
+    { isOnline: currentPresence === "online" },
+  );
   const presencePreview = formatClearAfterPreview(presenceClearAfter, nowTick);
   const customPreview = formatClearAfterPreview(customClearAfter, nowTick);
 
@@ -184,7 +193,7 @@ export function StatusPicker({
     }
     // Prompt for duration — nothing saved until Confirm.
     setPendingPresence(value);
-    setPresenceClearAfter(240);
+    setPresenceClearAfter(PRESENCE_CLEAR_AFTER_DEFAULT);
     setError(null);
   }
 
@@ -309,9 +318,18 @@ export function StatusPicker({
             <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
               Online status
             </p>
+            {savedPresenceClear && currentPresence !== "online" && (
+              <div className="mx-3 mb-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5">
+                <p className="text-[11px] font-medium text-[#dbdee1]">
+                  {statusLabel(currentPresence)} · {savedPresenceClear}
+                </p>
+              </div>
+            )}
             <ul>
               {STATUSES.map((value) => {
                 const active = draftStatus === value;
+                const activeClear =
+                  active && value !== "online" ? savedPresenceClear : null;
                 return (
                   <li key={value}>
                     <button
@@ -327,7 +345,16 @@ export function StatusPicker({
                       <span
                         className={`h-3 w-3 shrink-0 rounded-full ${statusDotClass(value)}`}
                       />
-                      <span className="font-medium">{statusLabel(value)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium">
+                          {statusLabel(value)}
+                        </span>
+                        {activeClear ? (
+                          <span className="mt-0.5 block text-[11px] font-normal text-[#949ba4]">
+                            {activeClear}
+                          </span>
+                        ) : null}
+                      </span>
                     </button>
                   </li>
                 );
@@ -353,9 +380,11 @@ export function StatusPicker({
         <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
           Custom status
         </label>
-        {savedCustomExpiry && statusText?.trim() && (
+        {statusText?.trim() && (
           <p className="mb-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5 text-[11px] text-[#b5bac1]">
-            Current: {savedCustomExpiry}
+            {savedCustomExpiry
+              ? `Current · ${savedCustomExpiry}`
+              : "Current · Doesn't clear"}
           </p>
         )}
         <input

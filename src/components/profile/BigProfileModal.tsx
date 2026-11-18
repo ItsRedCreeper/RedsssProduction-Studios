@@ -8,8 +8,16 @@ import {
   ChevronUp,
   MessageSquare,
   Pencil,
+  Star,
   X,
 } from "lucide-react";
+import { loadFriendNote, saveFriendNote } from "@/lib/friendNotes";
+import {
+  loadFavoriteFriendIds,
+  setFriendFavorite,
+} from "@/lib/friendFavorites";
+import { notifyFavoritesChanged } from "@/hooks/useFriendFavorites";
+import { notifyNotesChanged } from "@/hooks/useFriendNotes";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
 import { ProfileFriendButton } from "@/components/profile/ProfileFriendButton";
@@ -17,8 +25,13 @@ import { StatusPicker } from "@/components/profile/StatusPicker";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
 import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import { useUserPresence } from "@/components/presence/PresenceFeed";
-import { statusDotClass } from "@/components/messenger/data";
-import { formatStatusExpiry, resolveDisplayStatus } from "@/lib/presence";
+import { statusDotClass, statusLabel } from "@/components/messenger/data";
+import {
+  formatPresenceClearLabel,
+  formatStatusExpiry,
+  resolveDisplayStatus,
+} from "@/lib/presence";
+import { HoverTip } from "@/components/ui/HoverTip";
 import { avatarLetter } from "@/lib/avatar";
 import type { MutualFocus } from "@/components/profile/SmallProfileCard";
 import {
@@ -37,6 +50,7 @@ import {
 
 const VISIBLE_LIMIT = 6;
 const NICKNAME_MAX = 32;
+const NOTE_MAX = 500;
 
 /** Preloaded payload so the modal paints as one finished piece. */
 export type BigProfileReadyData = {
@@ -116,7 +130,15 @@ export function BigProfileModal({
   const [nickDraft, setNickDraft] = useState(nickname ?? "");
   const [nickBusy, setNickBusy] = useState(false);
   const [nickError, setNickError] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [jumpBusyId, setJumpBusyId] = useState<string | null>(null);
+  const isFriend = ready.friendStatus === "friends";
   const friendsSectionRef = useRef<HTMLDivElement | null>(null);
   const serversSectionRef = useRef<HTMLDivElement | null>(null);
   const memberSince = formatSinceDate(profile.created_at);
@@ -146,12 +168,16 @@ export function BigProfileModal({
 
   const presenceExpiryLabel =
     isSelf && liveManual && liveManual !== "online"
-      ? formatStatusExpiry(liveManualExpiresAt, expiryTick)
+      ? formatPresenceClearLabel(liveManualExpiresAt, expiryTick, {
+          isOnline: false,
+        })
       : null;
   const customExpiryLabel =
     isSelf && liveStatusText?.trim()
-      ? formatStatusExpiry(liveCustomExpiresAt, expiryTick)
+      ? formatStatusExpiry(liveCustomExpiresAt, expiryTick) ??
+        "Doesn't clear"
       : null;
+  const selfPresenceLabel = resolveDisplayStatus(liveStatus, liveLastSeen);
 
   // Keep status circle + caption synced from PresenceFeed for self and others.
   useEffect(() => {
@@ -180,7 +206,33 @@ export function BigProfileModal({
     setShowAllFriends(false);
     setShowAllServers(false);
     setHighlight(null);
+    setEditingNote(false);
+    setNoteError(null);
   }, [profile.id]);
+
+  useEffect(() => {
+    if (isSelf || restricted || !isFriend) {
+      setNote("");
+      setNoteDraft("");
+      setIsFavorite(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const [{ note: nextNote }, { ids }] = await Promise.all([
+        loadFriendNote(profile.id),
+        loadFavoriteFriendIds(),
+      ]);
+      if (cancelled) return;
+      const text = nextNote?.trim() ?? "";
+      setNote(text);
+      setNoteDraft(text);
+      setIsFavorite(ids.includes(profile.id));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSelf, restricted, isFriend, profile.id]);
 
   useEffect(() => {
     if (isSelf || restricted || !focusSection) return;
@@ -248,6 +300,39 @@ export function BigProfileModal({
     setEditingNick(false);
   }
 
+  async function persistNote(next: string) {
+    setNoteBusy(true);
+    setNoteError(null);
+    const cleaned = next.trim().slice(0, NOTE_MAX);
+    const previous = note;
+    setNote(cleaned);
+    const { error } = await saveFriendNote(profile.id, cleaned);
+    setNoteBusy(false);
+    if (error) {
+      setNote(previous);
+      setNoteDraft(previous);
+      setNoteError(error);
+      return;
+    }
+    setNoteDraft(cleaned);
+    setEditingNote(false);
+    notifyNotesChanged();
+  }
+
+  async function toggleFavorite() {
+    if (!isFriend || favoriteBusy) return;
+    const next = !isFavorite;
+    setFavoriteBusy(true);
+    setIsFavorite(next);
+    const { error } = await setFriendFavorite(profile.id, next);
+    setFavoriteBusy(false);
+    if (error) {
+      setIsFavorite(!next);
+      return;
+    }
+    notifyFavoritesChanged();
+  }
+
   return (
     <div
       className="fixed inset-0 z-[85] flex items-center justify-center p-4"
@@ -306,12 +391,19 @@ export function BigProfileModal({
                       setCustomOpen(false);
                       setPresenceOpen((open) => !open);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
+                    className="inline-flex max-w-[12rem] flex-col items-start gap-0.5 rounded-md bg-[#3f4147] px-3 py-2 text-left text-white hover:bg-[#4e5058]"
                   >
-                    <span
-                      className={`relative h-2.5 w-2.5 rounded-full ${statusDotClass(resolveDisplayStatus(liveStatus, liveLastSeen))}`}
-                    />
-                    Online Status
+                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                      <span
+                        className={`relative h-2.5 w-2.5 rounded-full ${statusDotClass(selfPresenceLabel)}`}
+                      />
+                      {statusLabel(selfPresenceLabel)}
+                    </span>
+                    {presenceExpiryLabel ? (
+                      <span className="pl-4 text-[10px] font-medium leading-tight text-[#b5bac1]">
+                        {presenceExpiryLabel}
+                      </span>
+                    ) : null}
                   </button>
                   <StatusPicker
                     mode="presence"
@@ -345,13 +437,19 @@ export function BigProfileModal({
                       setPresenceOpen(false);
                       setCustomOpen((open) => !open);
                     }}
-                    className="inline-flex max-w-[11rem] items-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-semibold text-white hover:bg-[#4e5058]"
-                    title={liveStatusText?.trim() || "Set a custom status"}
+                    className="inline-flex max-w-[12rem] flex-col items-start gap-0.5 rounded-md bg-[#3f4147] px-3 py-2 text-left text-white hover:bg-[#4e5058]"
                   >
-                    <MessageSquare className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                    <span className="truncate">
-                      {liveStatusText?.trim() || "Custom Status"}
+                    <span className="inline-flex max-w-full items-center gap-1.5 text-sm font-semibold">
+                      <MessageSquare className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                      <span className="truncate">
+                        {liveStatusText?.trim() || "Custom Status"}
+                      </span>
                     </span>
+                    {liveStatusText?.trim() && customExpiryLabel ? (
+                      <span className="pl-5 text-[10px] font-medium leading-tight text-[#b5bac1]">
+                        {customExpiryLabel}
+                      </span>
+                    ) : null}
                   </button>
                   <StatusPicker
                     mode="custom"
@@ -437,6 +535,26 @@ export function BigProfileModal({
                   initialEdgeId={ready.friendEdgeId}
                   initialBlockedByThem={restricted}
                 />
+                {isFriend && (
+                  <button
+                    type="button"
+                    disabled={favoriteBusy}
+                    onClick={() => void toggleFavorite()}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                      isFavorite
+                        ? "bg-accent-muted text-accent ring-1 ring-accent/40"
+                        : "bg-[#3f4147] text-white hover:bg-[#4e5058]"
+                    }`}
+                    aria-pressed={isFavorite}
+                  >
+                    <Star
+                      className="h-4 w-4"
+                      strokeWidth={1.75}
+                      fill={isFavorite ? "currentColor" : "none"}
+                    />
+                    {isFavorite ? "Favorited" : "Favorite"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onMessage}
@@ -455,11 +573,6 @@ export function BigProfileModal({
             <h2
               id="big-profile-title"
               className="text-2xl font-bold tracking-tight text-white"
-              title={
-                shownName !== profile.username
-                  ? `@${profile.username}`
-                  : undefined
-              }
             >
               {shownName}
             </h2>
@@ -559,6 +672,100 @@ export function BigProfileModal({
                 )}
               </div>
             )}
+            {!isSelf && !restricted && isFriend && (
+              <div className="mt-3 border-t border-white/10 pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+                    Note
+                  </h3>
+                  {!editingNote && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNoteDraft(note);
+                        setEditingNote(true);
+                        setNoteError(null);
+                      }}
+                      className="text-xs font-medium text-[#949ba4] hover:text-white"
+                    >
+                      {note ? "Edit Note" : "Add Note"}
+                    </button>
+                  )}
+                </div>
+                {editingNote ? (
+                  <div className="mt-2 space-y-2">
+                    <textarea
+                      value={noteDraft}
+                      maxLength={NOTE_MAX}
+                      rows={3}
+                      onChange={(event) => setNoteDraft(event.target.value)}
+                      onBlur={() => {
+                        if (noteBusy) return;
+                        if (noteDraft.trim() === note.trim()) {
+                          setEditingNote(false);
+                          return;
+                        }
+                        void persistNote(noteDraft);
+                      }}
+                      placeholder="Add a note…"
+                      className="w-full resize-y rounded-md border border-white/10 bg-[#111214] px-3 py-2 text-sm text-white outline-none focus:border-accent"
+                    />
+                    {noteError && (
+                      <p className="text-xs text-accent">{noteError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={noteBusy}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => void persistNote(noteDraft)}
+                        className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        disabled={noteBusy}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setNoteDraft("");
+                          void persistNote("");
+                        }}
+                        className="rounded-md bg-[#3f4147] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058] disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        disabled={noteBusy}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setEditingNote(false);
+                          setNoteDraft(note);
+                          setNoteError(null);
+                        }}
+                        className="rounded-md px-3 py-1.5 text-xs font-medium text-[#949ba4] hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNoteDraft(note);
+                      setEditingNote(true);
+                    }}
+                    className="mt-1 block w-full rounded-md px-0 py-1 text-left text-sm text-[#dbdee1] hover:text-white"
+                  >
+                    {note || (
+                      <span className="text-[#6d6f78]">Add a note…</span>
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
             {!isSelf && isBlocked && (
               <p className="mt-3 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-[#f2b8b5]">
                 You have blocked this user. They cannot message you, send friend
@@ -647,9 +854,16 @@ export function BigProfileModal({
                                   className="!h-2 !w-2"
                                 />
                               </span>
-                              <span className="truncate text-sm text-[#dbdee1]">
-                                {friend.username}
-                              </span>
+                              <HoverTip
+                                label={friend.username}
+                                onlyIfTruncated
+                                delayMs={40}
+                                className="min-w-0 flex-1"
+                              >
+                                <span className="block truncate text-sm text-[#dbdee1]">
+                                  {friend.username}
+                                </span>
+                              </HoverTip>
                             </button>
                           </li>
                         ))}
@@ -696,12 +910,17 @@ export function BigProfileModal({
                       <ul className="mt-2 space-y-1">
                         {visibleServers.map((server) => (
                           <li key={server.id}>
+                            <HoverTip
+                              label={server.name}
+                              onlyIfTruncated
+                              delayMs={40}
+                              className="block w-full"
+                            >
                             <button
                               type="button"
                               disabled={jumpBusyId === server.id}
                               onClick={() => void jumpToMutualServer(server.id)}
                               className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-white/5 disabled:opacity-60"
-                              title={`Open ${server.name}`}
                             >
                               {server.icon_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -719,6 +938,7 @@ export function BigProfileModal({
                                 {server.name}
                               </span>
                             </button>
+                            </HoverTip>
                           </li>
                         ))}
                       </ul>

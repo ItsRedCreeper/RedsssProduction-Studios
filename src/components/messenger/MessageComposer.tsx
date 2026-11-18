@@ -6,6 +6,7 @@ import {
   TypingIndicator,
   type TypingPerson,
 } from "@/components/messenger/TypingIndicator";
+import { HoverTip } from "@/components/ui/HoverTip";
 
 export type MentionSuggestion = {
   id: string;
@@ -157,16 +158,25 @@ export function MessageComposer({
             <p className="text-xs font-semibold text-accent">
               Replying to {replyAuthor}
             </p>
-            <p className="truncate text-xs text-muted">{replyContent}</p>
+            <HoverTip
+              label={replyContent}
+              onlyIfTruncated
+              delayMs={40}
+              className="block min-w-0"
+            >
+              <p className="truncate text-xs text-muted">{replyContent}</p>
+            </HoverTip>
           </div>
-          <button
-            type="button"
-            onClick={onCancelReply}
-            className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-foreground"
-            aria-label="Cancel reply"
-          >
-            <X className="h-4 w-4" strokeWidth={2} />
-          </button>
+          <HoverTip label="Cancel Reply" delayMs={40}>
+            <button
+              type="button"
+              onClick={onCancelReply}
+              className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-foreground"
+              aria-label="Cancel reply"
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </HoverTip>
         </div>
       )}
       {pendingFileName && (
@@ -176,17 +186,24 @@ export function MessageComposer({
           }`}
         >
           <Paperclip className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-          <p className="min-w-0 flex-1 truncate text-xs text-[#dbdee1]">
-            {pendingFileName}
-          </p>
-          <button
-            type="button"
-            onClick={onClearFile}
-            className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
-            aria-label="Remove attachment"
+          <HoverTip
+            label={pendingFileName}
+            onlyIfTruncated
+            delayMs={40}
+            className="min-w-0 flex-1"
           >
-            <X className="h-4 w-4" strokeWidth={2} />
-          </button>
+            <p className="truncate text-xs text-[#dbdee1]">{pendingFileName}</p>
+          </HoverTip>
+          <HoverTip label="Remove Attachment" delayMs={40}>
+            <button
+              type="button"
+              onClick={onClearFile}
+              className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
+              aria-label="Remove attachment"
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </HoverTip>
         </div>
       )}
       <div className="relative">
@@ -241,15 +258,17 @@ export function MessageComposer({
                   if (file) onFile(file);
                 }}
               />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={disabled || sending}
-                className="shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
-                aria-label="Attach file"
-              >
-                <Plus className="h-5 w-5" strokeWidth={2.25} />
-              </button>
+              <HoverTip label="Upload a File" delayMs={40}>
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={disabled || sending}
+                  className="shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
+                  aria-label="Attach file"
+                >
+                  <Plus className="h-5 w-5" strokeWidth={2.25} />
+                </button>
+              </HoverTip>
             </>
           )}
           <input

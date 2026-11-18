@@ -1,6 +1,7 @@
 "use client";
 
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
+import { HoverTip } from "@/components/ui/HoverTip";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 
 type DeviceOption = {
@@ -64,25 +65,38 @@ export function VoiceConnectionBar({
           Voice Connected
         </p>
         {micError ? (
-          <p className="truncate text-[11px] text-accent" title={micError}>
-            {micError}
-          </p>
+          <HoverTip label={micError} onlyIfTruncated delayMs={40} className="block max-w-full">
+            <p className="truncate text-[11px] text-accent">{micError}</p>
+          </HoverTip>
         ) : null}
         {onOpenChannel ? (
-          <button
-            type="button"
-            onClick={onOpenChannel}
-            className="block max-w-full truncate text-left text-[11px] text-[#b5bac1] hover:text-white hover:underline"
-            title={serverName ? `${channelName} / ${serverName}` : channelName}
+          <HoverTip
+            label={serverName ? `${channelName} / ${serverName}` : channelName}
+            onlyIfTruncated
+            delayMs={40}
+            className="block max-w-full"
           >
-            {channelName}
-            {serverName ? ` / ${serverName}` : ""}
-          </button>
+            <button
+              type="button"
+              onClick={onOpenChannel}
+              className="block max-w-full truncate text-left text-[11px] text-[#b5bac1] hover:text-white hover:underline"
+            >
+              {channelName}
+              {serverName ? ` / ${serverName}` : ""}
+            </button>
+          </HoverTip>
         ) : (
-          <p className="truncate text-[11px] text-[#b5bac1]">
-            {channelName}
-            {serverName ? ` / ${serverName}` : ""}
-          </p>
+          <HoverTip
+            label={serverName ? `${channelName} / ${serverName}` : channelName}
+            onlyIfTruncated
+            delayMs={40}
+            className="block max-w-full"
+          >
+            <p className="truncate text-[11px] text-[#b5bac1]">
+              {channelName}
+              {serverName ? ` / ${serverName}` : ""}
+            </p>
+          </HoverTip>
         )}
       </div>
       <VoiceChannelControls

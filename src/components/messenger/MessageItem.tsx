@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { HoverTip } from "@/components/ui/HoverTip";
 import { formatTimestamp } from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
@@ -364,18 +365,19 @@ export function MessageItem({
         >
           {onReact && (
             <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setPickerOpen((open) => !open);
-                  setMenuOpen(false);
-                }}
-                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
-                aria-label="Add reaction"
-                title="Add Reaction"
-              >
-                <SmilePlus className="h-4 w-4" strokeWidth={1.75} />
-              </button>
+              <HoverTip label="Add Reaction" delayMs={40}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPickerOpen((open) => !open);
+                    setMenuOpen(false);
+                  }}
+                  className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+                  aria-label="Add reaction"
+                >
+                  <SmilePlus className="h-4 w-4" strokeWidth={1.75} />
+                </button>
+              </HoverTip>
               {pickerOpen && (
                 <div className="absolute right-0 top-full z-20 mt-1 flex gap-0.5 rounded-md border border-[#1e1f22] bg-[#111214] p-1 shadow-xl">
                   {QUICK_REACTIONS.map((emoji) => (
@@ -396,60 +398,64 @@ export function MessageItem({
               )}
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => onReply(message)}
-            className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
-            aria-label="Reply"
-            title="Reply"
-          >
-            <Reply className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-          {onTogglePin && (
+          <HoverTip label="Reply" delayMs={40}>
             <button
               type="button"
-              onClick={onTogglePin}
+              onClick={() => onReply(message)}
               className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
-              aria-label={message.pinned ? "Unpin message" : "Pin message"}
-              title={message.pinned ? "Unpin" : "Pin"}
+              aria-label="Reply"
             >
-              {message.pinned ? (
-                <PinOff className="h-4 w-4" strokeWidth={1.75} />
-              ) : (
-                <Pin className="h-4 w-4" strokeWidth={1.75} />
-              )}
+              <Reply className="h-4 w-4" strokeWidth={1.75} />
             </button>
+          </HoverTip>
+          {onTogglePin && (
+            <HoverTip label={message.pinned ? "Unpin Message" : "Pin Message"} delayMs={40}>
+              <button
+                type="button"
+                onClick={onTogglePin}
+                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+                aria-label={message.pinned ? "Unpin message" : "Pin message"}
+              >
+                {message.pinned ? (
+                  <PinOff className="h-4 w-4" strokeWidth={1.75} />
+                ) : (
+                  <Pin className="h-4 w-4" strokeWidth={1.75} />
+                )}
+              </button>
+            </HoverTip>
           )}
           {isOwn && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditDraft(message.content);
-                setEditing(true);
-                setMenuOpen(false);
-                setPickerOpen(false);
-              }}
-              className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
-              aria-label="Edit"
-              title="Edit"
-            >
-              <Pencil className="h-4 w-4" strokeWidth={1.75} />
-            </button>
+            <HoverTip label="Edit" delayMs={40}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditDraft(message.content);
+                  setEditing(true);
+                  setMenuOpen(false);
+                  setPickerOpen(false);
+                }}
+                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+                aria-label="Edit"
+              >
+                <Pencil className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            </HoverTip>
           )}
           <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen((open) => !open);
-                setPickerOpen(false);
-              }}
-              className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
-              aria-label="More"
-              title="More"
-              aria-expanded={menuOpen}
-            >
-              <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
-            </button>
+            <HoverTip label="More" delayMs={40}>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen((open) => !open);
+                  setPickerOpen(false);
+                }}
+                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+                aria-label="More"
+                aria-expanded={menuOpen}
+              >
+                <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            </HoverTip>
             {menuOpen && (
               <div className="absolute right-0 top-full z-20 mt-1 min-w-[11rem] overflow-hidden rounded-md border border-border bg-[#111214] py-1.5 shadow-xl shadow-black/50">
                 <button
