@@ -13,7 +13,7 @@ type AuthFormProps = {
 function friendlyAuthError(message: string) {
   const lower = message.toLowerCase();
   if (lower.includes("email not confirmed")) {
-    return "This account still needs email confirmation. Ask an admin to confirm it, or create a new account now that confirmation is disabled.";
+    return "This account still needs email confirmation.";
   }
   if (lower.includes("invalid login credentials")) {
     return "Invalid email or password.";
@@ -25,7 +25,7 @@ function friendlyAuthError(message: string) {
     lower.includes("provider is not enabled") ||
     lower.includes("unsupported provider")
   ) {
-    return "Google sign-in isn’t enabled yet. In the Supabase dashboard, open Authentication → Providers → Google, turn it on, and add your Google Client ID and Secret.";
+    return "Google sign-in isn’t available right now.";
   }
   return message;
 }
@@ -44,9 +44,7 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
   useEffect(() => {
     const authError = searchParams.get("error");
     if (authError === "auth_callback") {
-      setError(
-        "Google sign-in didn’t finish on this link. Stay on the same BunnyCDN / site URL you started from and try again.",
-      );
+      setError("Sign-in failed. Try again.");
     }
   }, [searchParams]);
 
