@@ -40,7 +40,10 @@ type ChatTimelineProps = {
   onTogglePin?: (message: ChatMessage) => void;
 };
 
+/** Stay pinned to newest messages while within this of the bottom. */
 const NEAR_BOTTOM_PX = 80;
+/** Show "Jump to present" after scrolling up roughly ~15 message rows. */
+const JUMP_TO_PRESENT_PX = 900;
 
 function distanceFromBottom(el: HTMLElement) {
   return el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -130,9 +133,11 @@ export function ChatTimeline({
   }, [scrollKey]);
 
   function syncAwayFromBottom(el: HTMLElement) {
-    const away = distanceFromBottom(el) >= NEAR_BOTTOM_PX;
-    stickToBottomRef.current = !away;
-    setAwayFromBottom(away && messages.length > 0 && !loading);
+    const dist = distanceFromBottom(el);
+    stickToBottomRef.current = dist < NEAR_BOTTOM_PX;
+    setAwayFromBottom(
+      dist >= JUMP_TO_PRESENT_PX && messages.length > 0 && !loading,
+    );
   }
 
   function jumpToLatest(smooth = false) {
