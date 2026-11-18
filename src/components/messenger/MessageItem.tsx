@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { HoverTip } from "@/components/ui/HoverTip";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { formatTimestamp } from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
 import { LinkEmbeds } from "@/components/messenger/LinkEmbeds";
@@ -81,6 +82,8 @@ export function MessageItem({
   const [editError, setEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const profileUi = useOptionalProfileUi();
   const authorBase = message.profiles?.username ?? "Unknown";
@@ -153,17 +156,28 @@ export function MessageItem({
     setFullPickerOpen(false);
   }
 
+  async function confirmDelete() {
+    setDeleting(true);
+    try {
+      await onDelete(message.id);
+      setDeleteOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
+    <>
     <article
       id={`message-${message.id}`}
       data-message-id={message.id}
-      className={`group relative flex gap-4 px-4 py-0.5 transition-colors hover:bg-white/[0.03] ${
+      className={`group relative flex items-start gap-4 px-4 py-0.5 transition-colors hover:bg-white/[0.03] ${
         message.optimistic ? "opacity-70" : ""
       } ${message.failed ? "bg-accent-muted/40" : ""}`}
     >
       <button
         type="button"
-        className="mt-0.5 shrink-0 rounded-full"
+        className="mt-0.5 shrink-0 self-start rounded-full"
         onClick={(event) => openAuthorProfile(event.currentTarget)}
         aria-label={`Open ${author}'s profile`}
       >
@@ -540,7 +554,7 @@ export function MessageItem({
                       type="button"
                       onClick={() => {
                         setMenuOpen(false);
-                        void onDelete(message.id);
+                        setDeleteOpen(true);
                       }}
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent hover:bg-accent hover:text-white"
                     >
@@ -555,5 +569,19 @@ export function MessageItem({
         </div>
       )}
     </article>
+    <ConfirmModal
+      open={deleteOpen}
+      title="Delete Message"
+      description="Are you sure you want to delete this message? This can't be undone."
+      confirmLabel="Delete"
+      cancelLabel="Cancel"
+      danger
+      busy={deleting}
+      onConfirm={() => void confirmDelete()}
+      onCancel={() => {
+        if (!deleting) setDeleteOpen(false);
+      }}
+    />
+    </>
   );
 }
