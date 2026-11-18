@@ -454,13 +454,26 @@ export async function uploadProfileAsset(
   file: File,
   kind: "avatar" | "banner",
 ) {
-  const supabase = createClient();
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `${userId}/${kind}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from("profile-assets").upload(path, file, {
-    contentType: file.type || "image/jpeg",
-    upsert: true,
+  const { fitImageToMaxBytes, PROFILE_ASSET_MAX_BYTES } = await import(
+    "@/lib/compress-image"
+  );
+  const fitted = await fitImageToMaxBytes(file, PROFILE_ASSET_MAX_BYTES, {
+    maxEdge: kind === "avatar" ? 1024 : 2560,
   });
+  if (fitted.error) {
+    return { url: null as string | null, error: fitted.error };
+  }
+
+  const uploadFile = fitted.file;
+  const supabase = createClient();
+  const ext = uploadFile.name.split(".").pop()?.toLowerCase() || "webp";
+  const path = `${userId}/${kind}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from("profile-assets")
+    .upload(path, uploadFile, {
+      contentType: uploadFile.type || "image/webp",
+      upsert: true,
+    });
   if (error) return { url: null as string | null, error: error.message };
   const { data } = supabase.storage.from("profile-assets").getPublicUrl(path);
   return { url: data.publicUrl, error: null as string | null };

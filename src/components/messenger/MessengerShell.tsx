@@ -68,6 +68,10 @@ import {
   uploadAttachment,
   upsertReaction,
 } from "@/components/messenger/data";
+import {
+  fitImageToMaxBytes,
+  MESSAGE_ATTACHMENT_MAX_BYTES,
+} from "@/lib/compress-image";
 import { can, mergeRolePermissions, PERMISSIONS } from "@/lib/permissions";
 import {
   displayMentionText,
@@ -93,7 +97,6 @@ import type {
   VoiceState,
 } from "@/components/messenger/types";
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const EMPTY_BLOCKED_IDS: string[] = [];
 
 function mergeIncoming(prev: ChatMessage[], incoming: ChatMessage): ChatMessage[] {
@@ -2328,8 +2331,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const content = draft.trim();
     const file = pendingFile;
     if (!content && !file) return;
-    if (file && file.size > MAX_FILE_BYTES) {
-      setError("Files must be 10MB or smaller.");
+    if (file && file.size > MESSAGE_ATTACHMENT_MAX_BYTES) {
+      setError("File is too large.");
       return;
     }
     // Discord-style: store <@id> tokens so display names (incl. spaces) resolve correctly.
@@ -2807,13 +2810,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setSettingsOpen(true);
   }
 
-  function chooseFile(file: File) {
-    if (file.size > MAX_FILE_BYTES) {
-      setError("Files must be 10MB or smaller.");
+  async function chooseFile(file: File) {
+    setError(null);
+    const fitted = await fitImageToMaxBytes(file, MESSAGE_ATTACHMENT_MAX_BYTES, {
+      maxEdge: 4096,
+    });
+    if (fitted.error) {
+      setError(fitted.error);
       return;
     }
-    setPendingFile(file);
-    setError(null);
+    setPendingFile(fitted.file);
   }
 
   const waitingForChannel =

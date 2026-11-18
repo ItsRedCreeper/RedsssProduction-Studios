@@ -452,12 +452,23 @@ export function upsertReaction(prev: Reaction[], row: Reaction): Reaction[] {
 }
 
 export async function uploadAttachment(userId: string, file: File) {
+  const { fitImageToMaxBytes, MESSAGE_ATTACHMENT_MAX_BYTES } = await import(
+    "@/lib/compress-image"
+  );
+  const fitted = await fitImageToMaxBytes(file, MESSAGE_ATTACHMENT_MAX_BYTES, {
+    maxEdge: 4096,
+  });
+  if (fitted.error) {
+    return { url: null as string | null, error: fitted.error };
+  }
+
+  const uploadFile = fitted.file;
   const supabase = createClient();
-  const path = `${userId}/${Date.now()}-${safeFileName(file.name)}`;
+  const path = `${userId}/${Date.now()}-${safeFileName(uploadFile.name)}`;
   const { error } = await supabase.storage
     .from("message-attachments")
-    .upload(path, file, {
-      contentType: file.type || "application/octet-stream",
+    .upload(path, uploadFile, {
+      contentType: uploadFile.type || "application/octet-stream",
       upsert: false,
     });
   if (error) return { url: null as string | null, error: error.message };
