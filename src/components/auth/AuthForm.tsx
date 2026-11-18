@@ -252,7 +252,7 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-accent/60 focus:ring-1 focus:ring-accent-ring"
-              placeholder="alex"
+              placeholder="GamerName"
               autoComplete="username"
             />
           </label>
