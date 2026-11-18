@@ -1,0 +1,11 @@
+{
+  "projectRef": "nxgpwlcxakcoknbvujym",
+  "vercelProjectId": "prj_vTX0pIZr1ep0BCZM62wWBwzvfjkI",
+  "vercelTeamId": "team_AItGytlCF6V5JpOq4y0w1Edb",
+  "preferredSiteUrl": "https://redsssproduction-studios.vercel.app",
+  "alwaysAllow": [
+    "http://localhost:3000/**",
+    "http://127.0.0.1:3000/**",
+    "https://*-.vercel.app/**"
+  ]
+}

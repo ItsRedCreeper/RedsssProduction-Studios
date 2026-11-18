@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:auth-redirects": "node scripts/sync-auth-redirects.mjs",
+    "sync:auth-redirects:dry": "node scripts/sync-auth-redirects.mjs --dry-run"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
