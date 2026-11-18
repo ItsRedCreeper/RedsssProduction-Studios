@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { statusDotClass } from "@/components/messenger/data";
+import { HoverTip } from "@/components/ui/HoverTip";
 import {
   presenceCaption,
   resolveDisplayStatus,
@@ -83,14 +84,23 @@ export function PresenceCaption({
           : "text-[#23a559]";
 
   return (
-    <span className={`inline-flex min-w-0 items-center gap-1.5 ${className}`}>
+    <span
+      className={`flex w-full min-w-0 max-w-full items-center gap-1.5 ${className}`}
+    >
       {showDot && (
         <span
           className={`shrink-0 rounded-full ${dotClassName} ${statusDotClass(displayStatus)}`}
           aria-hidden
         />
       )}
-      <span className={`truncate text-xs ${tone}`}>{caption}</span>
+      <HoverTip
+        label={caption}
+        onlyIfTruncated
+        delayMs={40}
+        className="min-w-0 flex-1"
+      >
+        <span className={`block truncate text-xs ${tone}`}>{caption}</span>
+      </HoverTip>
     </span>
   );
 }
