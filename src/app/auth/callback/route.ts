@@ -1,5 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  AUTH_ERROR,
+  mapOAuthRedirectError,
+  profileSeedFromUser,
+} from "@/lib/auth-oauth";
 import { publicRequestOrigin } from "@/lib/request-origin";
 
 function getSupabaseKey() {
@@ -15,11 +20,23 @@ type CookieToSet = {
   options?: Parameters<NextResponse["cookies"]["set"]>[2];
 };
 
+function applyCookies(response: NextResponse, pendingCookies: CookieToSet[]) {
+  for (const { name, value, options } of pendingCookies) {
+    const { domain: _domain, ...rest } = options ?? {};
+    response.cookies.set(name, value, {
+      ...rest,
+      secure: true,
+      sameSite: "lax",
+      path: rest.path ?? "/",
+    });
+  }
+  response.headers.set("Cache-Control", "no-store, max-age=0");
+  return response;
+}
+
 /**
- * OAuth/PKCE cookies must be written onto the *redirect* response.
- * Using cookies() from next/headers alone often drops Set-Cookie on
- * NextResponse.redirect, which looks like a successful Google login
- * that immediately dumps you back on /login (especially behind BunnyCDN).
+ * OAuth/PKCE cookies must be written onto the redirect response.
+ * Automatic Google↔email linking is handled by Supabase Auth when emails match.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -29,11 +46,26 @@ export async function GET(request: NextRequest) {
   const safeNext = next.startsWith("/") ? next : "/";
 
   const successUrl = new URL(safeNext, `${origin}/`);
-  const failureUrl = new URL("/login", `${origin}/`);
-  failureUrl.searchParams.set("error", "auth_callback");
+  const loginUrl = new URL("/login", `${origin}/`);
+
+  const oauthError = mapOAuthRedirectError(
+    searchParams.get("error"),
+    searchParams.get("error_description"),
+  );
+
+  if (oauthError === AUTH_ERROR.cancelled) {
+    // Stay on auth page with no error banner.
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (oauthError) {
+    loginUrl.searchParams.set("error", oauthError);
+    return NextResponse.redirect(loginUrl);
+  }
 
   if (!code) {
-    return NextResponse.redirect(failureUrl);
+    loginUrl.searchParams.set("error", AUTH_ERROR.callback);
+    return NextResponse.redirect(loginUrl);
   }
 
   const pendingCookies: CookieToSet[] = [];
@@ -56,25 +88,30 @@ export async function GET(request: NextRequest) {
   );
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
-  // supabase-js may defer cookie/subscriber writes by a macrotask.
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  const response = NextResponse.redirect(error ? failureUrl : successUrl);
+  if (error) {
+    const mapped = mapOAuthRedirectError(error.name, error.message);
+    loginUrl.searchParams.set(
+      "error",
+      mapped === AUTH_ERROR.cancelled
+        ? AUTH_ERROR.callback
+        : (mapped ?? AUTH_ERROR.callback),
+    );
+    return applyCookies(NextResponse.redirect(loginUrl), pendingCookies);
+  }
 
-  for (const { name, value, options } of pendingCookies) {
-    // Host-only cookies (no Domain) so the session sticks to the BunnyCDN /
-    // Vercel hostname the browser actually used — not the proxied origin host.
-    const { domain: _domain, ...rest } = options ?? {};
-    response.cookies.set(name, value, {
-      ...rest,
-      secure: true,
-      sameSite: "lax",
-      path: rest.path ?? "/",
+  // First-time Google users (and any missed trigger) get a profiles row.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const seed = profileSeedFromUser(user);
+    await supabase.from("profiles").upsert(seed, {
+      onConflict: "id",
+      ignoreDuplicates: true,
     });
   }
 
-  // Avoid Bunny/edge caching the callback redirect without cookies.
-  response.headers.set("Cache-Control", "no-store, max-age=0");
-
-  return response;
+  return applyCookies(NextResponse.redirect(successUrl), pendingCookies);
 }

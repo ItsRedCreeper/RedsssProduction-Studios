@@ -15,10 +15,16 @@ function hasEmailPasswordIdentity(user: User | null) {
   if (!user) return false;
   const identities = user.identities ?? [];
   if (identities.length === 0) {
-    // Older sessions may omit identities; email users still have an email.
     return !!user.email;
   }
   return identities.some((identity) => identity.provider === "email");
+}
+
+function hasGoogleIdentity(user: User | null) {
+  if (!user) return false;
+  return (user.identities ?? []).some(
+    (identity) => identity.provider === "google",
+  );
 }
 
 export function AccountSettingsModal({
@@ -30,10 +36,12 @@ export function AccountSettingsModal({
     () => hasEmailPasswordIdentity(user),
     [user],
   );
+  const googleConnected = useMemo(() => hasGoogleIdentity(user), [user]);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -45,6 +53,7 @@ export function AccountSettingsModal({
     setError(null);
     setSuccess(null);
     setBusy(false);
+    setGoogleBusy(false);
   }, [open]);
 
   useEffect(() => {
@@ -57,6 +66,33 @@ export function AccountSettingsModal({
   }, [open, onClose]);
 
   if (!open) return null;
+
+  async function handleConnectGoogle() {
+    setError(null);
+    setSuccess(null);
+    setGoogleBusy(true);
+    const supabase = createClient();
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent("/")}`;
+    const { error: linkError } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+    if (linkError) {
+      const lower = linkError.message.toLowerCase();
+      if (lower.includes("manual linking")) {
+        setError("Google linking isn’t available right now.");
+      } else {
+        setError(linkError.message);
+      }
+      setGoogleBusy(false);
+    }
+  }
 
   async function handlePasswordSubmit(event: FormEvent) {
     event.preventDefault();
@@ -148,7 +184,32 @@ export function AccountSettingsModal({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-5 py-5">
+          <section className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Google</h3>
+              <p className="mt-1 text-xs text-[#949ba4]">
+                {googleConnected
+                  ? "Google is connected to this account."
+                  : "Connect Google to sign in with either method."}
+              </p>
+            </div>
+            {googleConnected ? (
+              <p className="rounded-md border border-[#23a559]/40 bg-[#23a559]/10 px-3 py-2 text-sm text-[#23a559]">
+                Connected
+              </p>
+            ) : (
+              <button
+                type="button"
+                disabled={googleBusy || busy}
+                onClick={() => void handleConnectGoogle()}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#3f4147] bg-[#1e1f22] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2b2d31] disabled:opacity-60"
+              >
+                {googleBusy ? "Redirecting…" : "Connect Google"}
+              </button>
+            )}
+          </section>
+
           <section className="space-y-3">
             <div>
               <h3 className="text-sm font-semibold text-white">
@@ -162,7 +223,10 @@ export function AccountSettingsModal({
             </div>
 
             {canChangePassword ? (
-              <form onSubmit={(event) => void handlePasswordSubmit(event)} className="space-y-3">
+              <form
+                onSubmit={(event) => void handlePasswordSubmit(event)}
+                className="space-y-3"
+              >
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium uppercase tracking-wide text-[#949ba4]">
                     Current password
@@ -202,20 +266,9 @@ export function AccountSettingsModal({
                   />
                 </label>
 
-                {error && (
-                  <p className="rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">
-                    {error}
-                  </p>
-                )}
-                {success && (
-                  <p className="rounded-md border border-[#23a559]/40 bg-[#23a559]/10 px-3 py-2 text-sm text-[#23a559]">
-                    {success}
-                  </p>
-                )}
-
                 <button
                   type="submit"
-                  disabled={busy}
+                  disabled={busy || googleBusy}
                   className="rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                 >
                   {busy ? "Updating…" : "Update Password"}
@@ -228,6 +281,17 @@ export function AccountSettingsModal({
               </p>
             )}
           </section>
+
+          {error && (
+            <p className="rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">
+              {error}
+            </p>
+          )}
+          {success && (
+            <p className="rounded-md border border-[#23a559]/40 bg-[#23a559]/10 px-3 py-2 text-sm text-[#23a559]">
+              {success}
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { messageForAuthError } from "@/lib/auth-oauth";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "login" | "signup";
@@ -42,10 +43,8 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
-    const authError = searchParams.get("error");
-    if (authError === "auth_callback") {
-      setError("Sign-in failed. Try again.");
-    }
+    const mapped = messageForAuthError(searchParams.get("error"));
+    if (mapped) setError(mapped);
   }, [searchParams]);
 
   function goAfterAuth() {
@@ -141,7 +140,7 @@ export function AuthForm({ nextPath = "/" }: AuthFormProps) {
       }
 
       if (!data.session) {
-        setError("Sign-in succeeded but no session was returned. Try again.");
+        setError("Sign-in failed. Try again.");
         return;
       }
 
