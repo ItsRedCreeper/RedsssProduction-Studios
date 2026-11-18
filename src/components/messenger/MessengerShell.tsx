@@ -2421,10 +2421,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           })),
         })
       : "";
-    const text =
-      encoded ||
-      filesSnapshot.map((item) => item.file.name).join(", ") ||
-      "";
+    const text = encoded;
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const optimistic: ChatMessage = {
@@ -2580,8 +2577,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError("One or more files are too large.");
       return;
     }
-    const text =
-      content || filesSnapshot.map((item) => item.file.name).join(", ") || "";
+    const text = content;
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const optimistic: ChatMessage = {

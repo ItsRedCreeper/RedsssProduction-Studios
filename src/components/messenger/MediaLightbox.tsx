@@ -58,7 +58,7 @@ export function MediaLightbox({
         <X className="h-5 w-5" strokeWidth={2} />
       </button>
       <div className="relative z-10 flex max-h-[90vh] w-fit max-w-[min(100%,80rem)] flex-col items-center">
-        <div className="relative flex max-h-[78vh] w-full items-center justify-center">
+        <div className="relative flex max-h-[85vh] w-full items-center justify-center">
           {hasMany && (
             <button
               type="button"
@@ -75,15 +75,15 @@ export function MediaLightbox({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={current.url}
-              alt={current.name}
-              className="max-h-[78vh] max-w-full rounded-md object-contain"
+              alt=""
+              className="max-h-[85vh] max-w-full rounded-md object-contain"
             />
           ) : video ? (
             <video
               src={current.url}
               controls
               autoPlay
-              className="max-h-[78vh] max-w-full rounded-md bg-black"
+              className="max-h-[85vh] max-w-full rounded-md bg-black"
             />
           ) : (
             <a
@@ -92,7 +92,7 @@ export function MediaLightbox({
               rel="noreferrer"
               className="rounded-md bg-[#2b2d31] px-4 py-3 text-sm text-white hover:bg-[#35373c]"
             >
-              Open {current.name}
+              Open file
             </a>
           )}
           {hasMany && (
@@ -106,14 +106,11 @@ export function MediaLightbox({
             </button>
           )}
         </div>
-        <div className="mt-3 max-w-full px-2 text-center">
-          <p className="truncate text-sm text-[#dbdee1]">{current.name}</p>
-          {hasMany && (
-            <p className="mt-1 text-xs text-[#949ba4]">
-              {index + 1} / {items.length}
-            </p>
-          )}
-        </div>
+        {hasMany && (
+          <p className="mt-3 text-xs text-[#949ba4]">
+            {index + 1} / {items.length}
+          </p>
+        )}
       </div>
     </div>
   );
