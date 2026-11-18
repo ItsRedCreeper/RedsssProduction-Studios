@@ -13,7 +13,6 @@ import {
   X,
 } from "lucide-react";
 import { useFriendFavorites } from "@/hooks/useFriendFavorites";
-import { useFriendNotes } from "@/hooks/useFriendNotes";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -108,7 +107,6 @@ export function FriendsPanel({
   const profileUi = useOptionalProfileUi();
   const presenceFeed = useOptionalPresenceFeed();
   const { isFavorite, setFavorite } = useFriendFavorites();
-  const { noteFor } = useFriendNotes();
   const { width, beginResize } = useFriendsPanelWidth();
   const [tab, setTab] = useState<FriendsTab>(initialTab);
   const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
@@ -609,7 +607,6 @@ export function FriendsPanel({
               {!loading &&
                 sortedFriends.map((edge) => {
                   const favorited = isFavorite(edge.other.id);
-                  const privateNote = noteFor(edge.other.id);
                   return (
                   <li
                     key={edge.id}
@@ -665,18 +662,6 @@ export function FriendsPanel({
                           customStatus={edge.other.status_text}
                           className="mt-0.5"
                         />
-                        {privateNote ? (
-                          <HoverTip
-                            label={privateNote}
-                            onlyIfTruncated
-                            delayMs={40}
-                            className="mt-0.5 block min-w-0"
-                          >
-                            <span className="block truncate text-[11px] text-[#6d6f78]">
-                              {privateNote}
-                            </span>
-                          </HoverTip>
-                        ) : null}
                       </span>
                     </button>
                     <HoverTip
