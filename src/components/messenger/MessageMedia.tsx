@@ -42,38 +42,51 @@ export function MessageMedia({ message }: MessageMediaProps) {
           const video = isVideoMime(item.type, item.url);
           if (image) {
             return (
-              <button
-                key={item.url}
-                type="button"
-                onClick={() => openLightbox(item)}
-                className="block max-w-full text-left"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.url}
-                  alt={item.name}
-                  className="max-h-80 max-w-full rounded-md object-contain"
-                />
-              </button>
+              <figure key={item.url} className="max-w-full">
+                <button
+                  type="button"
+                  onClick={() => openLightbox(item)}
+                  className="block max-w-full text-left"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.url}
+                    alt={item.name}
+                    className="max-h-80 max-w-full rounded-md object-contain"
+                  />
+                </button>
+                {item.name && item.name !== "attachment" && (
+                  <figcaption className="mt-1.5 max-w-full truncate text-xs text-[#949ba4]">
+                    {item.name}
+                  </figcaption>
+                )}
+              </figure>
             );
           }
           if (video) {
             return (
-              <div key={item.url} className="relative max-w-full overflow-hidden rounded-md bg-black">
-                <video
-                  src={item.url}
-                  controls
-                  preload="metadata"
-                  className="max-h-80 max-w-full"
-                />
-                <button
-                  type="button"
-                  onClick={() => openLightbox(item)}
-                  className="absolute right-2 top-2 rounded-md bg-black/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white hover:bg-black/80"
-                >
-                  Expand
-                </button>
-              </div>
+              <figure key={item.url} className="max-w-full">
+                <div className="relative max-w-full overflow-hidden rounded-md bg-black">
+                  <video
+                    src={item.url}
+                    controls
+                    preload="metadata"
+                    className="max-h-80 max-w-full"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openLightbox(item)}
+                    className="absolute right-2 top-2 rounded-md bg-black/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white hover:bg-black/80"
+                  >
+                    Expand
+                  </button>
+                </div>
+                {item.name && item.name !== "attachment" && (
+                  <figcaption className="mt-1.5 max-w-full truncate text-xs text-[#949ba4]">
+                    {item.name}
+                  </figcaption>
+                )}
+              </figure>
             );
           }
           return (

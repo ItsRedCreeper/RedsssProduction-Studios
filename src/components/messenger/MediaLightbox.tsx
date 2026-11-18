@@ -49,26 +49,23 @@ export function MediaLightbox({
         aria-label="Close media"
         onClick={onClose}
       />
-      <div className="relative z-10 flex max-h-[90vh] w-full max-w-5xl flex-col items-center">
-        <div className="mb-3 flex w-full items-center justify-between gap-3">
-          <p className="min-w-0 truncate text-sm text-[#dbdee1]">{current.name}</p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" strokeWidth={2} />
-          </button>
-        </div>
-        <div className="relative flex max-h-[80vh] w-full items-center justify-center">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-4 top-4 z-20 rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white"
+        aria-label="Close"
+      >
+        <X className="h-5 w-5" strokeWidth={2} />
+      </button>
+      <div className="relative z-10 flex max-h-[90vh] w-fit max-w-[min(100%,80rem)] flex-col items-center">
+        <div className="relative flex max-h-[78vh] w-full items-center justify-center">
           {hasMany && (
             <button
               type="button"
               onClick={() =>
                 onIndexChange((index - 1 + items.length) % items.length)
               }
-              className="absolute left-2 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+              className="absolute -left-12 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 sm:left-2"
               aria-label="Previous"
             >
               <ChevronLeft className="h-5 w-5" strokeWidth={2} />
@@ -79,14 +76,14 @@ export function MediaLightbox({
             <img
               src={current.url}
               alt={current.name}
-              className="max-h-[80vh] max-w-full rounded-md object-contain"
+              className="max-h-[78vh] max-w-full rounded-md object-contain"
             />
           ) : video ? (
             <video
               src={current.url}
               controls
               autoPlay
-              className="max-h-[80vh] max-w-full rounded-md bg-black"
+              className="max-h-[78vh] max-w-full rounded-md bg-black"
             />
           ) : (
             <a
@@ -102,18 +99,21 @@ export function MediaLightbox({
             <button
               type="button"
               onClick={() => onIndexChange((index + 1) % items.length)}
-              className="absolute right-2 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+              className="absolute -right-12 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 sm:right-2"
               aria-label="Next"
             >
               <ChevronRight className="h-5 w-5" strokeWidth={2} />
             </button>
           )}
         </div>
-        {hasMany && (
-          <p className="mt-3 text-xs text-[#949ba4]">
-            {index + 1} / {items.length}
-          </p>
-        )}
+        <div className="mt-3 max-w-full px-2 text-center">
+          <p className="truncate text-sm text-[#dbdee1]">{current.name}</p>
+          {hasMany && (
+            <p className="mt-1 text-xs text-[#949ba4]">
+              {index + 1} / {items.length}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

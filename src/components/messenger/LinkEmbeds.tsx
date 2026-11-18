@@ -61,6 +61,14 @@ export function LinkEmbeds({ content }: LinkEmbedsProps) {
   if (youtubeId) {
     return (
       <div className="mt-2 max-w-md overflow-hidden rounded-md border border-[#3f4147] bg-[#2b2d31]">
+        <div className="space-y-0.5 px-3 py-2">
+          <p className="truncate text-sm font-semibold text-white">
+            {meta?.title ?? (loading ? "Loading…" : "YouTube video")}
+          </p>
+          {meta?.author_name && (
+            <p className="truncate text-xs text-[#949ba4]">{meta.author_name}</p>
+          )}
+        </div>
         {open ? (
           <div className="aspect-video w-full bg-black">
             <iframe
@@ -93,14 +101,6 @@ export function LinkEmbeds({ content }: LinkEmbedsProps) {
             </span>
           </button>
         )}
-        <div className="space-y-0.5 px-3 py-2">
-          <p className="truncate text-sm font-semibold text-white">
-            {meta?.title ?? (loading ? "Loading…" : "YouTube video")}
-          </p>
-          {meta?.author_name && (
-            <p className="truncate text-xs text-[#949ba4]">{meta.author_name}</p>
-          )}
-        </div>
       </div>
     );
   }
@@ -114,14 +114,6 @@ export function LinkEmbeds({ content }: LinkEmbedsProps) {
       rel="noreferrer"
       className="mt-2 block max-w-md overflow-hidden rounded-md border border-[#3f4147] bg-[#2b2d31] hover:bg-[#32343a]"
     >
-      {meta?.thumbnail_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={meta.thumbnail_url}
-          alt=""
-          className="max-h-40 w-full object-cover"
-        />
-      )}
       <div className="space-y-0.5 px-3 py-2">
         <p className="truncate text-sm font-semibold text-white">
           {meta?.title ?? (loading ? "Loading…" : otherUrl)}
@@ -132,6 +124,14 @@ export function LinkEmbeds({ content }: LinkEmbedsProps) {
           </p>
         )}
       </div>
+      {meta?.thumbnail_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={meta.thumbnail_url}
+          alt=""
+          className="max-h-40 w-full object-cover"
+        />
+      )}
     </a>
   );
 }
