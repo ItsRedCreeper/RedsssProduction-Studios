@@ -400,8 +400,9 @@ export function dmRowsToMessages(rows: Tables<"dm_messages">[]): Tables<"message
     reply_to_id: row.reply_to_id,
     pinned: false,
     edited_at: row.edited_at,
-    attachment_url: null,
-    attachment_type: null,
+    attachment_url: row.attachment_url ?? null,
+    attachment_type: row.attachment_type ?? null,
+    attachments: row.attachments ?? [],
     created_at: row.created_at,
   }));
 }
@@ -455,14 +456,19 @@ export async function uploadAttachment(userId: string, file: File) {
   const { fitImageToMaxBytes, MESSAGE_ATTACHMENT_MAX_BYTES } = await import(
     "@/lib/compress-image"
   );
+  const { measureImage } = await import("@/lib/message-media");
   const fitted = await fitImageToMaxBytes(file, MESSAGE_ATTACHMENT_MAX_BYTES, {
     maxEdge: 4096,
   });
   if (fitted.error) {
-    return { url: null as string | null, error: fitted.error };
+    return {
+      attachment: null as null,
+      error: fitted.error,
+    };
   }
 
   const uploadFile = fitted.file;
+  const dims = await measureImage(uploadFile);
   const supabase = createClient();
   const path = `${userId}/${Date.now()}-${safeFileName(uploadFile.name)}`;
   const { error } = await supabase.storage
@@ -471,9 +477,21 @@ export async function uploadAttachment(userId: string, file: File) {
       contentType: uploadFile.type || "application/octet-stream",
       upsert: false,
     });
-  if (error) return { url: null as string | null, error: error.message };
+  if (error) {
+    return { attachment: null as null, error: error.message };
+  }
   const { data } = supabase.storage.from("message-attachments").getPublicUrl(path);
-  return { url: data.publicUrl, error: null as string | null };
+  return {
+    attachment: {
+      url: data.publicUrl,
+      type: uploadFile.type || "application/octet-stream",
+      name: uploadFile.name,
+      size: uploadFile.size,
+      width: dims?.width ?? null,
+      height: dims?.height ?? null,
+    },
+    error: null as string | null,
+  };
 }
 
 export async function saveChannelRead(

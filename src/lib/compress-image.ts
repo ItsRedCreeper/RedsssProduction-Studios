@@ -1,6 +1,6 @@
 /** Matches Supabase bucket file_size_limit values. */
 export const PROFILE_ASSET_MAX_BYTES = 5 * 1024 * 1024;
-export const MESSAGE_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+export const MESSAGE_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
 
 const MIN_QUALITY = 0.48;
 const QUALITY_STEP = 0.06;

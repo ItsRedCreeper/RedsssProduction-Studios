@@ -1,13 +1,30 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Hash, Paperclip, Plus, Reply, Shield, User, X } from "lucide-react";
+import {
+  FileText,
+  Film,
+  Hash,
+  Paperclip,
+  Plus,
+  Reply,
+  Shield,
+  User,
+  X,
+} from "lucide-react";
 import {
   TypingIndicator,
   type TypingPerson,
 } from "@/components/messenger/TypingIndicator";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
+import {
+  formatFileSize,
+  isImageMime,
+  isVideoMime,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+} from "@/lib/message-media";
 
 export type MentionSuggestion = {
   id: string;
@@ -15,12 +32,18 @@ export type MentionSuggestion = {
   kind: "user" | "role" | "channel";
 };
 
+export type PendingAttachment = {
+  id: string;
+  file: File;
+  previewUrl: string | null;
+};
+
 type MessageComposerProps = {
   placeholder: string;
   draft: string;
   replyAuthor: string | null;
   replyContent: string | null;
-  pendingFileName: string | null;
+  pendingFiles: PendingAttachment[];
   sending: boolean;
   allowAttach: boolean;
   disabled?: boolean;
@@ -28,11 +51,10 @@ type MessageComposerProps = {
   typingPeople?: TypingPerson[];
   onDraft: (value: string) => void;
   onCancelReply: () => void;
-  onFile: (file: File) => void;
-  onClearFile: () => void;
+  onFiles: (files: File[]) => void;
+  onRemoveFile: (id: string) => void;
   onSubmit: () => void;
   onTyping?: () => void;
-  /** Fired shortly after keystrokes pause, and before send. */
   onTypingStop?: () => void;
   onLimitReached?: (message: string) => void;
 };
@@ -48,7 +70,7 @@ export function MessageComposer({
   draft,
   replyAuthor,
   replyContent,
-  pendingFileName,
+  pendingFiles,
   sending,
   allowAttach,
   disabled,
@@ -56,8 +78,8 @@ export function MessageComposer({
   typingPeople = [],
   onDraft,
   onCancelReply,
-  onFile,
-  onClearFile,
+  onFiles,
+  onRemoveFile,
   onSubmit,
   onTyping,
   onTypingStop,
@@ -67,6 +89,7 @@ export function MessageComposer({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const typingStopTimer = useRef<number | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const replying = !!replyAuthor;
 
   useEffect(() => {
@@ -109,6 +132,11 @@ export function MessageComposer({
     onDraft(value);
   }
 
+  function takeFiles(list: FileList | File[] | null) {
+    if (!list || !allowAttach) return;
+    onFiles(Array.from(list));
+  }
+
   const mentionQuery = useMemo(() => {
     const cursor = inputRef.current?.selectionStart ?? draft.length;
     const before = draft.slice(0, cursor);
@@ -126,7 +154,8 @@ export function MessageComposer({
     const kindFilter =
       mentionQuery.trigger === "#"
         ? (item: MentionSuggestion) => item.kind === "channel"
-        : (item: MentionSuggestion) => item.kind === "user" || item.kind === "role";
+        : (item: MentionSuggestion) =>
+            item.kind === "user" || item.kind === "role";
     const query = mentionQuery.query.trim();
     const queryCompact = query.replace(/\s+/g, " ");
     return mentionSuggestions
@@ -169,7 +198,29 @@ export function MessageComposer({
   }
 
   return (
-    <div className="shrink-0 px-4 pb-6 pt-2">
+    <div
+      className="shrink-0 px-4 pb-6 pt-2"
+      onDragEnter={(event) => {
+        if (!allowAttach) return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragOver={(event) => {
+        if (!allowAttach) return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+        setDragging(false);
+      }}
+      onDrop={(event) => {
+        if (!allowAttach) return;
+        event.preventDefault();
+        setDragging(false);
+        takeFiles(event.dataTransfer.files);
+      }}
+    >
       <TypingIndicator people={typingPeople} className="mb-1.5 px-1" />
       {replying && (
         <div className="flex items-center gap-2 rounded-t-md border-l-4 border-accent bg-[#2b2d31] px-4 py-2">
@@ -199,31 +250,59 @@ export function MessageComposer({
           </HoverTip>
         </div>
       )}
-      {pendingFileName && (
+      {pendingFiles.length > 0 && (
         <div
-          className={`flex items-center gap-2 bg-[#2b2d31] px-4 py-2 ${
+          className={`flex flex-wrap gap-2 bg-[#2b2d31] px-3 py-2 ${
             replying ? "" : "rounded-t-md"
           }`}
         >
-          <Paperclip className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-          <HoverTip
-            label={pendingFileName}
-            onlyIfTruncated
-            delayMs={40}
-            className="min-w-0 flex-1"
-          >
-            <p className="truncate text-xs text-[#dbdee1]">{pendingFileName}</p>
-          </HoverTip>
-          <HoverTip label="Remove Attachment" delayMs={40}>
-            <button
-              type="button"
-              onClick={onClearFile}
-              className="rounded-md p-1 text-muted hover:bg-white/10 hover:text-white"
-              aria-label="Remove attachment"
-            >
-              <X className="h-4 w-4" strokeWidth={2} />
-            </button>
-          </HoverTip>
+          {pendingFiles.map((item) => {
+            const image = isImageMime(item.file.type);
+            const video = isVideoMime(item.file.type);
+            return (
+              <div
+                key={item.id}
+                className="relative w-28 overflow-hidden rounded-md border border-[#3f4147] bg-[#1e1f22]"
+              >
+                {image && item.previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.previewUrl}
+                    alt=""
+                    className="h-20 w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-20 flex-col items-center justify-center gap-1 px-2 text-[#949ba4]">
+                    {video ? (
+                      <Film className="h-5 w-5" strokeWidth={1.75} />
+                    ) : item.file.type.startsWith("text/") ||
+                      item.file.type.includes("pdf") ? (
+                      <FileText className="h-5 w-5" strokeWidth={1.75} />
+                    ) : (
+                      <Paperclip className="h-5 w-5" strokeWidth={1.75} />
+                    )}
+                  </div>
+                )}
+                <div className="space-y-0.5 px-1.5 py-1">
+                  <p className="truncate text-[10px] text-[#dbdee1]">
+                    {item.file.name}
+                  </p>
+                  <p className="text-[10px] text-[#949ba4]">
+                    {formatFileSize(item.file.size)}
+                    {item.file.size > MAX_ATTACHMENT_BYTES ? " · too large" : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemoveFile(item.id)}
+                  className="absolute right-1 top-1 rounded-full bg-black/70 p-0.5 text-white hover:bg-black"
+                  aria-label={`Remove ${item.file.name}`}
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={2} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
       <div className="relative">
@@ -231,7 +310,11 @@ export function MessageComposer({
           <ul className="absolute bottom-full left-0 z-20 mb-1 max-h-48 w-full overflow-y-auto rounded-md border border-[#1e1f22] bg-[#111214] py-1 shadow-xl">
             {filteredMentions.map((item, index) => {
               const Icon =
-                item.kind === "channel" ? Hash : item.kind === "role" ? Shield : User;
+                item.kind === "channel"
+                  ? Hash
+                  : item.kind === "role"
+                    ? Shield
+                    : User;
               return (
                 <li key={`${item.kind}-${item.id}`}>
                   <button
@@ -263,7 +346,9 @@ export function MessageComposer({
         <form
           onSubmit={handleSubmit}
           className={`flex items-end gap-3 bg-[#383a40] px-4 py-3 ${
-            replying || pendingFileName ? "rounded-b-md" : "rounded-md"
+            dragging ? "ring-2 ring-accent/60" : ""
+          } ${
+            replying || pendingFiles.length > 0 ? "rounded-b-md" : "rounded-md"
           }`}
         >
           {allowAttach && (
@@ -271,18 +356,22 @@ export function MessageComposer({
               <input
                 ref={fileRef}
                 type="file"
+                multiple
                 className="hidden"
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
+                  takeFiles(event.target.files);
                   event.target.value = "";
-                  if (file) onFile(file);
                 }}
               />
               <HoverTip label="Upload a File" delayMs={40}>
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
-                  disabled={disabled || sending}
+                  disabled={
+                    disabled ||
+                    sending ||
+                    pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE
+                  }
                   className="mb-0.5 shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
                   aria-label="Attach file"
                 >
@@ -312,7 +401,8 @@ export function MessageComposer({
                   event.preventDefault();
                   setMentionIndex(
                     (i) =>
-                      (i - 1 + filteredMentions.length) % filteredMentions.length,
+                      (i - 1 + filteredMentions.length) %
+                      filteredMentions.length,
                   );
                   return;
                 }
@@ -330,19 +420,29 @@ export function MessageComposer({
               }
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                if (!disabled && !sending && (draft.trim() || pendingFileName)) {
+                if (
+                  !disabled &&
+                  !sending &&
+                  (draft.trim() || pendingFiles.length > 0)
+                ) {
                   clearTypingSoon();
                   onSubmit();
                 }
               }
             }}
-            placeholder={placeholder}
+            placeholder={
+              dragging ? "Drop files to attach…" : placeholder
+            }
             disabled={disabled || sending}
             className="max-h-40 min-h-[24px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-[#dbdee1] outline-none placeholder:text-[#6d6f78] [overflow-wrap:anywhere] whitespace-pre-wrap"
           />
           <button
             type="submit"
-            disabled={disabled || sending || (!draft.trim() && !pendingFileName)}
+            disabled={
+              disabled ||
+              sending ||
+              (!draft.trim() && pendingFiles.length === 0)
+            }
             className="mb-0.5 shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
             {sending ? "Sending…" : "Send"}

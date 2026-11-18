@@ -28,9 +28,37 @@ export type Database = {
         Relationships: []
       }
       dm_messages: {
-        Row: { id: string; conversation_id: string; user_id: string; content: string; reply_to_id: string | null; created_at: string; edited_at: string | null }
-        Insert: { id?: string; conversation_id: string; user_id: string; content: string; reply_to_id?: string | null; created_at?: string; edited_at?: string | null }
+        Row: {
+          id: string
+          conversation_id: string
+          user_id: string
+          content: string
+          reply_to_id: string | null
+          created_at: string
+          edited_at: string | null
+          attachment_url: string | null
+          attachment_type: string | null
+          attachments: Json
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          user_id: string
+          content: string
+          reply_to_id?: string | null
+          created_at?: string
+          edited_at?: string | null
+          attachment_url?: string | null
+          attachment_type?: string | null
+          attachments?: Json
+        }
         Update: Partial<Database["public"]["Tables"]["dm_messages"]["Insert"]>
+        Relationships: []
+      }
+      dm_message_reactions: {
+        Row: { id: string; message_id: string; user_id: string; emoji: string; created_at: string }
+        Insert: { id?: string; message_id: string; user_id: string; emoji: string; created_at?: string }
+        Update: Partial<Database["public"]["Tables"]["dm_message_reactions"]["Insert"]>
         Relationships: []
       }
       dm_participants: {
@@ -176,8 +204,32 @@ export type Database = {
         Relationships: []
       }
       messages: {
-        Row: { id: string; channel_id: string; user_id: string; content: string; reply_to_id: string | null; pinned: boolean; edited_at: string | null; attachment_url: string | null; attachment_type: string | null; created_at: string }
-        Insert: { id?: string; channel_id: string; user_id: string; content: string; reply_to_id?: string | null; pinned?: boolean; edited_at?: string | null; attachment_url?: string | null; attachment_type?: string | null; created_at?: string }
+        Row: {
+          id: string
+          channel_id: string
+          user_id: string
+          content: string
+          reply_to_id: string | null
+          pinned: boolean
+          edited_at: string | null
+          attachment_url: string | null
+          attachment_type: string | null
+          attachments: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          channel_id: string
+          user_id: string
+          content: string
+          reply_to_id?: string | null
+          pinned?: boolean
+          edited_at?: string | null
+          attachment_url?: string | null
+          attachment_type?: string | null
+          attachments?: Json
+          created_at?: string
+        }
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>
         Relationships: []
       }

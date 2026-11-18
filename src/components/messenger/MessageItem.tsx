@@ -5,10 +5,10 @@ import {
   Check,
   Copy,
   MoreHorizontal,
-  Paperclip,
   Pencil,
   Pin,
   PinOff,
+  Plus,
   Reply,
   SmilePlus,
   Trash2,
@@ -18,9 +18,12 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { formatTimestamp } from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
+import { LinkEmbeds } from "@/components/messenger/LinkEmbeds";
+import { MessageMedia } from "@/components/messenger/MessageMedia";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { displayMentionText, type MentionMaps } from "@/lib/mentions";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
+import { EXTRA_EMOJIS } from "@/lib/message-media";
 import {
   QUICK_REACTIONS,
   type ChatMessage,
@@ -51,12 +54,6 @@ type MessageItemProps = {
   onTogglePin?: () => void;
 };
 
-function isImageAttachment(message: ChatMessage) {
-  if (!message.attachment_url) return false;
-  if (message.attachment_type?.startsWith("image/")) return true;
-  return /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(message.attachment_url);
-}
-
 export function MessageItem({
   message,
   isOwn,
@@ -78,7 +75,7 @@ export function MessageItem({
   onTogglePin,
 }: MessageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [fullPickerOpen, setFullPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(message.content);
   const [editError, setEditError] = useState<string | null>(null);
@@ -86,7 +83,6 @@ export function MessageItem({
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const profileUi = useOptionalProfileUi();
-  // Discord: friend nick in DMs; server nick in servers; else username.
   const authorBase = message.profiles?.username ?? "Unknown";
   const author = preferFriendNickname
     ? profileUi?.nicknameFor(message.user_id)?.trim() || authorBase
@@ -110,16 +106,16 @@ export function MessageItem({
   }
 
   useEffect(() => {
-    if (!menuOpen && !pickerOpen) return;
+    if (!menuOpen && !fullPickerOpen) return;
     function onPointerDown(event: MouseEvent) {
       if (!menuRef.current?.contains(event.target as Node)) {
         setMenuOpen(false);
-        setPickerOpen(false);
+        setFullPickerOpen(false);
       }
     }
     window.addEventListener("mousedown", onPointerDown);
     return () => window.removeEventListener("mousedown", onPointerDown);
-  }, [menuOpen, pickerOpen]);
+  }, [menuOpen, fullPickerOpen]);
 
   async function saveEdit() {
     const next = editDraft.trim();
@@ -152,6 +148,11 @@ export function MessageItem({
     setMenuOpen(false);
   }
 
+  function react(emoji: string) {
+    onReact?.(emoji);
+    setFullPickerOpen(false);
+  }
+
   return (
     <article
       id={`message-${message.id}`}
@@ -174,8 +175,8 @@ export function MessageItem({
       </button>
 
       <div className="min-w-0 flex-1 py-0.5 pr-2">
-        {reply && (
-          replyHidden ? (
+        {reply &&
+          (replyHidden ? (
             <div className="mb-1 flex max-w-full items-center gap-1.5 text-left">
               <span
                 className="mb-1 ml-2 mr-0.5 h-2.5 w-7 shrink-0 rounded-tl-md border-l-2 border-t-2 border-[#4e5058]"
@@ -212,8 +213,7 @@ export function MessageItem({
                   : "Attachment"}
               </span>
             </button>
-          )
-        )}
+          ))}
 
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <button
@@ -272,9 +272,7 @@ export function MessageItem({
                 }
               }}
             />
-            {editError && (
-              <p className="text-xs text-accent">{editError}</p>
-            )}
+            {editError && <p className="text-xs text-accent">{editError}</p>}
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -315,32 +313,8 @@ export function MessageItem({
                 })}
               </p>
             )}
-            {message.attachment_url && isImageAttachment(message) && (
-              <a
-                href={message.attachment_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-block"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={message.attachment_url}
-                  alt=""
-                  className="max-h-80 max-w-md rounded-md object-contain"
-                />
-              </a>
-            )}
-            {message.attachment_url && !isImageAttachment(message) && (
-              <a
-                href={message.attachment_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex max-w-full items-center gap-2 rounded-md bg-[#2b2d31] px-3 py-2 text-sm text-[#dbdee1] hover:bg-[#35373c]"
-              >
-                <Paperclip className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
-                <span className="truncate">Open attachment</span>
-              </a>
-            )}
+            <MessageMedia message={message} />
+            {message.content && <LinkEmbeds content={message.content} />}
           </>
         )}
 
@@ -350,7 +324,7 @@ export function MessageItem({
               readOnly ? (
                 <span
                   key={reaction.emoji}
-                  className="inline-flex items-center gap-1 rounded-md border border-transparent bg-[#2b2d31] px-1.5 py-0.5 text-xs text-[#dbdee1]"
+                  className="inline-flex items-center gap-1 rounded-full border border-transparent bg-[#2b2d31] px-1.5 py-0.5 text-xs text-[#dbdee1]"
                 >
                   <span>{reaction.emoji}</span>
                   <span>{reaction.count}</span>
@@ -360,9 +334,9 @@ export function MessageItem({
                   key={reaction.emoji}
                   type="button"
                   onClick={() => onReact?.(reaction.emoji)}
-                  className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs ${
+                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition ${
                     reaction.reacted
-                      ? "border-accent bg-accent-muted text-white"
+                      ? "border-accent/70 bg-accent-muted text-white"
                       : "border-transparent bg-[#2b2d31] text-[#dbdee1] hover:border-[#4e5058]"
                   }`}
                 >
@@ -370,6 +344,19 @@ export function MessageItem({
                   <span>{reaction.count}</span>
                 </button>
               ),
+            )}
+            {showToolbar && onReact && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFullPickerOpen(true);
+                  setMenuOpen(false);
+                }}
+                className="inline-flex items-center rounded-full border border-transparent bg-[#2b2d31] px-1.5 py-0.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 hover:border-[#4e5058] hover:text-white"
+                aria-label="Add reaction"
+              >
+                <SmilePlus className="h-3.5 w-3.5" strokeWidth={1.75} />
+              </button>
             )}
           </div>
         )}
@@ -379,45 +366,55 @@ export function MessageItem({
         <div
           ref={menuRef}
           className={`absolute -top-3 right-4 z-10 items-center overflow-visible rounded-md border border-[#1e1f22] bg-[#111214] shadow-lg shadow-black/40 ${
-            menuOpen || pickerOpen
+            menuOpen || fullPickerOpen
               ? "flex"
               : "hidden group-hover:flex group-focus-within:flex"
           }`}
         >
           {onReact && (
-            <div className="relative">
-              <HoverTip label="Add Reaction" delayMs={40}>
+            <>
+              {QUICK_REACTIONS.map((emoji) => (
                 <button
+                  key={emoji}
                   type="button"
-                  onClick={() => {
-                    setPickerOpen((open) => !open);
-                    setMenuOpen(false);
-                  }}
-                  className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
-                  aria-label="Add reaction"
+                  onClick={() => react(emoji)}
+                  className="px-1.5 py-1 text-sm transition-colors hover:bg-[#2b2d31]"
+                  aria-label={`React with ${emoji}`}
                 >
-                  <SmilePlus className="h-4 w-4" strokeWidth={1.75} />
+                  {emoji}
                 </button>
-              </HoverTip>
-              {pickerOpen && (
-                <div className="absolute right-0 top-full z-20 mt-1 flex gap-0.5 rounded-md border border-[#1e1f22] bg-[#111214] p-1 shadow-xl">
-                  {QUICK_REACTIONS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => {
-                        onReact(emoji);
-                        setPickerOpen(false);
-                      }}
-                      className="rounded-md px-1.5 py-1 text-base hover:bg-white/10"
-                      aria-label={`React with ${emoji}`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+              ))}
+              <div className="relative">
+                <HoverTip label="Add Reaction" delayMs={40}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFullPickerOpen((open) => !open);
+                      setMenuOpen(false);
+                    }}
+                    className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+                    aria-label="More reactions"
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                </HoverTip>
+                {fullPickerOpen && (
+                  <div className="absolute right-0 top-full z-20 mt-1 grid w-[15rem] grid-cols-6 gap-0.5 rounded-md border border-[#1e1f22] bg-[#111214] p-1.5 shadow-xl">
+                    {EXTRA_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => react(emoji)}
+                        className="rounded-md px-1 py-1 text-base hover:bg-white/10"
+                        aria-label={`React with ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           )}
           <HoverTip label="Reply" delayMs={40}>
             <button
@@ -430,7 +427,10 @@ export function MessageItem({
             </button>
           </HoverTip>
           {onTogglePin && (
-            <HoverTip label={message.pinned ? "Unpin Message" : "Pin Message"} delayMs={40}>
+            <HoverTip
+              label={message.pinned ? "Unpin Message" : "Pin Message"}
+              delayMs={40}
+            >
               <button
                 type="button"
                 onClick={onTogglePin}
@@ -453,7 +453,7 @@ export function MessageItem({
                   setEditDraft(message.content);
                   setEditing(true);
                   setMenuOpen(false);
-                  setPickerOpen(false);
+                  setFullPickerOpen(false);
                 }}
                 className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
                 aria-label="Edit"
@@ -468,7 +468,7 @@ export function MessageItem({
                 type="button"
                 onClick={() => {
                   setMenuOpen((open) => !open);
-                  setPickerOpen(false);
+                  setFullPickerOpen(false);
                 }}
                 className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
                 aria-label="More"
@@ -518,23 +518,6 @@ export function MessageItem({
                     )}
                     {message.pinned ? "Unpin Message" : "Pin Message"}
                   </button>
-                )}
-                {onReact && (
-                  <div className="flex gap-1 px-3 py-2">
-                    {QUICK_REACTIONS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => {
-                          onReact(emoji);
-                          setMenuOpen(false);
-                        }}
-                        className="rounded-md px-1 py-0.5 text-base hover:bg-white/10"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
                 )}
                 {isOwn && (
                   <button

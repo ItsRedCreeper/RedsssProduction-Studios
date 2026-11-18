@@ -31,6 +31,7 @@ import { ChatTimeline } from "@/components/messenger/ChatTimeline";
 import {
   MessageComposer,
   type MentionSuggestion,
+  type PendingAttachment,
 } from "@/components/messenger/MessageComposer";
 import type { TypingPerson } from "@/components/messenger/TypingIndicator";
 import { MemberList } from "@/components/messenger/MemberList";
@@ -72,6 +73,11 @@ import {
   fitImageToMaxBytes,
   MESSAGE_ATTACHMENT_MAX_BYTES,
 } from "@/lib/compress-image";
+import {
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  type MessageAttachment,
+} from "@/lib/message-media";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import { can, mergeRolePermissions, PERMISSIONS } from "@/lib/permissions";
 import {
@@ -247,7 +253,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [pinnedExtra, setPinnedExtra] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
   const [sending, setSending] = useState(false);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [createChannelType, setCreateChannelType] = useState<"text" | "voice">("text");
@@ -304,7 +310,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   conversationRef.current = activeConversationId;
   userIdRef.current = user?.id ?? null;
   channelIdsRef.current = new Set(channels.map((channel) => channel.id));
-  messageIdsRef.current = new Set(messages.map((message) => message.id));
+  messageIdsRef.current = new Set([
+    ...messages.map((message) => message.id),
+    ...dmMessages.map((message) => message.id),
+  ]);
 
   const isMemberOfActiveServer =
     !!activeServerId && servers.some((server) => server.id === activeServerId);
@@ -414,7 +423,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     scopeRef.current = scope;
     setDraft("");
     setReplyTo(null);
-    setPendingFile(null);
+    setPendingFiles((prev) => {
+      for (const item of prev) {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      }
+      return [];
+    });
     setSearchQuery("");
     setPinsOpen(false);
   }, [scope]);
@@ -1289,6 +1303,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     reply_to_id: row.reply_to_id,
                     attachment_url: row.attachment_url,
                     attachment_type: row.attachment_type,
+                    attachments: row.attachments ?? [],
                   }
                 : message,
             ),
@@ -1339,6 +1354,24 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           setReactions((prev) => prev.filter((reaction) => reaction.id !== row.id));
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "dm_message_reactions" },
+        (payload) => {
+          const row = payload.new as Reaction;
+          if (!messageIdsRef.current.has(row.message_id)) return;
+          setReactions((prev) => upsertReaction(prev, row));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "dm_message_reactions" },
+        (payload) => {
+          const row = payload.old as Partial<Reaction>;
+          if (!row.id) return;
+          setReactions((prev) => prev.filter((reaction) => reaction.id !== row.id));
+        },
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -1348,6 +1381,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   useEffect(() => {
     if (!activeConversationId) {
       setDmMessages([]);
+      setReactions([]);
       return;
     }
     const conversationId = activeConversationId;
@@ -1366,6 +1400,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (dmError || !data) {
         setError(dmError?.message ?? "Failed to load direct messages");
         setDmMessages([]);
+        setReactions([]);
         setDmHasMore(false);
         setLoadingDmMessages(false);
         return;
@@ -1387,8 +1422,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       const profiles = await loadProfiles(
         [...rows, ...parents].map((row) => row.user_id),
       );
+      const ids = rows.map((row) => row.id).filter((id) => !id.startsWith("temp-"));
+      const { data: reactionRows } =
+        ids.length > 0
+          ? await supabase
+              .from("dm_message_reactions")
+              .select("*")
+              .in("message_id", ids)
+          : { data: [] as Tables<"dm_message_reactions">[] };
       if (cancelled) return;
       setDmMessages(hydrateMessages(rows, profiles, parents));
+      setReactions((reactionRows as Reaction[]) ?? []);
       setDmHasMore(data.length >= CHANNEL_MESSAGE_PAGE_SIZE);
       setLoadingDmMessages(false);
     }
@@ -1456,6 +1500,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     content: row.content,
                     edited_at: row.edited_at,
                     reply_to_id: row.reply_to_id,
+                    attachment_url: row.attachment_url ?? null,
+                    attachment_type: row.attachment_type ?? null,
+                    attachments: row.attachments ?? [],
                   }
                 : message,
             ),
@@ -1994,11 +2041,31 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setLoadingOlderMessages(false);
       return;
     }
+    const ids = result.messages
+      .map((message) => message.id)
+      .filter((id) => !id.startsWith("temp-"));
+    const supabase = createClient();
+    const { data: reactionRows } =
+      ids.length > 0
+        ? await supabase
+            .from("dm_message_reactions")
+            .select("*")
+            .in("message_id", ids)
+        : { data: [] as Tables<"dm_message_reactions">[] };
     setDmMessages((prev) => {
       const seen = new Set(prev.map((message) => message.id));
       const older = result.messages.filter((message) => !seen.has(message.id));
       return [...older, ...prev];
     });
+    if (reactionRows?.length) {
+      setReactions((prev) => {
+        let next = prev;
+        for (const row of reactionRows) {
+          next = upsertReaction(next, row as Reaction);
+        }
+        return next;
+      });
+    }
     setDmHasMore(result.hasMore);
     setLoadingOlderMessages(false);
   }, [
@@ -2330,14 +2397,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
     const channelId = activeChannelId;
     const content = draft.trim();
-    const file = pendingFile;
-    if (!content && !file) return;
+    const filesSnapshot = pendingFiles;
+    if (!content && filesSnapshot.length === 0) return;
     if (content.length > MESSAGE_MAX) {
       setError(MESSAGE_MAX_REACHED);
       return;
     }
-    if (file && file.size > MESSAGE_ATTACHMENT_MAX_BYTES) {
-      setError("File is too large.");
+    if (filesSnapshot.some((item) => item.file.size > MAX_ATTACHMENT_BYTES)) {
+      setError("One or more files are too large.");
       return;
     }
     // Discord-style: store <@id> tokens so display names (incl. spaces) resolve correctly.
@@ -2354,7 +2421,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           })),
         })
       : "";
-    const text = encoded || file?.name || "";
+    const text =
+      encoded ||
+      filesSnapshot.map((item) => item.file.name).join(", ") ||
+      "";
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const optimistic: ChatMessage = {
@@ -2367,7 +2437,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       pinned: false,
       edited_at: null,
       attachment_url: null,
-      attachment_type: file?.type || null,
+      attachment_type: filesSnapshot[0]?.file.type || null,
+      attachments: [],
       profiles: {
         username: profile?.username ?? "You",
         avatar_url: profile?.avatar_url ?? null,
@@ -2385,17 +2456,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     setDraft("");
     setReplyTo(null);
-    setPendingFile(null);
+    setPendingFiles([]);
     setError(null);
     publishTypingStop();
     setSending(true);
     setMessages((prev) => [...prev, optimistic]);
 
-    let attachmentUrl: string | null = null;
-    let attachmentType: string | null = null;
-    if (file) {
-      const uploaded = await uploadAttachment(user.id, file);
-      if (uploaded.error || !uploaded.url) {
+    const uploadedAttachments: MessageAttachment[] = [];
+    for (const item of filesSnapshot) {
+      const uploaded = await uploadAttachment(user.id, item.file);
+      if (uploaded.error || !uploaded.attachment) {
         setMessages((prev) =>
           prev.map((message) =>
             message.id === tempId ? { ...message, failed: true } : message,
@@ -2403,15 +2473,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         );
         setError(uploaded.error ?? "Upload failed");
         setDraft(content);
-        setPendingFile(file);
+        setPendingFiles(filesSnapshot);
         if (replySnapshot) setReplyTo(replySnapshot);
         setSending(false);
         return;
       }
-      attachmentUrl = uploaded.url;
-      attachmentType = file.type || "application/octet-stream";
+      uploadedAttachments.push(uploaded.attachment);
     }
 
+    const first = uploadedAttachments[0] ?? null;
     const supabase = createClient();
     const { data, error: insertError } = await supabase
       .from("messages")
@@ -2420,8 +2490,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         user_id: user.id,
         content: text,
         reply_to_id: replySnapshot?.id ?? null,
-        attachment_url: attachmentUrl,
-        attachment_type: attachmentType,
+        attachment_url: first?.url ?? null,
+        attachment_type: first?.type ?? null,
+        attachments: uploadedAttachments,
       })
       .select("*")
       .single();
@@ -2434,9 +2505,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       );
       setError(insertError?.message ?? "Failed to send message");
       setDraft(content);
+      setPendingFiles(filesSnapshot);
       if (replySnapshot) setReplyTo(replySnapshot);
       setSending(false);
       return;
+    }
+
+    for (const item of filesSnapshot) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     }
 
     const saved: ChatMessage = {
@@ -2494,24 +2570,32 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
     const conversationId = activeConversationId;
     const content = draft.trim();
-    if (!content) return;
+    const filesSnapshot = pendingFiles;
+    if (!content && filesSnapshot.length === 0) return;
     if (content.length > MESSAGE_MAX) {
       setError(MESSAGE_MAX_REACHED);
       return;
     }
+    if (filesSnapshot.some((item) => item.file.size > MAX_ATTACHMENT_BYTES)) {
+      setError("One or more files are too large.");
+      return;
+    }
+    const text =
+      content || filesSnapshot.map((item) => item.file.name).join(", ") || "";
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const optimistic: ChatMessage = {
       id: tempId,
       channel_id: conversationId,
       user_id: user.id,
-      content,
+      content: text,
       created_at: new Date().toISOString(),
       reply_to_id: replySnapshot?.id ?? null,
       pinned: false,
       edited_at: null,
       attachment_url: null,
-      attachment_type: null,
+      attachment_type: filesSnapshot[0]?.file.type || null,
+      attachments: [],
       profiles: {
         username: profile?.username ?? "You",
         avatar_url: profile?.avatar_url ?? null,
@@ -2528,19 +2612,43 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     };
     setDraft("");
     setReplyTo(null);
+    setPendingFiles([]);
     setError(null);
     publishTypingStop();
     setSending(true);
     setDmMessages((prev) => [...prev, optimistic]);
 
+    const uploadedAttachments: MessageAttachment[] = [];
+    for (const item of filesSnapshot) {
+      const uploaded = await uploadAttachment(user.id, item.file);
+      if (uploaded.error || !uploaded.attachment) {
+        setDmMessages((prev) =>
+          prev.map((message) =>
+            message.id === tempId ? { ...message, failed: true } : message,
+          ),
+        );
+        setError(uploaded.error ?? "Upload failed");
+        setDraft(content);
+        setPendingFiles(filesSnapshot);
+        if (replySnapshot) setReplyTo(replySnapshot);
+        setSending(false);
+        return;
+      }
+      uploadedAttachments.push(uploaded.attachment);
+    }
+
+    const first = uploadedAttachments[0] ?? null;
     const supabase = createClient();
     const { data, error: insertError } = await supabase
       .from("dm_messages")
       .insert({
         conversation_id: conversationId,
         user_id: user.id,
-        content,
+        content: text,
         reply_to_id: replySnapshot?.id ?? null,
+        attachment_url: first?.url ?? null,
+        attachment_type: first?.type ?? null,
+        attachments: uploadedAttachments,
       })
       .select("*")
       .single();
@@ -2555,9 +2663,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (blockedMsg) setDmBlockedByThem(true);
       setError(blockedMsg ?? insertError?.message ?? "Failed to send message");
       setDraft(content);
+      setPendingFiles(filesSnapshot);
       if (replySnapshot) setReplyTo(replySnapshot);
       setSending(false);
       return;
+    }
+
+    for (const item of filesSnapshot) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
     }
 
     const [saved] = hydrateMessages(
@@ -2598,14 +2711,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       prev
         .map((thread) =>
           thread.id === conversationId
-            ? { ...thread, preview: content, previewAt: data.created_at }
+            ? {
+                ...thread,
+                preview: text.slice(0, 120),
+                previewAt: data.created_at,
+              }
             : thread,
         )
         .sort((a, b) => compareDmThreads(a, b)),
     );
 
-    // Notify the other participant. Sidebar preview was already patched locally;
-    // their client patches via realtime without a full list remount.
     if (otherId) {
       void supabase.rpc("create_notification", {
         p_user_id: otherId,
@@ -2613,7 +2728,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         p_title: profile?.username
           ? `Message from ${profile.username}`
           : "New direct message",
-        p_body: content.slice(0, 120),
+        p_body: text.slice(0, 120),
         p_link: messengerDmPath(conversationId),
       });
     }
@@ -2717,10 +2832,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const supabase = createClient();
     if (existing && !existing.id.startsWith("temp-")) {
       setReactions((prev) => prev.filter((reaction) => reaction.id !== existing.id));
-      const { error: deleteError } = await supabase
-        .from("message_reactions")
-        .delete()
-        .eq("id", existing.id);
+      const { error: deleteError } = dmMode
+        ? await supabase
+            .from("dm_message_reactions")
+            .delete()
+            .eq("id", existing.id)
+        : await supabase
+            .from("message_reactions")
+            .delete()
+            .eq("id", existing.id);
       if (deleteError) {
         setReactions((prev) => upsertReaction(prev, existing));
         setError(deleteError.message);
@@ -2735,17 +2855,29 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       created_at: new Date().toISOString(),
     };
     setReactions((prev) => [...prev, temp]);
-    const { data, error: insertError } = await supabase
-      .from("message_reactions")
-      .insert({ message_id: messageId, user_id: user.id, emoji })
-      .select("*")
-      .single();
+    const insertResult = dmMode
+      ? await supabase
+          .from("dm_message_reactions")
+          .insert({ message_id: messageId, user_id: user.id, emoji })
+          .select("*")
+          .single()
+      : await supabase
+          .from("message_reactions")
+          .insert({ message_id: messageId, user_id: user.id, emoji })
+          .select("*")
+          .single();
+    const { data, error: insertError } = insertResult;
     if (insertError || !data) {
       setReactions((prev) => prev.filter((reaction) => reaction.id !== temp.id));
       setError(insertError?.message ?? "Could not add reaction");
       return;
     }
-    setReactions((prev) => upsertReaction(prev.filter((reaction) => reaction.id !== temp.id), data));
+    setReactions((prev) =>
+      upsertReaction(
+        prev.filter((reaction) => reaction.id !== temp.id),
+        data as Reaction,
+      ),
+    );
   }
 
   async function togglePin(message: ChatMessage) {
@@ -2819,16 +2951,55 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setSettingsOpen(true);
   }
 
-  async function chooseFile(file: File) {
+  async function chooseFiles(files: File[]) {
+    if (files.length === 0) return;
     setError(null);
-    const fitted = await fitImageToMaxBytes(file, MESSAGE_ATTACHMENT_MAX_BYTES, {
-      maxEdge: 4096,
-    });
-    if (fitted.error) {
-      setError(fitted.error);
+    const remaining = MAX_ATTACHMENTS_PER_MESSAGE - pendingFiles.length;
+    if (remaining <= 0) {
+      setError(`You can attach up to ${MAX_ATTACHMENTS_PER_MESSAGE} files.`);
       return;
     }
-    setPendingFile(fitted.file);
+    const selected = files.slice(0, remaining);
+    if (files.length > remaining) {
+      setError(`Only ${MAX_ATTACHMENTS_PER_MESSAGE} files per message.`);
+    }
+    const next: PendingAttachment[] = [];
+    for (const file of selected) {
+      if (file.size > MAX_ATTACHMENT_BYTES && !file.type.startsWith("image/")) {
+        setError(`"${file.name}" is too large (max 25 MB).`);
+        continue;
+      }
+      const fitted = await fitImageToMaxBytes(file, MESSAGE_ATTACHMENT_MAX_BYTES, {
+        maxEdge: 4096,
+      });
+      if (fitted.error) {
+        setError(fitted.error);
+        continue;
+      }
+      const ready = fitted.file;
+      if (ready.size > MAX_ATTACHMENT_BYTES) {
+        setError(`"${file.name}" is too large (max 25 MB).`);
+        continue;
+      }
+      next.push({
+        id: crypto.randomUUID(),
+        file: ready,
+        previewUrl: ready.type.startsWith("image/")
+          ? URL.createObjectURL(ready)
+          : null,
+      });
+    }
+    if (next.length > 0) {
+      setPendingFiles((prev) => [...prev, ...next]);
+    }
+  }
+
+  function removePendingFile(id: string) {
+    setPendingFiles((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((item) => item.id !== id);
+    });
   }
 
   const waitingForChannel =
@@ -3206,7 +3377,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               }
               scrollKey={activeConversationId ?? ""}
               currentUserId={user?.id ?? null}
-              reactionMap={{}}
+              reactionMap={reactionMap}
               hasMore={!searchNeedle && dmHasMore}
               loadingOlder={loadingOlderMessages}
               onLoadOlder={() => void loadOlderDm()}
@@ -3216,6 +3387,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               onEdit={editDm}
               onDelete={deleteDm}
               onJumpToReply={jumpToMessage}
+              onReact={(messageId, emoji) =>
+                void toggleReaction(messageId, emoji)
+              }
             />
           )}
 
@@ -3373,16 +3547,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                       : displayMentionText(replyTo.content, mentionMaps)
                     : null
                 }
-                pendingFileName={textMode ? pendingFile?.name ?? null : null}
+                pendingFiles={pendingFiles}
                 sending={sending}
-                allowAttach={textMode && canSendMessages}
+                allowAttach={
+                  dmMode || (textMode && canSendMessages)
+                }
                 disabled={!user || (textMode && !canSendMessages)}
                 mentionSuggestions={textMode ? mentionSuggestions : []}
                 typingPeople={typingPeople}
                 onDraft={setDraft}
                 onCancelReply={() => setReplyTo(null)}
-                onFile={chooseFile}
-                onClearFile={() => setPendingFile(null)}
+                onFiles={(files) => void chooseFiles(files)}
+                onRemoveFile={removePendingFile}
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
                 onLimitReached={setError}
@@ -3492,7 +3668,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                       : displayMentionText(replyTo.content, mentionMaps)
                     : null
                 }
-                pendingFileName={pendingFile?.name ?? null}
+                pendingFiles={pendingFiles}
                 sending={sending}
                 allowAttach={canSendMessages}
                 disabled={!user || !canSendMessages}
@@ -3500,8 +3676,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 typingPeople={typingPeople}
                 onDraft={setDraft}
                 onCancelReply={() => setReplyTo(null)}
-                onFile={chooseFile}
-                onClearFile={() => setPendingFile(null)}
+                onFiles={(files) => void chooseFiles(files)}
+                onRemoveFile={removePendingFile}
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
                 onLimitReached={setError}

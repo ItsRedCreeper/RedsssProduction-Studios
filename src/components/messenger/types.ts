@@ -35,6 +35,8 @@ export type ChatMessage = Tables<"messages"> & {
   failed?: boolean;
 };
 
+export type { MessageAttachment } from "@/lib/message-media";
+
 export type ReactionGroup = {
   emoji: string;
   count: number;
