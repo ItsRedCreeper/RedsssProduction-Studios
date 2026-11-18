@@ -274,7 +274,7 @@ export function HoverTip({
               left: tip.left,
               transform: tipTransform(tip.side),
             }}
-            className="pointer-events-none fixed z-[80] max-w-[min(20rem,calc(100vw-1rem))] whitespace-normal break-words rounded-md border border-accent/45 bg-[#111214] px-3 py-1.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,0.55)]"
+            className="pointer-events-none fixed z-[80] max-w-[min(40rem,calc(100vw-1.25rem))] rounded-md border border-accent/45 bg-[#111214] px-3 py-1 text-sm font-semibold leading-snug text-white shadow-[0_8px_24px_rgba(0,0,0,0.55)] [overflow-wrap:anywhere] [text-wrap:pretty]"
           >
             <span className={tipArrow(tip.side)} aria-hidden />
             {clean}
