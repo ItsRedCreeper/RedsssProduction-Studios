@@ -5,6 +5,14 @@ export type MessageAttachment = {
   size: number;
   width?: number | null;
   height?: number | null;
+  /** Discord-style: blurred until the viewer clicks. */
+  spoiler?: boolean;
+};
+
+export type EmbeddableUrl = {
+  url: string;
+  /** True when the URL was wrapped in ||...|| spoilers. */
+  spoiler: boolean;
 };
 
 export const MAX_ATTACHMENTS_PER_MESSAGE = 8;
@@ -41,6 +49,7 @@ export function normalizeAttachments(input: unknown): MessageAttachment[] {
       size: typeof row.size === "number" ? row.size : 0,
       width: typeof row.width === "number" ? row.width : null,
       height: typeof row.height === "number" ? row.height : null,
+      spoiler: row.spoiler === true,
     });
   }
   return out;
@@ -112,11 +121,11 @@ export function extractUrls(text: string): string[] {
 
 /**
  * URLs that should generate a Discord-style link preview.
- * Skips `<https://...>` (no-embed), fenced/inline code, and masked-link-only
- * destinations that Discord still embeds — we embed any bare or masked URL
- * that isn't angle-bracket suppressed.
+ * Skips `<https://...>` (no-embed), fenced/inline code.
+ * URLs inside `||...||` still unfurl, but marked `spoiler: true` so the
+ * preview stays hidden until clicked (Discord behavior).
  */
-export function extractEmbeddableUrls(text: string): string[] {
+export function extractEmbeddableUrlInfos(text: string): EmbeddableUrl[] {
   // Strip fenced + inline code so URLs inside don't unfurl.
   const withoutCode = text
     .replace(/```[\s\S]*?```/g, " ")
@@ -129,22 +138,51 @@ export function extractEmbeddableUrls(text: string): string[] {
     ),
   );
 
-  const found: string[] = [];
+  // Ranges covered by ||spoiler|| blocks (for marking embeds as spoilered).
+  const spoilerRanges: Array<{ start: number; end: number }> = [];
+  {
+    let i = 0;
+    while (i < withoutCode.length) {
+      const open = withoutCode.indexOf("||", i);
+      if (open < 0) break;
+      const close = withoutCode.indexOf("||", open + 2);
+      if (close < 0) break;
+      spoilerRanges.push({ start: open, end: close + 2 });
+      i = close + 2;
+    }
+  }
+
+  function inSpoiler(index: number) {
+    return spoilerRanges.some((r) => index >= r.start && index < r.end);
+  }
+
+  const found: EmbeddableUrl[] = [];
+  const seen = new Set<string>();
+
+  function push(url: string, index: number) {
+    const cleaned = url.replace(/[).,!?]+$/g, "");
+    if (!cleaned || suppressed.has(cleaned) || seen.has(cleaned)) return;
+    seen.add(cleaned);
+    found.push({ url: cleaned, spoiler: inSpoiler(index) });
+  }
 
   // Bare URLs
   for (const match of withoutCode.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
-    const url = match[0].replace(/[).,!?]+$/g, "");
-    if (!suppressed.has(url)) found.push(url);
+    push(match[0], match.index ?? 0);
   }
 
   // Masked links [label](url) — Discord still unfurls these.
   for (const match of withoutCode.matchAll(
     /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi,
   )) {
-    const url = match[2].replace(/[).,!?]+$/g, "");
-    if (!suppressed.has(url)) found.push(url);
+    push(match[2], match.index ?? 0);
   }
 
-  return [...new Set(found)];
+  return found;
+}
+
+/** @deprecated Prefer extractEmbeddableUrlInfos when spoiler state matters. */
+export function extractEmbeddableUrls(text: string): string[] {
+  return extractEmbeddableUrlInfos(text).map((item) => item.url);
 }
 

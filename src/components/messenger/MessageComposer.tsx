@@ -11,6 +11,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  Eye,
+  EyeOff,
   FileText,
   Film,
   Hash,
@@ -61,6 +63,8 @@ export type PendingAttachment = {
   id: string;
   file: File;
   previewUrl: string | null;
+  /** Mark as spoiler before send (Discord eye toggle). */
+  spoiler?: boolean;
 };
 
 type MessageComposerProps = {
@@ -82,6 +86,7 @@ type MessageComposerProps = {
   onCancelReply: () => void;
   onFiles: (files: File[]) => void;
   onRemoveFile: (id: string) => void;
+  onToggleFileSpoiler?: (id: string) => void;
   onPickGif?: (gif: GifResult) => void;
   /** Optional expanded content (emoji slots → tokens) for send. */
   onSubmit: (content?: string) => void;
@@ -114,6 +119,7 @@ export function MessageComposer({
   onCancelReply,
   onFiles,
   onRemoveFile,
+  onToggleFileSpoiler,
   onPickGif,
   onSubmit,
   onTyping,
@@ -626,6 +632,7 @@ export function MessageComposer({
           {pendingFiles.map((item) => {
             const image = isImageMime(item.file.type);
             const video = isVideoMime(item.file.type);
+            const spoiler = Boolean(item.spoiler);
             return (
               <div
                 key={item.id}
@@ -636,10 +643,16 @@ export function MessageComposer({
                   <img
                     src={item.previewUrl}
                     alt=""
-                    className="h-20 w-full object-cover"
+                    className={`h-20 w-full object-cover ${
+                      spoiler ? "blur-[10px] brightness-75" : ""
+                    }`}
                   />
                 ) : (
-                  <div className="flex h-20 flex-col items-center justify-center gap-1 px-2 text-[#949ba4]">
+                  <div
+                    className={`flex h-20 flex-col items-center justify-center gap-1 px-2 text-[#949ba4] ${
+                      spoiler ? "blur-[6px] brightness-75" : ""
+                    }`}
+                  >
                     {video ? (
                       <Film className="h-5 w-5" strokeWidth={1.75} />
                     ) : item.file.type.startsWith("text/") ||
@@ -650,6 +663,13 @@ export function MessageComposer({
                     )}
                   </div>
                 )}
+                {spoiler && (
+                  <span className="pointer-events-none absolute inset-x-0 top-6 flex justify-center">
+                    <span className="rounded bg-black/75 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                      Spoiler
+                    </span>
+                  </span>
+                )}
                 <div className="space-y-0.5 px-1.5 py-1">
                   <p className="truncate text-[10px] text-[#dbdee1]">
                     {item.file.name}
@@ -659,6 +679,30 @@ export function MessageComposer({
                     {item.file.size > MAX_ATTACHMENT_BYTES ? " · too large" : ""}
                   </p>
                 </div>
+                {onToggleFileSpoiler && (
+                  <HoverTip
+                    label={spoiler ? "Unmark as spoiler" : "Mark as spoiler"}
+                    delayMs={40}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onToggleFileSpoiler(item.id)}
+                      className="absolute left-1 top-1 rounded-full bg-black/70 p-0.5 text-white hover:bg-black"
+                      aria-label={
+                        spoiler
+                          ? `Unmark ${item.file.name} as spoiler`
+                          : `Mark ${item.file.name} as spoiler`
+                      }
+                      aria-pressed={spoiler}
+                    >
+                      {spoiler ? (
+                        <EyeOff className="h-3.5 w-3.5" strokeWidth={2} />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+                      )}
+                    </button>
+                  </HoverTip>
+                )}
                 <button
                   type="button"
                   onClick={() => onRemoveFile(item.id)}

@@ -2657,7 +2657,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setSending(false);
         return;
       }
-      uploadedAttachments.push(uploaded.attachment);
+      uploadedAttachments.push({
+        ...uploaded.attachment,
+        spoiler: Boolean(item.spoiler),
+      });
     }
 
     const first = uploadedAttachments[0] ?? null;
@@ -2814,7 +2817,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setSending(false);
         return;
       }
-      uploadedAttachments.push(uploaded.attachment);
+      uploadedAttachments.push({
+        ...uploaded.attachment,
+        spoiler: Boolean(item.spoiler),
+      });
     }
 
     const first = uploadedAttachments[0] ?? null;
@@ -3190,6 +3196,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         previewUrl: ready.type.startsWith("image/")
           ? URL.createObjectURL(ready)
           : null,
+        spoiler: false,
       });
     }
     if (next.length > 0) {
@@ -3203,6 +3210,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
       return prev.filter((item) => item.id !== id);
     });
+  }
+
+  function togglePendingFileSpoiler(id: string) {
+    setPendingFiles((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, spoiler: !item.spoiler } : item,
+      ),
+    );
   }
 
   async function pickGif(gif: GifResult) {
@@ -3824,6 +3839,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onCancelReply={() => setReplyTo(null)}
                 onFiles={(files) => void chooseFiles(files)}
                 onRemoveFile={removePendingFile}
+                onToggleFileSpoiler={togglePendingFileSpoiler}
                 onPickGif={(gif) => void pickGif(gif)}
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
@@ -3958,6 +3974,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onCancelReply={() => setReplyTo(null)}
                 onFiles={(files) => void chooseFiles(files)}
                 onRemoveFile={removePendingFile}
+                onToggleFileSpoiler={togglePendingFileSpoiler}
                 onPickGif={(gif) => void pickGif(gif)}
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Download, FileText, Film, Paperclip } from "lucide-react";
 import { MediaLightbox } from "@/components/messenger/MediaLightbox";
+import { SpoilerMedia } from "@/components/messenger/SpoilerMedia";
 import {
   attachmentsFromMessage,
   formatFileSize,
@@ -40,10 +41,11 @@ export function MessageMedia({ message }: MessageMediaProps) {
         {items.map((item) => {
           const image = isImageMime(item.type, item.url);
           const video = isVideoMime(item.type, item.url);
+          const spoiler = Boolean(item.spoiler);
+
           if (image) {
-            return (
+            const body = (
               <button
-                key={item.url}
                 type="button"
                 onClick={() => openLightbox(item)}
                 className="block max-w-full text-left"
@@ -56,13 +58,16 @@ export function MessageMedia({ message }: MessageMediaProps) {
                 />
               </button>
             );
+            return spoiler ? (
+              <SpoilerMedia key={item.url}>{body}</SpoilerMedia>
+            ) : (
+              <div key={item.url}>{body}</div>
+            );
           }
+
           if (video) {
-            return (
-              <div
-                key={item.url}
-                className="relative max-w-full overflow-hidden rounded-md bg-black"
-              >
+            const body = (
+              <div className="relative max-w-full overflow-hidden rounded-md bg-black">
                 <video
                   src={item.url}
                   controls
@@ -78,10 +83,15 @@ export function MessageMedia({ message }: MessageMediaProps) {
                 </button>
               </div>
             );
+            return spoiler ? (
+              <SpoilerMedia key={item.url}>{body}</SpoilerMedia>
+            ) : (
+              <div key={item.url}>{body}</div>
+            );
           }
-          return (
+
+          const body = (
             <a
-              key={item.url}
               href={item.url}
               target="_blank"
               rel="noreferrer"
@@ -105,6 +115,14 @@ export function MessageMedia({ message }: MessageMediaProps) {
               </span>
               <Download className="h-4 w-4 shrink-0 text-[#949ba4]" strokeWidth={1.75} />
             </a>
+          );
+
+          return spoiler ? (
+            <SpoilerMedia key={item.url} className="inline-flex max-w-full">
+              {body}
+            </SpoilerMedia>
+          ) : (
+            <div key={item.url}>{body}</div>
           );
         })}
       </div>

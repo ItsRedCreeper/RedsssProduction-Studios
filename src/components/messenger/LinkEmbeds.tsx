@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Play } from "lucide-react";
+import { SpoilerMedia } from "@/components/messenger/SpoilerMedia";
 import {
-  extractEmbeddableUrls,
+  extractEmbeddableUrlInfos,
   extractYoutubeId,
 } from "@/lib/message-media";
 
@@ -21,22 +22,39 @@ type LinkEmbedsProps = {
   content: string;
 };
 
-/** Discord-style unfurl: inline URL stays in the message; this is the preview card. */
+/**
+ * Discord-style unfurl: inline URL stays in the message; this is the preview card.
+ * URLs wrapped in ||spoilers|| get a blurred card until revealed — then the
+ * full preview (title, description, thumbnail / YouTube player) shows.
+ */
 export function LinkEmbeds({ content }: LinkEmbedsProps) {
-  const urls = useMemo(() => extractEmbeddableUrls(content).slice(0, 2), [content]);
+  const urls = useMemo(
+    () => extractEmbeddableUrlInfos(content).slice(0, 2),
+    [content],
+  );
 
   if (urls.length === 0) return null;
 
   return (
     <div className="mt-1.5 flex flex-col gap-2">
-      {urls.map((url) => (
-        <LinkPreviewCard key={url} url={url} />
+      {urls.map((item) => (
+        <LinkPreviewCard
+          key={item.url}
+          url={item.url}
+          spoiler={item.spoiler}
+        />
       ))}
     </div>
   );
 }
 
-function LinkPreviewCard({ url }: { url: string }) {
+function LinkPreviewCard({
+  url,
+  spoiler,
+}: {
+  url: string;
+  spoiler: boolean;
+}) {
   const youtubeId = useMemo(() => extractYoutubeId(url), [url]);
   const [open, setOpen] = useState(false);
   const [meta, setMeta] = useState<LinkPreview | null>(null);
@@ -77,66 +95,62 @@ function LinkPreviewCard({ url }: { url: string }) {
 
   if (!loading && !meta && !youtubeId) return null;
 
-  if (youtubeId) {
-    return (
-      <div className="max-w-md overflow-hidden rounded-[4px] bg-[#2b2d31]">
-        <div className="flex">
-          <div className="w-1 shrink-0 bg-accent" aria-hidden />
-          <div className="min-w-0 flex-1 px-3 py-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
-              {site}
+  const card = youtubeId ? (
+    <div className="max-w-md overflow-hidden rounded-[4px] bg-[#2b2d31]">
+      <div className="flex">
+        <div className="w-1 shrink-0 bg-accent" aria-hidden />
+        <div className="min-w-0 flex-1 px-3 py-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+            {site}
+          </p>
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-0.5 line-clamp-2 text-base font-semibold text-[#00a8fc] hover:underline"
+          >
+            {title}
+          </a>
+          {meta?.author_name && (
+            <p className="mt-1 line-clamp-1 text-sm text-[#dbdee1]">
+              {meta.author_name}
             </p>
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-0.5 line-clamp-2 text-base font-semibold text-[#00a8fc] hover:underline"
-            >
-              {title}
-            </a>
-            {meta?.author_name && (
-              <p className="mt-1 line-clamp-1 text-sm text-[#dbdee1]">
-                {meta.author_name}
-              </p>
-            )}
-            <div className="mt-2 overflow-hidden rounded">
-              {open ? (
-                <div className="aspect-video w-full bg-black">
-                  <iframe
-                    title={title}
-                    src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
-                    className="h-full w-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setOpen(true)}
-                  className="group relative block w-full text-left"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={image ?? undefined}
-                    alt=""
-                    className="aspect-video w-full object-cover"
-                  />
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/35 transition group-hover:bg-black/45">
-                    <span className="rounded-full bg-accent p-3 text-white shadow-lg">
-                      <Play className="h-5 w-5 fill-current" strokeWidth={0} />
-                    </span>
+          )}
+          <div className="mt-2 overflow-hidden rounded">
+            {open ? (
+              <div className="aspect-video w-full bg-black">
+                <iframe
+                  title={title}
+                  src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
+                  className="h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="group relative block w-full text-left"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={image ?? undefined}
+                  alt=""
+                  className="aspect-video w-full object-cover"
+                />
+                <span className="absolute inset-0 flex items-center justify-center bg-black/35 transition group-hover:bg-black/45">
+                  <span className="rounded-full bg-accent p-3 text-white shadow-lg">
+                    <Play className="h-5 w-5 fill-current" strokeWidth={0} />
                   </span>
-                </button>
-              )}
-            </div>
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </div>
-    );
-  }
-
-  return (
+    </div>
+  ) : (
     <a
       href={url}
       target="_blank"
@@ -169,6 +183,11 @@ function LinkPreviewCard({ url }: { url: string }) {
       </div>
     </a>
   );
+
+  if (!spoiler) return card;
+
+  // Discord: blur the real preview until clicked, then show it fully.
+  return <SpoilerMedia className="max-w-md">{card}</SpoilerMedia>;
 }
 
 function safeHostname(url: string) {
