@@ -30,12 +30,17 @@ import { formatTimestamp } from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
 import { LinkEmbeds } from "@/components/messenger/LinkEmbeds";
 import { MessageMedia } from "@/components/messenger/MessageMedia";
+import { EmojiPicker } from "@/components/messenger/EmojiPicker";
+import { ReactionEmoji } from "@/components/messenger/CustomEmoji";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { displayMentionText, type MentionMaps } from "@/lib/mentions";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
-import { EXTRA_EMOJIS } from "@/lib/message-media";
 import {
-  QUICK_REACTIONS,
+  emojiDisplayName,
+  QUICK_REACTION_EMOJIS,
+  type ServerEmoji,
+} from "@/lib/emoji";
+import {
   type ChatMessage,
   type ReactionGroup,
 } from "@/components/messenger/types";
@@ -114,6 +119,10 @@ type MessageItemProps = {
   serverNickByUserId?: Record<string, string>;
   /** Discover preview: look around only — no reply/edit/react/delete. */
   readOnly?: boolean;
+  customEmojis?: ServerEmoji[];
+  emojiCatalog?: Map<string, ServerEmoji>;
+  serverNamesById?: Record<string, string>;
+  reactorNamesById?: Record<string, string>;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
   onDelete: (messageId: string) => Promise<void>;
@@ -121,6 +130,28 @@ type MessageItemProps = {
   onReact?: (emoji: string) => void;
   onTogglePin?: () => void;
 };
+
+function reactionTooltip(
+  reaction: ReactionGroup,
+  catalog: Map<string, ServerEmoji> | undefined,
+  namesById: Record<string, string>,
+) {
+  const emojiName = emojiDisplayName(reaction.emoji, catalog);
+  const names = reaction.userIds
+    .map((id) => namesById[id])
+    .filter(Boolean) as string[];
+  const shown = names.slice(0, 3);
+  const extra = Math.max(0, reaction.count - shown.length);
+  const who =
+    shown.length === 0
+      ? `${reaction.count} reaction${reaction.count === 1 ? "" : "s"}`
+      : extra > 0
+        ? `${shown.join(", ")} and ${extra} other${extra === 1 ? "" : "s"}`
+        : shown.length === 1
+          ? shown[0]
+          : `${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
+  return `${emojiName}\n${who}`;
+}
 
 export function MessageItem({
   message,
@@ -135,6 +166,10 @@ export function MessageItem({
   preferFriendNickname = false,
   serverNickByUserId,
   readOnly = false,
+  customEmojis = [],
+  emojiCatalog,
+  serverNamesById = {},
+  reactorNamesById = {},
   onReply,
   onEdit,
   onDelete,
@@ -401,6 +436,7 @@ export function MessageItem({
                   roleNames,
                   channelNames,
                   mentionMaps,
+                  emojiCatalog,
                 })}
               </p>
             )}
@@ -411,31 +447,43 @@ export function MessageItem({
 
         {reactions.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
-            {reactions.map((reaction) =>
-              readOnly ? (
-                <span
-                  key={reaction.emoji}
-                  className="inline-flex items-center gap-1 rounded-full border border-transparent bg-[#2b2d31] px-1.5 py-0.5 text-xs text-[#dbdee1]"
-                >
-                  <span>{reaction.emoji}</span>
+            {reactions.map((reaction) => {
+              const tip = reactionTooltip(
+                reaction,
+                emojiCatalog,
+                reactorNamesById,
+              );
+              const pillClass = `inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition ${
+                reaction.reacted
+                  ? "border-accent/70 bg-accent-muted text-white"
+                  : "border-transparent bg-[#2b2d31] text-[#dbdee1] hover:border-[#4e5058]"
+              }`;
+              const body = (
+                <>
+                  <ReactionEmoji
+                    token={reaction.emoji}
+                    catalog={emojiCatalog}
+                    size={16}
+                  />
                   <span>{reaction.count}</span>
-                </span>
+                </>
+              );
+              return readOnly ? (
+                <HoverTip key={reaction.emoji} label={tip} delayMs={40}>
+                  <span className={pillClass}>{body}</span>
+                </HoverTip>
               ) : (
-                <button
-                  key={reaction.emoji}
-                  type="button"
-                  onClick={() => onReact?.(reaction.emoji)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition ${
-                    reaction.reacted
-                      ? "border-accent/70 bg-accent-muted text-white"
-                      : "border-transparent bg-[#2b2d31] text-[#dbdee1] hover:border-[#4e5058]"
-                  }`}
-                >
-                  <span>{reaction.emoji}</span>
-                  <span>{reaction.count}</span>
-                </button>
-              ),
-            )}
+                <HoverTip key={reaction.emoji} label={tip} delayMs={40}>
+                  <button
+                    type="button"
+                    onClick={() => onReact?.(reaction.emoji)}
+                    className={pillClass}
+                  >
+                    {body}
+                  </button>
+                </HoverTip>
+              );
+            })}
             {showToolbar && onReact && (
               <button
                 type="button"
@@ -464,7 +512,7 @@ export function MessageItem({
         >
           {onReact && (
             <>
-              {QUICK_REACTIONS.map((emoji) => (
+              {QUICK_REACTION_EMOJIS.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
@@ -494,20 +542,15 @@ export function MessageItem({
                   open={fullPickerOpen}
                   anchorRef={emojiBtnRef}
                   menuRef={emojiMenuRef}
-                  estimatedHeight={220}
-                  className="grid w-[15rem] grid-cols-6 gap-0.5 rounded-md border border-[#1e1f22] bg-[#111214] p-1.5 shadow-xl"
+                  estimatedHeight={380}
                 >
-                  {EXTRA_EMOJIS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => react(emoji)}
-                      className="rounded-md px-1 py-1 text-base hover:bg-white/10"
-                      aria-label={`React with ${emoji}`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
+                  <EmojiPicker
+                    customEmojis={customEmojis}
+                    serverNamesById={serverNamesById}
+                    onPick={(pick) =>
+                      react(pick.kind === "custom" ? pick.token : pick.char)
+                    }
+                  />
                 </MessageFloatingMenu>
               </div>
             </>

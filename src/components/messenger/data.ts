@@ -422,8 +422,12 @@ export function groupReactions(
       emoji: reaction.emoji,
       count: 0,
       reacted: false,
+      userIds: [] as string[],
     };
     current.count += 1;
+    if (!current.userIds.includes(reaction.user_id)) {
+      current.userIds.push(reaction.user_id);
+    }
     if (userId && reaction.user_id === userId) current.reacted = true;
     emojis.set(reaction.emoji, current);
   }

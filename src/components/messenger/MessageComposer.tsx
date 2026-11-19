@@ -1,14 +1,24 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   FileText,
   Film,
   Hash,
-  Paperclip,
+  Image as ImageIcon,
   Plus,
   Reply,
   Shield,
+  Smile,
   User,
   X,
 } from "lucide-react";
@@ -16,8 +26,11 @@ import {
   TypingIndicator,
   type TypingPerson,
 } from "@/components/messenger/TypingIndicator";
+import { EmojiPicker, type EmojiPick } from "@/components/messenger/EmojiPicker";
+import { GifPicker, type TenorGif } from "@/components/messenger/GifPicker";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
+import type { ServerEmoji } from "@/lib/emoji";
 import {
   formatFileSize,
   isImageMime,
@@ -49,10 +62,13 @@ type MessageComposerProps = {
   disabled?: boolean;
   mentionSuggestions?: MentionSuggestion[];
   typingPeople?: TypingPerson[];
+  customEmojis?: ServerEmoji[];
+  serverNamesById?: Record<string, string>;
   onDraft: (value: string) => void;
   onCancelReply: () => void;
   onFiles: (files: File[]) => void;
   onRemoveFile: (id: string) => void;
+  onPickGif?: (gif: TenorGif) => void;
   onSubmit: () => void;
   onTyping?: () => void;
   onTypingStop?: () => void;
@@ -76,10 +92,13 @@ export function MessageComposer({
   disabled,
   mentionSuggestions = [],
   typingPeople = [],
+  customEmojis = [],
+  serverNamesById = {},
   onDraft,
   onCancelReply,
   onFiles,
   onRemoveFile,
+  onPickGif,
   onSubmit,
   onTyping,
   onTypingStop,
@@ -87,9 +106,15 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
+  const gifBtnRef = useRef<HTMLButtonElement | null>(null);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
   const typingStopTimer = useRef<number | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [gifOpen, setGifOpen] = useState(false);
+  const [pickerStyle, setPickerStyle] = useState<CSSProperties | null>(null);
   const replying = !!replyAuthor;
 
   useEffect(() => {
@@ -103,6 +128,54 @@ export function MessageComposer({
   useEffect(() => {
     resizeTextarea(inputRef.current);
   }, [draft]);
+
+  useEffect(() => {
+    if (!emojiOpen && !gifOpen) return;
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        pickerRef.current?.contains(target) ||
+        emojiBtnRef.current?.contains(target) ||
+        gifBtnRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setEmojiOpen(false);
+      setGifOpen(false);
+    }
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [emojiOpen, gifOpen]);
+
+  useLayoutEffect(() => {
+    if (!emojiOpen && !gifOpen) {
+      setPickerStyle(null);
+      return;
+    }
+    function place() {
+      const anchor = emojiOpen ? emojiBtnRef.current : gifBtnRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const height = emojiOpen ? 360 : 400;
+      const spaceAbove = rect.top - 8;
+      const openUp = spaceAbove >= height || spaceAbove > window.innerHeight - rect.bottom;
+      setPickerStyle({
+        position: "fixed",
+        right: Math.max(8, window.innerWidth - rect.right),
+        zIndex: 80,
+        ...(openUp
+          ? { bottom: Math.max(8, window.innerHeight - rect.top + 6) }
+          : { top: Math.min(window.innerHeight - 8, rect.bottom + 6) }),
+      });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [emojiOpen, gifOpen]);
 
   function bumpTyping() {
     onTyping?.();
@@ -130,6 +203,21 @@ export function MessageComposer({
       return;
     }
     onDraft(value);
+  }
+
+  function insertAtCursor(text: string) {
+    const el = inputRef.current;
+    const start = el?.selectionStart ?? draft.length;
+    const end = el?.selectionEnd ?? draft.length;
+    const next = `${draft.slice(0, start)}${text}${draft.slice(end)}`;
+    setDraftValue(next);
+    bumpTyping();
+    requestAnimationFrame(() => {
+      const pos = Math.min(start + text.length, MESSAGE_MAX);
+      el?.setSelectionRange(pos, pos);
+      el?.focus();
+      resizeTextarea(el);
+    });
   }
 
   function takeFiles(list: FileList | File[] | null) {
@@ -189,6 +277,11 @@ export function MessageComposer({
       inputRef.current?.setSelectionRange(pos, pos);
       inputRef.current?.focus();
     });
+  }
+
+  function handleEmojiPick(pick: EmojiPick) {
+    insertAtCursor(pick.kind === "custom" ? pick.token : pick.char);
+    setEmojiOpen(false);
   }
 
   function handleSubmit(event: FormEvent) {
@@ -279,7 +372,7 @@ export function MessageComposer({
                       item.file.type.includes("pdf") ? (
                       <FileText className="h-5 w-5" strokeWidth={1.75} />
                     ) : (
-                      <Paperclip className="h-5 w-5" strokeWidth={1.75} />
+                      <ImageIcon className="h-5 w-5" strokeWidth={1.75} />
                     )}
                   </div>
                 )}
@@ -345,7 +438,7 @@ export function MessageComposer({
         )}
         <form
           onSubmit={handleSubmit}
-          className={`flex items-end gap-3 bg-[#383a40] px-4 py-3 ${
+          className={`flex items-end gap-2 bg-[#383a40] px-3 py-3 sm:gap-3 sm:px-4 ${
             dragging ? "ring-2 ring-accent/60" : ""
           } ${
             replying || pendingFiles.length > 0 ? "rounded-b-md" : "rounded-md"
@@ -418,6 +511,11 @@ export function MessageComposer({
                   return;
                 }
               }
+              if (event.key === "Escape" && (emojiOpen || gifOpen)) {
+                setEmojiOpen(false);
+                setGifOpen(false);
+                return;
+              }
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
                 if (
@@ -436,6 +534,46 @@ export function MessageComposer({
             disabled={disabled || sending}
             className="max-h-40 min-h-[24px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-[#dbdee1] outline-none placeholder:text-[#6d6f78] [overflow-wrap:anywhere] whitespace-pre-wrap"
           />
+          <HoverTip label="Emoji" delayMs={40}>
+            <button
+              ref={emojiBtnRef}
+              type="button"
+              disabled={disabled || sending}
+              onClick={() => {
+                setEmojiOpen((open) => !open);
+                setGifOpen(false);
+              }}
+              className={`mb-0.5 shrink-0 rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 ${
+                emojiOpen ? "bg-white/10 text-white" : ""
+              }`}
+              aria-label="Emoji picker"
+            >
+              <Smile className="h-5 w-5" strokeWidth={1.75} />
+            </button>
+          </HoverTip>
+          {allowAttach && onPickGif && (
+            <HoverTip label="GIF" delayMs={40}>
+              <button
+                ref={gifBtnRef}
+                type="button"
+                disabled={
+                  disabled ||
+                  sending ||
+                  pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE
+                }
+                onClick={() => {
+                  setGifOpen((open) => !open);
+                  setEmojiOpen(false);
+                }}
+                className={`mb-0.5 shrink-0 rounded-md px-1.5 py-1 text-xs font-bold tracking-wide text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 ${
+                  gifOpen ? "bg-white/10 text-white" : ""
+                }`}
+                aria-label="GIF picker"
+              >
+                GIF
+              </button>
+            </HoverTip>
+          )}
           <button
             type="submit"
             disabled={
@@ -449,6 +587,28 @@ export function MessageComposer({
           </button>
         </form>
       </div>
+      {(emojiOpen || gifOpen) &&
+        pickerStyle &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div ref={pickerRef} style={pickerStyle}>
+            {emojiOpen ? (
+              <EmojiPicker
+                customEmojis={customEmojis}
+                serverNamesById={serverNamesById}
+                onPick={handleEmojiPick}
+              />
+            ) : (
+              <GifPicker
+                onPick={(gif) => {
+                  onPickGif?.(gif);
+                  setGifOpen(false);
+                }}
+              />
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

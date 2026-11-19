@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, Hash, MessagesSquare } from "lucide-react";
 import { MessageItem } from "@/components/messenger/MessageItem";
+import type { ServerEmoji } from "@/lib/emoji";
 import type { MentionMaps } from "@/lib/mentions";
 import type { ChatMessage, ReactionGroup } from "@/components/messenger/types";
 
@@ -21,6 +22,10 @@ type ChatTimelineProps = {
   mentionMaps?: MentionMaps;
   canDeleteOthers?: boolean;
   reactionMap: Record<string, ReactionGroup[]>;
+  customEmojis?: ServerEmoji[];
+  emojiCatalog?: Map<string, ServerEmoji>;
+  serverNamesById?: Record<string, string>;
+  reactorNamesById?: Record<string, string>;
   /** More history exists above the loaded window. */
   hasMore?: boolean;
   loadingOlder?: boolean;
@@ -95,6 +100,10 @@ export function ChatTimeline({
   mentionMaps,
   canDeleteOthers,
   reactionMap,
+  customEmojis,
+  emojiCatalog,
+  serverNamesById,
+  reactorNamesById,
   hasMore = false,
   loadingOlder = false,
   onLoadOlder,
@@ -280,6 +289,10 @@ export function ChatTimeline({
                 serverNickByUserId={serverNickByUserId}
                 readOnly={readOnly}
                 reactions={reactionMap[message.id] ?? []}
+                customEmojis={customEmojis}
+                emojiCatalog={emojiCatalog}
+                serverNamesById={serverNamesById}
+                reactorNamesById={reactorNamesById}
                 onReply={onReply}
                 onEdit={onEdit}
                 onDelete={onDelete}

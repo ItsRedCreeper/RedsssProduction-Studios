@@ -41,6 +41,7 @@ export type ReactionGroup = {
   emoji: string;
   count: number;
   reacted: boolean;
+  userIds: string[];
 };
 
 export type MemberView = {
@@ -83,6 +84,7 @@ export type SettingsTab =
   | "roles"
   | "members"
   | "invites"
-  | "channels";
+  | "channels"
+  | "emojis";
 
-export const QUICK_REACTIONS = ["👍", "❤️", "😂", "🔥", "👀", "🎉"] as const;
+export { QUICK_REACTION_EMOJIS as QUICK_REACTIONS } from "@/lib/emoji";

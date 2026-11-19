@@ -33,6 +33,7 @@ import {
   type MentionSuggestion,
   type PendingAttachment,
 } from "@/components/messenger/MessageComposer";
+import type { TenorGif } from "@/components/messenger/GifPicker";
 import type { TypingPerson } from "@/components/messenger/TypingIndicator";
 import { MemberList } from "@/components/messenger/MemberList";
 import { VoicePane } from "@/components/messenger/VoicePane";
@@ -78,6 +79,7 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   type MessageAttachment,
 } from "@/lib/message-media";
+import type { ServerEmoji } from "@/lib/emoji";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import { can, mergeRolePermissions, PERMISSIONS } from "@/lib/permissions";
 import {
@@ -254,6 +256,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
+  const [customEmojis, setCustomEmojis] = useState<ServerEmoji[]>([]);
   const [sending, setSending] = useState(false);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [createChannelType, setCreateChannelType] = useState<"text" | "voice">("text");
@@ -490,6 +493,37 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   useEffect(() => {
     void loadServers();
   }, [loadServers]);
+
+  const loadCustomEmojis = useCallback(async () => {
+    if (!user) {
+      setCustomEmojis([]);
+      return;
+    }
+    const supabase = createClient();
+    const { data: memberships } = await supabase
+      .from("server_members")
+      .select("server_id")
+      .eq("user_id", user.id);
+    const serverIds = (memberships ?? []).map((row) => row.server_id);
+    if (serverIds.length === 0) {
+      setCustomEmojis([]);
+      return;
+    }
+    const { data, error: emojiError } = await supabase
+      .from("server_emojis")
+      .select("*")
+      .in("server_id", serverIds)
+      .order("name", { ascending: true });
+    if (emojiError) {
+      setCustomEmojis([]);
+      return;
+    }
+    setCustomEmojis((data as ServerEmoji[]) ?? []);
+  }, [user]);
+
+  useEffect(() => {
+    void loadCustomEmojis();
+  }, [loadCustomEmojis, servers]);
 
   const refreshThreads = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) return;
@@ -1799,6 +1833,35 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const canManageChannels = can(myPerms, PERMISSIONS.MANAGE_CHANNELS, {
     isOwner: isServerOwner,
   });
+  const canManageEmojis = can(myPerms, PERMISSIONS.MANAGE_EMOJIS, {
+    isOwner: isServerOwner,
+  });
+
+  const emojiCatalog = useMemo(() => {
+    const map = new Map<string, ServerEmoji>();
+    for (const emoji of customEmojis) map.set(emoji.id, emoji);
+    return map;
+  }, [customEmojis]);
+
+  const serverNamesById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const server of servers) map[server.id] = server.name;
+    return map;
+  }, [servers]);
+
+  const reactorNamesById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const member of members) {
+      map[member.user_id] = member.nickname?.trim() || member.username;
+    }
+    for (const thread of threads) {
+      if (!map[thread.otherUserId]) map[thread.otherUserId] = thread.username;
+    }
+    if (user?.id && profile?.username) {
+      map[user.id] = profile.username;
+    }
+    return map;
+  }, [members, threads, user?.id, profile?.username]);
 
   const visibleMembers = useMemo(
     () => members.filter((member) => !isBlocked(member.user_id)),
@@ -2998,6 +3061,28 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     });
   }
 
+  async function pickGif(gif: TenorGif) {
+    setError(null);
+    if (pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE) {
+      setError(`You can attach up to ${MAX_ATTACHMENTS_PER_MESSAGE} files.`);
+      return;
+    }
+    try {
+      const res = await fetch(gif.url);
+      if (!res.ok) throw new Error("Could not download GIF");
+      const blob = await res.blob();
+      const safeTitle = (gif.title || "tenor")
+        .replace(/[^\w\-]+/g, "_")
+        .slice(0, 40);
+      const file = new File([blob], `${safeTitle || "gif"}.gif`, {
+        type: blob.type || "image/gif",
+      });
+      await chooseFiles([file]);
+    } catch {
+      setError("Could not add that GIF.");
+    }
+  }
+
   const waitingForChannel =
     channelPending || (pane === "server" && !activeChannel && channels.length > 0);
   const headerTitle = dmMode
@@ -3374,6 +3459,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               scrollKey={activeConversationId ?? ""}
               currentUserId={user?.id ?? null}
               reactionMap={reactionMap}
+              customEmojis={customEmojis}
+              emojiCatalog={emojiCatalog}
+              serverNamesById={serverNamesById}
+              reactorNamesById={reactorNamesById}
               hasMore={!searchNeedle && dmHasMore}
               loadingOlder={loadingOlderMessages}
               onLoadOlder={() => void loadOlderDm()}
@@ -3412,6 +3501,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               mentionMaps={mentionMaps}
               canDeleteOthers={!previewMode && canManageMessages}
               reactionMap={reactionMap}
+              customEmojis={customEmojis}
+              emojiCatalog={emojiCatalog}
+              serverNamesById={serverNamesById}
+              reactorNamesById={reactorNamesById}
               serverNickByUserId={serverNickByUserId}
               hasMore={!searchNeedle && channelHasMore}
               loadingOlder={loadingOlderMessages}
@@ -3551,10 +3644,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 disabled={!user || (textMode && !canSendMessages)}
                 mentionSuggestions={textMode ? mentionSuggestions : []}
                 typingPeople={typingPeople}
+                customEmojis={customEmojis}
+                serverNamesById={serverNamesById}
                 onDraft={setDraft}
                 onCancelReply={() => setReplyTo(null)}
                 onFiles={(files) => void chooseFiles(files)}
                 onRemoveFile={removePendingFile}
+                onPickGif={(gif) => void pickGif(gif)}
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
                 onLimitReached={setError}
@@ -3628,6 +3724,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 mentionMaps={mentionMaps}
                 canDeleteOthers={canManageMessages}
                 reactionMap={reactionMap}
+                customEmojis={customEmojis}
+                emojiCatalog={emojiCatalog}
+                serverNamesById={serverNamesById}
+                reactorNamesById={reactorNamesById}
                 serverNickByUserId={serverNickByUserId}
                 hasMore={channelHasMore}
                 loadingOlder={loadingOlderMessages}
@@ -3670,10 +3770,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 disabled={!user || !canSendMessages}
                 mentionSuggestions={mentionSuggestions}
                 typingPeople={typingPeople}
+                customEmojis={customEmojis}
+                serverNamesById={serverNamesById}
                 onDraft={setDraft}
                 onCancelReply={() => setReplyTo(null)}
                 onFiles={(files) => void chooseFiles(files)}
                 onRemoveFile={removePendingFile}
+                onPickGif={(gif) => void pickGif(gif)}
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
                 onLimitReached={setError}
@@ -3755,6 +3858,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           channels={channels}
           categories={categories}
           initialTab={settingsTab}
+          canManageEmojis={canManageEmojis}
           onClose={() => setSettingsOpen(false)}
           onServerUpdated={(next) => {
             setServers((prev) => prev.map((server) => (server.id === next.id ? next : server)));
@@ -3769,6 +3873,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             });
           }}
           onMembersChanged={setMembers}
+          onEmojisChanged={() => void loadCustomEmojis()}
         />
       )}
 

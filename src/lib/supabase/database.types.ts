@@ -203,6 +203,28 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["message_reactions"]["Insert"]>
         Relationships: []
       }
+      server_emojis: {
+        Row: {
+          id: string
+          server_id: string
+          name: string
+          url: string
+          animated: boolean
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          server_id: string
+          name: string
+          url: string
+          animated?: boolean
+          created_by: string
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["server_emojis"]["Insert"]>
+        Relationships: []
+      }
       messages: {
         Row: {
           id: string
