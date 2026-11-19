@@ -51,7 +51,8 @@ export function roleColorForMember(
 ): string | null {
   for (const role of rolesForMember(roles, roleIds)) {
     if (!hasCustomRoleColor(role)) continue;
-    return ensureReadableRoleColor(role.color.trim());
+    // Use the exact role color — do not mix toward white.
+    return normalizeHex(role.color.trim()) ?? role.color.trim();
   }
   return null;
 }
@@ -83,19 +84,9 @@ export function displayRolesForMember(
   return owned.filter((role) => hasCustomRoleColor(role));
 }
 
-/** Lift very dark role colors so names stay readable on dark UI. */
+/** Normalize a role hex for display — exact chosen color, no lightening. */
 export function ensureReadableRoleColor(hex: string): string {
-  const parsed = parseHex(hex);
-  if (!parsed) return hex;
-  const { r, g, b } = parsed;
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  if (luminance >= 0.22) return normalizeHex(hex) ?? hex;
-  // Mix toward white until readable.
-  const mix = 0.45;
-  const nr = Math.round(r + (255 - r) * mix);
-  const ng = Math.round(g + (255 - g) * mix);
-  const nb = Math.round(b + (255 - b) * mix);
-  return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`;
+  return normalizeHex(hex) ?? hex.trim();
 }
 
 function parseHex(hex: string): { r: number; g: number; b: number } | null {
