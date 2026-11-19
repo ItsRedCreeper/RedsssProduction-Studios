@@ -31,6 +31,15 @@ export function EmojiPicker({
 
   const unicodeGroups = useMemo(() => filterUnicodeEmojis(query), [query]);
 
+  const nameCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const emoji of customEmojis) {
+      const key = emoji.name.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [customEmojis]);
+
   const customGroups = useMemo(() => {
     const q = query.trim().toLowerCase().replace(/^:|:$/g, "");
     const byServer = new Map<string, ServerEmoji[]>();
@@ -80,24 +89,31 @@ export function EmojiPicker({
               {group.label}
             </h3>
             <div className="grid grid-cols-8 gap-0.5">
-              {group.emojis.map((emoji) => (
-                <HoverTip key={emoji.id} label={`:${emoji.name}:`} delayMs={40}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onPick({
-                        kind: "custom",
-                        emoji,
-                        token: customEmojiToken(emoji),
-                      })
-                    }
-                    className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-white/10"
-                    aria-label={emoji.name}
-                  >
-                    <CustomEmoji emoji={emoji} size={24} />
-                  </button>
-                </HoverTip>
-              ))}
+              {group.emojis.map((emoji) => {
+                const duplicate =
+                  (nameCounts.get(emoji.name.toLowerCase()) ?? 0) > 1;
+                const tip = duplicate
+                  ? `:${emoji.name}: · ${group.label}`
+                  : `:${emoji.name}:`;
+                return (
+                  <HoverTip key={emoji.id} label={tip} delayMs={40}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onPick({
+                          kind: "custom",
+                          emoji,
+                          token: customEmojiToken(emoji),
+                        })
+                      }
+                      className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-white/10"
+                      aria-label={tip}
+                    >
+                      <CustomEmoji emoji={emoji} size={24} />
+                    </button>
+                  </HoverTip>
+                );
+              })}
             </div>
           </section>
         ))}

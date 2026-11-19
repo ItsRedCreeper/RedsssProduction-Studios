@@ -122,6 +122,8 @@ type MessageItemProps = {
   customEmojis?: ServerEmoji[];
   emojiCatalog?: Map<string, ServerEmoji>;
   serverNamesById?: Record<string, string>;
+  /** Prefer this server when resolving typed `:name:` collisions. */
+  preferredServerId?: string | null;
   reactorNamesById?: Record<string, string>;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
@@ -169,6 +171,7 @@ export function MessageItem({
   customEmojis = [],
   emojiCatalog,
   serverNamesById = {},
+  preferredServerId = null,
   reactorNamesById = {},
   onReply,
   onEdit,
@@ -437,6 +440,8 @@ export function MessageItem({
                   channelNames,
                   mentionMaps,
                   emojiCatalog,
+                  customEmojis,
+                  preferredServerId,
                 })}
               </p>
             )}
@@ -463,7 +468,7 @@ export function MessageItem({
                   <ReactionEmoji
                     token={reaction.emoji}
                     catalog={emojiCatalog}
-                    size={16}
+                    size={20}
                   />
                   <span>{reaction.count}</span>
                 </>

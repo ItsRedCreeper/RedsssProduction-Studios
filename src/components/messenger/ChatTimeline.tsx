@@ -25,6 +25,7 @@ type ChatTimelineProps = {
   customEmojis?: ServerEmoji[];
   emojiCatalog?: Map<string, ServerEmoji>;
   serverNamesById?: Record<string, string>;
+  preferredServerId?: string | null;
   reactorNamesById?: Record<string, string>;
   /** More history exists above the loaded window. */
   hasMore?: boolean;
@@ -103,6 +104,7 @@ export function ChatTimeline({
   customEmojis,
   emojiCatalog,
   serverNamesById,
+  preferredServerId = null,
   reactorNamesById,
   hasMore = false,
   loadingOlder = false,
@@ -292,6 +294,7 @@ export function ChatTimeline({
                 customEmojis={customEmojis}
                 emojiCatalog={emojiCatalog}
                 serverNamesById={serverNamesById}
+                preferredServerId={preferredServerId}
                 reactorNamesById={reactorNamesById}
                 onReply={onReply}
                 onEdit={onEdit}

@@ -2,7 +2,11 @@
 
 import type { ReactNode } from "react";
 import { CustomEmoji } from "@/components/messenger/CustomEmoji";
-import type { ServerEmoji } from "@/lib/emoji";
+import {
+  findEmojiByName,
+  isCustomEmojiOnlyMessage,
+  type ServerEmoji,
+} from "@/lib/emoji";
 import type { MentionMaps } from "@/lib/mentions";
 
 type FormatOpts = {
@@ -12,6 +16,8 @@ type FormatOpts = {
   channelNames?: string[];
   mentionMaps?: MentionMaps;
   emojiCatalog?: Map<string, ServerEmoji>;
+  customEmojis?: ServerEmoji[];
+  preferredServerId?: string | null;
 };
 
 /**
@@ -81,6 +87,8 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
   const parts: ReactNode[] = [];
   let i = 0;
   let key = 0;
+  const emojiSize = isCustomEmojiOnlyMessage(content) ? 48 : 32;
+  const customList = opts.customEmojis ?? [];
 
   while (i < content.length) {
     const slice = content.slice(i);
@@ -92,12 +100,35 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
           key={key++}
           token={customEmoji[0]}
           catalog={opts.emojiCatalog}
-          size={22}
+          size={emojiSize}
           className="mx-0.5"
         />,
       );
       i += customEmoji[0].length;
       continue;
+    }
+
+    // Typed `:name:` shortcodes (prefer current server on name collisions).
+    const shortcode = slice.match(/^:([a-zA-Z0-9_]{2,32}):/);
+    if (shortcode) {
+      const hit = findEmojiByName(
+        shortcode[1],
+        customList,
+        opts.preferredServerId,
+      );
+      if (hit) {
+        parts.push(
+          <CustomEmoji
+            key={key++}
+            emoji={hit}
+            catalog={opts.emojiCatalog}
+            size={emojiSize}
+            className="mx-0.5"
+          />,
+        );
+        i += shortcode[0].length;
+        continue;
+      }
     }
 
     const idUser = slice.match(/^<@(?!&)([0-9a-f-]{36})>/i);
@@ -228,6 +259,7 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
         ch === "*" ||
         ch === "`" ||
         ch === "<" ||
+        ch === ":" ||
         (ch === "h" && content.slice(next, next + 4) === "http")
       ) {
         break;

@@ -79,7 +79,7 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   type MessageAttachment,
 } from "@/lib/message-media";
-import type { ServerEmoji } from "@/lib/emoji";
+import { resolveEmojiShortcodes, type ServerEmoji } from "@/lib/emoji";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import { can, mergeRolePermissions, PERMISSIONS } from "@/lib/permissions";
 import {
@@ -2470,9 +2470,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError("One or more files are too large.");
       return;
     }
-    // Discord-style: store <@id> tokens so display names (incl. spaces) resolve correctly.
-    const encoded = content
-      ? encodeMentions(content, {
+    // Discord-style: resolve :name: → <:name:id>, then store <@id> mention tokens.
+    const withEmojis = content
+      ? resolveEmojiShortcodes(content, customEmojis, activeServer?.id)
+      : "";
+    const encoded = withEmojis
+      ? encodeMentions(withEmojis, {
           users: members.map((member) => ({
             id: member.user_id,
             username: member.nickname?.trim() || member.username,
@@ -2640,7 +2643,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError("One or more files are too large.");
       return;
     }
-    const text = content;
+    const text = content
+      ? resolveEmojiShortcodes(content, customEmojis, null)
+      : "";
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const optimistic: ChatMessage = {
@@ -2796,16 +2801,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   async function editChannel(messageId: string, content: string) {
     const previous = messages.find((message) => message.id === messageId);
+    const nextContent = resolveEmojiShortcodes(
+      content,
+      customEmojis,
+      activeServer?.id,
+    );
     const editedAt = new Date().toISOString();
     setMessages((prev) =>
       prev.map((message) =>
-        message.id === messageId ? { ...message, content, edited_at: editedAt } : message,
+        message.id === messageId
+          ? { ...message, content: nextContent, edited_at: editedAt }
+          : message,
       ),
     );
     const supabase = createClient();
     const { error: updateError } = await supabase
       .from("messages")
-      .update({ content, edited_at: editedAt })
+      .update({ content: nextContent, edited_at: editedAt })
       .eq("id", messageId);
     if (updateError) {
       if (previous) {
@@ -2825,16 +2837,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   async function editDm(messageId: string, content: string) {
     const previous = dmMessages.find((message) => message.id === messageId);
+    const nextContent = resolveEmojiShortcodes(content, customEmojis, null);
     const editedAt = new Date().toISOString();
     setDmMessages((prev) =>
       prev.map((message) =>
-        message.id === messageId ? { ...message, content, edited_at: editedAt } : message,
+        message.id === messageId
+          ? { ...message, content: nextContent, edited_at: editedAt }
+          : message,
       ),
     );
     const supabase = createClient();
     const { error: updateError } = await supabase
       .from("dm_messages")
-      .update({ content, edited_at: editedAt })
+      .update({ content: nextContent, edited_at: editedAt })
       .eq("id", messageId);
     if (updateError) {
       if (previous) {
@@ -3465,6 +3480,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               customEmojis={customEmojis}
               emojiCatalog={emojiCatalog}
               serverNamesById={serverNamesById}
+              preferredServerId={null}
               reactorNamesById={reactorNamesById}
               hasMore={!searchNeedle && dmHasMore}
               loadingOlder={loadingOlderMessages}
@@ -3507,6 +3523,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               customEmojis={customEmojis}
               emojiCatalog={emojiCatalog}
               serverNamesById={serverNamesById}
+              preferredServerId={activeServer?.id ?? null}
               reactorNamesById={reactorNamesById}
               serverNickByUserId={serverNickByUserId}
               hasMore={!searchNeedle && channelHasMore}
@@ -3730,6 +3747,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 customEmojis={customEmojis}
                 emojiCatalog={emojiCatalog}
                 serverNamesById={serverNamesById}
+                preferredServerId={activeServer?.id ?? null}
                 reactorNamesById={reactorNamesById}
                 serverNickByUserId={serverNickByUserId}
                 hasMore={channelHasMore}

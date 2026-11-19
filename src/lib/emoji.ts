@@ -11,8 +11,43 @@ export type ServerEmoji = {
 /** Discord-style custom emoji token: <:name:id> or <a:name:id> */
 export const CUSTOM_EMOJI_RE = /<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/gi;
 
+/** Typed shortcode `:name:` — not already inside a <:name:id> token. */
+export const EMOJI_SHORTCODE_RE = /(?<![<a]):([a-zA-Z0-9_]{2,32}):/g;
+
 export function customEmojiToken(emoji: Pick<ServerEmoji, "id" | "name" | "animated">) {
   return `<${emoji.animated ? "a" : ""}:${emoji.name}:${emoji.id}>`;
+}
+
+/** Prefer current-server emoji when multiple servers share a name. */
+export function findEmojiByName(
+  name: string,
+  catalog: ServerEmoji[],
+  preferredServerId?: string | null,
+): ServerEmoji | null {
+  const needle = name.toLowerCase();
+  const matches = catalog.filter((emoji) => emoji.name.toLowerCase() === needle);
+  if (matches.length === 0) return null;
+  if (preferredServerId) {
+    const local = matches.find((emoji) => emoji.server_id === preferredServerId);
+    if (local) return local;
+  }
+  return matches[0] ?? null;
+}
+
+/**
+ * Turn typed `:name:` into Discord-style `<:name:id>` / `<a:name:id>` tokens
+ * before send/edit so messages store a stable emoji id.
+ */
+export function resolveEmojiShortcodes(
+  text: string,
+  catalog: ServerEmoji[],
+  preferredServerId?: string | null,
+): string {
+  if (!text || catalog.length === 0) return text;
+  return text.replace(EMOJI_SHORTCODE_RE, (full, name: string) => {
+    const hit = findEmojiByName(name, catalog, preferredServerId);
+    return hit ? customEmojiToken(hit) : full;
+  });
 }
 
 export function parseCustomEmojiToken(token: string): {
@@ -207,17 +242,37 @@ export const UNICODE_EMOJI_GROUPS: {
 
 export const QUICK_REACTION_EMOJIS = ["👍", "❤️", "😂", "🔥", "👀", "🎉"] as const;
 
-export function emojiDisplayName(token: string, catalog?: Map<string, ServerEmoji>) {
+export function emojiDisplayName(
+  token: string,
+  catalog?: Map<string, ServerEmoji>,
+  serverNamesById?: Record<string, string>,
+) {
   const custom = parseCustomEmojiToken(token);
   if (custom) {
     const row = catalog?.get(custom.id);
-    return row ? `:${row.name}:` : `:${custom.name}:`;
+    const name = row?.name ?? custom.name;
+    const serverLabel =
+      row && serverNamesById?.[row.server_id]
+        ? ` · ${serverNamesById[row.server_id]}`
+        : "";
+    return `:${name}:${serverLabel}`;
   }
   for (const group of UNICODE_EMOJI_GROUPS) {
     const hit = group.emojis.find((item) => item.char === token);
     if (hit) return `:${hit.name}:`;
   }
   return token;
+}
+
+/** True when the message is only custom emoji tokens (+ whitespace). */
+export function isCustomEmojiOnlyMessage(content: string) {
+  if (!content.trim()) return false;
+  const tokenRe = /<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/gi;
+  if (!tokenRe.test(content)) return false;
+  const leftover = content
+    .replace(/<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/gi, "")
+    .replace(/\s+/g, "");
+  return leftover.length === 0;
 }
 
 export function filterUnicodeEmojis(query: string) {
