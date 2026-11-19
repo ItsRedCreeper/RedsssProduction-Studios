@@ -37,6 +37,7 @@ export function findEmojiByName(
 /**
  * Turn typed `:name:` into Discord-style `<:name:id>` / `<a:name:id>` tokens
  * before send/edit so messages store a stable emoji id.
+ * Same-name collisions prefer `preferredServerId` (the channel's server).
  */
 export function resolveEmojiShortcodes(
   text: string,
@@ -48,6 +49,47 @@ export function resolveEmojiShortcodes(
     const hit = findEmojiByName(name, catalog, preferredServerId);
     return hit ? customEmojiToken(hit) : full;
   });
+}
+
+/** Private-use slots so the composer can show an emoji chip instead of `<:name:uuid>`. */
+export function isComposerEmojiSlot(ch: string) {
+  const code = ch.codePointAt(0) ?? 0;
+  return code >= 0xe000 && code <= 0xf8ff;
+}
+
+export function expandComposerDraft(
+  text: string,
+  slots: Map<string, string>,
+  catalog: ServerEmoji[],
+  preferredServerId?: string | null,
+) {
+  let out = "";
+  for (const ch of text) {
+    out += slots.get(ch) ?? ch;
+  }
+  return resolveEmojiShortcodes(out, catalog, preferredServerId);
+}
+
+export function findEmojisByNamePrefix(
+  query: string,
+  catalog: ServerEmoji[],
+  preferredServerId?: string | null,
+) {
+  const q = query.trim().toLowerCase();
+  const matches = catalog.filter((emoji) =>
+    q ? emoji.name.toLowerCase().includes(q) : true,
+  );
+  matches.sort((a, b) => {
+    if (preferredServerId) {
+      const aLocal = a.server_id === preferredServerId ? 0 : 1;
+      const bLocal = b.server_id === preferredServerId ? 0 : 1;
+      if (aLocal !== bLocal) return aLocal - bLocal;
+    }
+    const byName = a.name.localeCompare(b.name);
+    if (byName !== 0) return byName;
+    return a.server_id.localeCompare(b.server_id);
+  });
+  return matches.slice(0, 12);
 }
 
 export function parseCustomEmojiToken(token: string): {

@@ -2444,7 +2444,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setPinsOpen(false);
   }
 
-  async function sendChannel() {
+  async function sendChannel(contentOverride?: string) {
     if (
       !user ||
       !activeChannelId ||
@@ -2459,7 +2459,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
     const channelId = activeChannelId;
-    const content = draft.trim();
+    const content = (contentOverride ?? draft).trim();
     const filesSnapshot = pendingFiles;
     if (!content && filesSnapshot.length === 0) return;
     if (content.length > MESSAGE_MAX) {
@@ -2613,7 +2613,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setSending(false);
   }
 
-  async function sendDm() {
+  async function sendDm(contentOverride?: string) {
     if (!user || !activeConversationId || sending) return;
     const otherId =
       threads.find((thread) => thread.id === activeConversationId)?.otherUserId ??
@@ -2632,7 +2632,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       }
     }
     const conversationId = activeConversationId;
-    const content = draft.trim();
+    const content = (contentOverride ?? draft).trim();
     const filesSnapshot = pendingFiles;
     if (!content && filesSnapshot.length === 0) return;
     if (content.length > MESSAGE_MAX) {
@@ -3666,6 +3666,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 typingPeople={typingPeople}
                 customEmojis={customEmojis}
                 serverNamesById={serverNamesById}
+                preferredServerId={dmMode ? null : (activeServer?.id ?? null)}
                 onDraft={setDraft}
                 onCancelReply={() => setReplyTo(null)}
                 onFiles={(files) => void chooseFiles(files)}
@@ -3674,9 +3675,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
                 onLimitReached={setError}
-                onSubmit={() => {
-                  if (dmMode) void sendDm();
-                  else void sendChannel();
+                onSubmit={(content) => {
+                  if (dmMode) void sendDm(content);
+                  else void sendChannel(content);
                 }}
               />
             ))}
@@ -3793,6 +3794,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 typingPeople={typingPeople}
                 customEmojis={customEmojis}
                 serverNamesById={serverNamesById}
+                preferredServerId={activeServer?.id ?? null}
                 onDraft={setDraft}
                 onCancelReply={() => setReplyTo(null)}
                 onFiles={(files) => void chooseFiles(files)}
@@ -3801,7 +3803,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
                 onLimitReached={setError}
-                onSubmit={() => void sendChannel()}
+                onSubmit={(content) => void sendChannel(content)}
               />
             </div>
           </aside>

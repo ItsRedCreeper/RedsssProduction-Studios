@@ -28,9 +28,18 @@ import {
 } from "@/components/messenger/TypingIndicator";
 import { EmojiPicker, type EmojiPick } from "@/components/messenger/EmojiPicker";
 import { GifPicker, type GifResult } from "@/components/messenger/GifPicker";
+import { ComposerDraftMirror } from "@/components/messenger/ComposerDraftMirror";
+import { CustomEmoji } from "@/components/messenger/CustomEmoji";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
-import type { ServerEmoji } from "@/lib/emoji";
+import {
+  customEmojiToken,
+  expandComposerDraft,
+  findEmojiByName,
+  findEmojisByNamePrefix,
+  isComposerEmojiSlot,
+  type ServerEmoji,
+} from "@/lib/emoji";
 import {
   formatFileSize,
   isImageMime,
@@ -64,12 +73,15 @@ type MessageComposerProps = {
   typingPeople?: TypingPerson[];
   customEmojis?: ServerEmoji[];
   serverNamesById?: Record<string, string>;
+  /** Prefer this server when `:name:` collides across servers. */
+  preferredServerId?: string | null;
   onDraft: (value: string) => void;
   onCancelReply: () => void;
   onFiles: (files: File[]) => void;
   onRemoveFile: (id: string) => void;
   onPickGif?: (gif: GifResult) => void;
-  onSubmit: () => void;
+  /** Optional expanded content (emoji slots → tokens) for send. */
+  onSubmit: (content?: string) => void;
   onTyping?: () => void;
   onTypingStop?: () => void;
   onLimitReached?: (message: string) => void;
@@ -94,6 +106,7 @@ export function MessageComposer({
   typingPeople = [],
   customEmojis = [],
   serverNamesById = {},
+  preferredServerId = null,
   onDraft,
   onCancelReply,
   onFiles,
@@ -106,16 +119,77 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const mirrorRef = useRef<HTMLDivElement | null>(null);
   const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
   const gifBtnRef = useRef<HTMLButtonElement | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const typingStopTimer = useRef<number | null>(null);
+  const slotMapRef = useRef(new Map<string, string>());
+  const slotSeqRef = useRef(0);
+  const [slotVersion, setSlotVersion] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [emojiSuggestIndex, setEmojiSuggestIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
   const [pickerStyle, setPickerStyle] = useState<CSSProperties | null>(null);
   const replying = !!replyAuthor;
+
+  const emojiCatalog = useMemo(() => {
+    const map = new Map<string, ServerEmoji>();
+    for (const emoji of customEmojis) map.set(emoji.id, emoji);
+    return map;
+  }, [customEmojis]);
+
+  const nameCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const emoji of customEmojis) {
+      const key = emoji.name.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [customEmojis]);
+
+  function allocEmojiSlot(emoji: ServerEmoji) {
+    const code = 0xe000 + (slotSeqRef.current % 6400);
+    slotSeqRef.current += 1;
+    const slot = String.fromCharCode(code);
+    slotMapRef.current.set(slot, customEmojiToken(emoji));
+    setSlotVersion((value) => value + 1);
+    return slot;
+  }
+
+  function expandForSend(value: string) {
+    return expandComposerDraft(
+      value,
+      slotMapRef.current,
+      customEmojis,
+      preferredServerId,
+    );
+  }
+
+  /** Collapse completed `:name:` shortcodes into emoji chips (prefer current server). */
+  function collapseShortcodes(value: string, cursor: number) {
+    const re = /(?<![<a]):([a-zA-Z0-9_]{2,32}):/g;
+    let out = "";
+    let last = 0;
+    let nextCursor = cursor;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(value))) {
+      const name = match[1];
+      const hit = findEmojiByName(name, customEmojis, preferredServerId);
+      if (!hit) continue;
+      const slot = allocEmojiSlot(hit);
+      out += value.slice(last, match.index) + slot;
+      if (cursor > match.index) {
+        const removed = match[0].length - 1;
+        nextCursor = Math.max(match.index + 1, nextCursor - removed);
+      }
+      last = match.index + match[0].length;
+    }
+    out += value.slice(last);
+    return { value: out, cursor: nextCursor };
+  }
 
   useEffect(() => {
     return () => {
@@ -196,13 +270,18 @@ export function MessageComposer({
     onTypingStop?.();
   }
 
-  function setDraftValue(value: string) {
-    if (value.length > MESSAGE_MAX) {
-      onDraft(value.slice(0, MESSAGE_MAX));
+  function setDraftValue(value: string, cursor?: number) {
+    const collapsed = collapseShortcodes(
+      value,
+      cursor ?? value.length,
+    );
+    let next = collapsed.value;
+    if (next.length > MESSAGE_MAX) {
+      next = next.slice(0, MESSAGE_MAX);
       onLimitReached?.(MESSAGE_MAX_REACHED);
-      return;
     }
-    onDraft(value);
+    onDraft(next);
+    return collapsed.cursor;
   }
 
   function insertAtCursor(text: string) {
@@ -210,14 +289,18 @@ export function MessageComposer({
     const start = el?.selectionStart ?? draft.length;
     const end = el?.selectionEnd ?? draft.length;
     const next = `${draft.slice(0, start)}${text}${draft.slice(end)}`;
-    setDraftValue(next);
+    const cursor = setDraftValue(next, start + text.length);
     bumpTyping();
     requestAnimationFrame(() => {
-      const pos = Math.min(start + text.length, MESSAGE_MAX);
+      const pos = Math.min(cursor, MESSAGE_MAX);
       el?.setSelectionRange(pos, pos);
       el?.focus();
       resizeTextarea(el);
     });
+  }
+
+  function insertCustomEmoji(emoji: ServerEmoji) {
+    insertAtCursor(allocEmojiSlot(emoji));
   }
 
   function takeFiles(list: FileList | File[] | null) {
@@ -236,6 +319,22 @@ export function MessageComposer({
       start: before.length - match[2].length - match[3].length,
     };
   }, [draft]);
+
+  const emojiQuery = useMemo(() => {
+    if (mentionQuery) return null;
+    const cursor = inputRef.current?.selectionStart ?? draft.length;
+    const before = draft.slice(0, cursor);
+    // Don't treat <:name… as a typed shortcode query.
+    if (/<[a]?$/.test(before) || /<[a]?:[a-zA-Z0-9_]*$/.test(before)) {
+      return null;
+    }
+    const match = before.match(/:([a-zA-Z0-9_]{0,32})$/);
+    if (!match) return null;
+    return {
+      query: match[1].toLowerCase(),
+      start: before.length - match[0].length,
+    };
+  }, [draft, mentionQuery]);
 
   const filteredMentions = useMemo(() => {
     if (!mentionQuery) return [];
@@ -258,9 +357,22 @@ export function MessageComposer({
       .slice(0, 8);
   }, [mentionQuery, mentionSuggestions]);
 
+  const filteredEmojiSuggestions = useMemo(() => {
+    if (!emojiQuery) return [];
+    return findEmojisByNamePrefix(
+      emojiQuery.query,
+      customEmojis,
+      preferredServerId,
+    );
+  }, [emojiQuery, customEmojis, preferredServerId]);
+
   useEffect(() => {
     setMentionIndex(0);
   }, [mentionQuery?.query, mentionQuery?.trigger]);
+
+  useEffect(() => {
+    setEmojiSuggestIndex(0);
+  }, [emojiQuery?.query]);
 
   function applyMention(item: MentionSuggestion) {
     if (!mentionQuery) return;
@@ -268,26 +380,42 @@ export function MessageComposer({
     const before = draft.slice(0, mentionQuery.start);
     const after = draft.slice(inputRef.current?.selectionStart ?? draft.length);
     const next = `${before}${prefix}${item.label} ${after}`;
-    setDraftValue(next);
+    const cursor = setDraftValue(
+      next,
+      before.length + prefix.length + item.label.length + 1,
+    );
     requestAnimationFrame(() => {
-      const pos = Math.min(
-        before.length + prefix.length + item.label.length + 1,
-        MESSAGE_MAX,
-      );
+      const pos = Math.min(cursor, MESSAGE_MAX);
       inputRef.current?.setSelectionRange(pos, pos);
       inputRef.current?.focus();
     });
   }
 
+  function applyEmojiSuggestion(emoji: ServerEmoji) {
+    if (!emojiQuery) return;
+    const before = draft.slice(0, emojiQuery.start);
+    const after = draft.slice(inputRef.current?.selectionStart ?? draft.length);
+    const slot = allocEmojiSlot(emoji);
+    const next = `${before}${slot}${after}`;
+    const cursor = setDraftValue(next, before.length + 1);
+    bumpTyping();
+    requestAnimationFrame(() => {
+      inputRef.current?.setSelectionRange(cursor, cursor);
+      inputRef.current?.focus();
+      resizeTextarea(inputRef.current);
+    });
+  }
+
   function handleEmojiPick(pick: EmojiPick) {
-    insertAtCursor(pick.kind === "custom" ? pick.token : pick.char);
+    if (pick.kind === "custom") insertCustomEmoji(pick.emoji);
+    else insertAtCursor(pick.char);
     setEmojiOpen(false);
   }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     clearTypingSoon();
-    onSubmit();
+    onSubmit(expandForSend(draft));
   }
 
   return (
@@ -436,6 +564,43 @@ export function MessageComposer({
             })}
           </ul>
         )}
+        {filteredMentions.length === 0 && filteredEmojiSuggestions.length > 0 && (
+          <ul className="absolute bottom-full left-0 z-20 mb-1 max-h-56 w-full overflow-y-auto rounded-md border border-[#1e1f22] bg-[#111214] py-1 shadow-xl">
+            {filteredEmojiSuggestions.map((emoji, index) => {
+              const duplicate =
+                (nameCounts.get(emoji.name.toLowerCase()) ?? 0) > 1;
+              const serverLabel =
+                serverNamesById[emoji.server_id] ?? "Server";
+              const isPreferred =
+                !!preferredServerId && emoji.server_id === preferredServerId;
+              return (
+                <li key={emoji.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      applyEmojiSuggestion(emoji);
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
+                      index === emojiSuggestIndex
+                        ? "bg-accent/20 text-white"
+                        : "text-[#dbdee1] hover:bg-white/5"
+                    }`}
+                  >
+                    <CustomEmoji emoji={emoji} size={22} title="" />
+                    <span className="font-medium">:{emoji.name}:</span>
+                    {duplicate && (
+                      <span className="truncate text-xs text-[#949ba4]">
+                        {serverLabel}
+                        {isPreferred ? " · this server" : ""}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         <form
           onSubmit={handleSubmit}
           className={`flex items-end gap-2 bg-[#383a40] px-3 py-3 sm:gap-3 sm:px-4 ${
@@ -473,67 +638,152 @@ export function MessageComposer({
               </HoverTip>
             </>
           )}
-          <textarea
-            ref={inputRef}
-            rows={1}
-            value={draft}
-            onChange={(event) => {
-              setDraftValue(event.target.value);
-              if (event.target.value.trim()) bumpTyping();
-              else clearTypingSoon();
-              resizeTextarea(event.currentTarget);
-            }}
-            onKeyDown={(event) => {
-              if (filteredMentions.length > 0) {
-                if (event.key === "ArrowDown") {
-                  event.preventDefault();
-                  setMentionIndex((i) => (i + 1) % filteredMentions.length);
+          <div className="relative min-h-[24px] min-w-0 flex-1">
+            <div
+              ref={mirrorRef}
+              className="pointer-events-none absolute inset-0 overflow-y-auto text-[15px] leading-6 text-[#dbdee1]"
+            >
+              {/* slotVersion keeps mirror in sync when chip map changes */}
+              <span className="sr-only">{slotVersion}</span>
+              <ComposerDraftMirror
+                draft={draft}
+                slots={slotMapRef.current}
+                catalog={emojiCatalog}
+                customEmojis={customEmojis}
+                preferredServerId={preferredServerId}
+              />
+            </div>
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={draft}
+              onChange={(event) => {
+                const el = event.currentTarget;
+                const cursor = setDraftValue(
+                  event.target.value,
+                  el.selectionStart,
+                );
+                if (event.target.value.trim()) bumpTyping();
+                else clearTypingSoon();
+                requestAnimationFrame(() => {
+                  el.setSelectionRange(cursor, cursor);
+                  resizeTextarea(el);
+                });
+              }}
+              onScroll={(event) => {
+                if (mirrorRef.current) {
+                  mirrorRef.current.scrollTop = event.currentTarget.scrollTop;
+                }
+              }}
+              onKeyDown={(event) => {
+                if (filteredMentions.length > 0) {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setMentionIndex((i) => (i + 1) % filteredMentions.length);
+                    return;
+                  }
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setMentionIndex(
+                      (i) =>
+                        (i - 1 + filteredMentions.length) %
+                        filteredMentions.length,
+                    );
+                    return;
+                  }
+                  if (event.key === "Enter" || event.key === "Tab") {
+                    event.preventDefault();
+                    applyMention(
+                      filteredMentions[mentionIndex] ?? filteredMentions[0],
+                    );
+                    return;
+                  }
+                  if (event.key === "Escape") {
+                    onDraft(`${draft} `);
+                    return;
+                  }
+                }
+                if (filteredEmojiSuggestions.length > 0) {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setEmojiSuggestIndex(
+                      (i) => (i + 1) % filteredEmojiSuggestions.length,
+                    );
+                    return;
+                  }
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setEmojiSuggestIndex(
+                      (i) =>
+                        (i - 1 + filteredEmojiSuggestions.length) %
+                        filteredEmojiSuggestions.length,
+                    );
+                    return;
+                  }
+                  if (event.key === "Enter" || event.key === "Tab") {
+                    event.preventDefault();
+                    applyEmojiSuggestion(
+                      filteredEmojiSuggestions[emojiSuggestIndex] ??
+                        filteredEmojiSuggestions[0],
+                    );
+                    return;
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    onDraft(`${draft} `);
+                    return;
+                  }
+                }
+                if (event.key === "Escape" && (emojiOpen || gifOpen)) {
+                  setEmojiOpen(false);
+                  setGifOpen(false);
                   return;
                 }
-                if (event.key === "ArrowUp") {
-                  event.preventDefault();
-                  setMentionIndex(
-                    (i) =>
-                      (i - 1 + filteredMentions.length) %
-                      filteredMentions.length,
-                  );
-                  return;
-                }
-                if (event.key === "Enter" || event.key === "Tab") {
-                  event.preventDefault();
-                  applyMention(
-                    filteredMentions[mentionIndex] ?? filteredMentions[0],
-                  );
-                  return;
-                }
-                if (event.key === "Escape") {
-                  onDraft(`${draft} `);
-                  return;
-                }
-              }
-              if (event.key === "Escape" && (emojiOpen || gifOpen)) {
-                setEmojiOpen(false);
-                setGifOpen(false);
-                return;
-              }
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
+                // Backspace deletes a whole emoji chip in one go.
                 if (
-                  !disabled &&
-                  !sending &&
-                  (draft.trim() || pendingFiles.length > 0)
+                  event.key === "Backspace" &&
+                  !event.shiftKey &&
+                  !event.metaKey &&
+                  !event.ctrlKey
                 ) {
-                  clearTypingSoon();
-                  onSubmit();
+                  const el = event.currentTarget;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  if (start === end && start > 0) {
+                    const ch = draft[start - 1]!;
+                    if (isComposerEmojiSlot(ch)) {
+                      event.preventDefault();
+                      const next = `${draft.slice(0, start - 1)}${draft.slice(end)}`;
+                      slotMapRef.current.delete(ch);
+                      setSlotVersion((value) => value + 1);
+                      onDraft(next);
+                      requestAnimationFrame(() => {
+                        el.setSelectionRange(start - 1, start - 1);
+                        resizeTextarea(el);
+                      });
+                      return;
+                    }
+                  }
                 }
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  if (
+                    !disabled &&
+                    !sending &&
+                    (draft.trim() || pendingFiles.length > 0)
+                  ) {
+                    clearTypingSoon();
+                    onSubmit(expandForSend(draft));
+                  }
+                }
+              }}
+              placeholder={
+                dragging ? "Drop files to attach…" : placeholder
               }
-            }}
-            placeholder={
-              dragging ? "Drop files to attach…" : placeholder
-            }
-            disabled={disabled || sending}
-            className="max-h-40 min-h-[24px] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-[#dbdee1] outline-none placeholder:text-[#6d6f78] [overflow-wrap:anywhere] whitespace-pre-wrap"
-          />
+              disabled={disabled || sending}
+              className="relative z-10 max-h-40 min-h-[24px] w-full resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-transparent caret-[#dbdee1] outline-none placeholder:text-[#6d6f78] selection:bg-accent/35 [overflow-wrap:anywhere] whitespace-pre-wrap"
+            />
+          </div>
           <HoverTip label="Emoji" delayMs={40}>
             <button
               ref={emojiBtnRef}

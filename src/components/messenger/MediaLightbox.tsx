@@ -10,6 +10,7 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
+  Download,
   Minus,
   Plus,
   RotateCcw,
@@ -39,6 +40,7 @@ export function MediaLightbox({
   const hasMany = items.length > 1;
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [downloading, setDownloading] = useState(false);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -102,6 +104,29 @@ export function MediaLightbox({
     setOffset({ x: 0, y: 0 });
   }
 
+  async function downloadCurrent() {
+    if (!current || downloading) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(current.url);
+      if (!res.ok) throw new Error("download failed");
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = current.name || "download";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      // Fallback: open in a new tab if blob download is blocked.
+      window.open(current.url, "_blank", "noopener,noreferrer");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   function onWheel(event: ReactWheelEvent<HTMLDivElement>) {
     if (!image) return;
     event.preventDefault();
@@ -143,49 +168,72 @@ export function MediaLightbox({
         aria-label="Close media"
         onClick={onClose}
       />
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-4 top-4 z-20 rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white"
-        aria-label="Close"
-      >
-        <X className="h-5 w-5" strokeWidth={2} />
-      </button>
+      <div className="absolute right-4 top-4 z-20 flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => void downloadCurrent()}
+          disabled={downloading}
+          className="rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-50"
+          aria-label="Download"
+        >
+          <Download className="h-5 w-5" strokeWidth={2} />
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" strokeWidth={2} />
+        </button>
+      </div>
 
-      {image && (
-        <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-white/10 bg-black/70 p-1 shadow-lg backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={() => bumpZoom(-ZOOM_STEP)}
-            disabled={zoom <= MIN_ZOOM}
-            className="rounded-md p-2 text-white hover:bg-white/10 disabled:opacity-40"
-            aria-label="Zoom out"
-          >
-            <Minus className="h-4 w-4" strokeWidth={2} />
-          </button>
-          <span className="min-w-[3.25rem] text-center text-xs font-medium tabular-nums text-[#dbdee1]">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            type="button"
-            onClick={() => bumpZoom(ZOOM_STEP)}
-            disabled={zoom >= MAX_ZOOM}
-            className="rounded-md p-2 text-white hover:bg-white/10 disabled:opacity-40"
-            aria-label="Zoom in"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            onClick={resetZoom}
-            disabled={zoom === MIN_ZOOM && offset.x === 0 && offset.y === 0}
-            className="rounded-md p-2 text-white hover:bg-white/10 disabled:opacity-40"
-            aria-label="Reset zoom"
-          >
-            <RotateCcw className="h-4 w-4" strokeWidth={2} />
-          </button>
-        </div>
-      )}
+      <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-white/10 bg-black/70 p-1 shadow-lg backdrop-blur-sm">
+        {image && (
+          <>
+            <button
+              type="button"
+              onClick={() => bumpZoom(-ZOOM_STEP)}
+              disabled={zoom <= MIN_ZOOM}
+              className="rounded-md p-2 text-white hover:bg-white/10 disabled:opacity-40"
+              aria-label="Zoom out"
+            >
+              <Minus className="h-4 w-4" strokeWidth={2} />
+            </button>
+            <span className="min-w-[3.25rem] text-center text-xs font-medium tabular-nums text-[#dbdee1]">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => bumpZoom(ZOOM_STEP)}
+              disabled={zoom >= MAX_ZOOM}
+              className="rounded-md p-2 text-white hover:bg-white/10 disabled:opacity-40"
+              aria-label="Zoom in"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} />
+            </button>
+            <button
+              type="button"
+              onClick={resetZoom}
+              disabled={zoom === MIN_ZOOM && offset.x === 0 && offset.y === 0}
+              className="rounded-md p-2 text-white hover:bg-white/10 disabled:opacity-40"
+              aria-label="Reset zoom"
+            >
+              <RotateCcw className="h-4 w-4" strokeWidth={2} />
+            </button>
+            <span className="mx-1 h-4 w-px bg-white/20" aria-hidden />
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => void downloadCurrent()}
+          disabled={downloading}
+          className="rounded-md px-2 py-2 text-white hover:bg-white/10 disabled:opacity-40"
+          aria-label="Download"
+        >
+          <Download className="h-4 w-4" strokeWidth={2} />
+        </button>
+      </div>
 
       <div className="relative z-10 flex h-full w-full max-w-[100vw] flex-col items-center justify-center px-2 py-14 sm:px-4">
         <div
