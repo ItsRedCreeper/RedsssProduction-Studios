@@ -122,12 +122,16 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
           placement="above"
           onClose={() => setPickerOpen(false)}
           onSaved={(next) => {
-            if (next.manualStatusExpiresAt !== undefined) {
-              setManualExpiresAt(next.manualStatusExpiresAt);
-            }
-            if (next.statusTextExpiresAt !== undefined) {
-              setCustomExpiresAt(next.statusTextExpiresAt);
-            }
+            setManualExpiresAt(
+              next.status === "online"
+                ? null
+                : (next.manualStatusExpiresAt ?? null),
+            );
+            setCustomExpiresAt(
+              next.statusText?.trim()
+                ? (next.statusTextExpiresAt ?? null)
+                : null,
+            );
             setPickerOpen(false);
           }}
         />

@@ -168,7 +168,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [ignoring, setIgnoring] = useState(false);
   const [messageNotice, setMessageNotice] = useState<string | null>(null);
 
-  // Keep own big/small profile status dots in sync after StatusPicker / heartbeat.
+  // Keep own big/small profile status + expiry labels in sync after StatusPicker /
+  // heartbeat / timed revert (clear_expired_status_text).
   useEffect(() => {
     if (!current) return;
     setBig((prev) => {
@@ -178,7 +179,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         p.status === current.status &&
         p.status_text === current.status_text &&
         p.last_seen_at === current.last_seen_at &&
-        p.manual_status === current.manual_status
+        p.manual_status === current.manual_status &&
+        p.manual_status_expires_at === current.manual_status_expires_at &&
+        p.status_text_expires_at === current.status_text_expires_at
       ) {
         return prev;
       }
@@ -190,6 +193,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           status_text: current.status_text,
           last_seen_at: current.last_seen_at,
           manual_status: current.manual_status,
+          manual_status_expires_at: current.manual_status_expires_at,
+          status_text_expires_at: current.status_text_expires_at,
           avatar_url: current.avatar_url,
           username: current.username,
           bio: current.bio,
@@ -205,7 +210,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         p.status === current.status &&
         p.status_text === current.status_text &&
         p.last_seen_at === current.last_seen_at &&
-        p.manual_status === current.manual_status
+        p.manual_status === current.manual_status &&
+        p.manual_status_expires_at === current.manual_status_expires_at &&
+        p.status_text_expires_at === current.status_text_expires_at
       ) {
         return prev;
       }
@@ -217,6 +224,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           status_text: current.status_text,
           last_seen_at: current.last_seen_at,
           manual_status: current.manual_status,
+          manual_status_expires_at: current.manual_status_expires_at,
+          status_text_expires_at: current.status_text_expires_at,
           avatar_url: current.avatar_url,
           username: current.username,
           bio: current.bio,
@@ -231,6 +240,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     current?.status_text,
     current?.last_seen_at,
     current?.manual_status,
+    current?.manual_status_expires_at,
+    current?.status_text_expires_at,
     current?.avatar_url,
     current?.username,
     current?.bio,

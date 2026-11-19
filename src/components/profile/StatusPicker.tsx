@@ -66,11 +66,6 @@ function panelClass(placement: "above" | "below") {
   }`;
 }
 
-function expiryIsoFromClearAfter(value: StatusClearAfter): string | null {
-  const end = clearAfterToExpiryDate(value);
-  return end ? end.toISOString() : null;
-}
-
 export function StatusPicker({
   open,
   mode,
@@ -166,22 +161,32 @@ export function StatusPicker({
     setDraftStatus(nextStatus);
     const minutes =
       nextStatus === "online" ? 0 : clearAfterToMinutes(clearAfter) ?? 0;
-    const { error: saveError } = await setManualStatus({
+    const saved = await setManualStatus({
       manualStatus: nextStatus,
       manualClearAfterMinutes: minutes,
       clearAfterMinutes: null,
     });
     setBusy(false);
-    if (saveError) {
-      setError(saveError);
+    if (saved.error) {
+      setError(saved.error);
       return;
     }
     onSaved?.({
-      status: nextStatus,
-      statusText: statusText?.trim() || null,
+      status: (saved.status as ManualStatus) ?? nextStatus,
+      statusText:
+        saved.statusText !== undefined
+          ? saved.statusText
+          : statusText?.trim() || null,
       manualStatusExpiresAt:
-        nextStatus === "online" ? null : expiryIsoFromClearAfter(clearAfter),
-      statusTextExpiresAt: statusTextExpiresAt ?? null,
+        saved.manualStatusExpiresAt !== undefined
+          ? saved.manualStatusExpiresAt
+          : nextStatus === "online"
+            ? null
+            : clearAfterToExpiryDate(clearAfter)?.toISOString() ?? null,
+      statusTextExpiresAt:
+        saved.statusTextExpiresAt !== undefined
+          ? saved.statusTextExpiresAt
+          : statusTextExpiresAt ?? null,
     });
     setPendingPresence(null);
     onClose();
@@ -210,7 +215,7 @@ export function StatusPicker({
       (STATUSES.includes(currentPresence as ManualStatus)
         ? currentPresence
         : "online") as ManualStatus;
-    const { error: saveError } = await setManualStatus({
+    const saved = await setManualStatus({
       manualStatus: presence,
       manualClearAfterMinutes: null,
       ...(clearText
@@ -225,19 +230,26 @@ export function StatusPicker({
           }),
     });
     setBusy(false);
-    if (saveError) {
-      setError(saveError);
+    if (saved.error) {
+      setError(saved.error);
       return;
     }
     const cleaned = clearText ? null : draftText.trim() || null;
     if (clearText) setDraftText("");
     onSaved?.({
-      status: presence,
-      statusText: cleaned,
-      manualStatusExpiresAt: manualStatusExpiresAt ?? null,
-      statusTextExpiresAt: clearText
-        ? null
-        : expiryIsoFromClearAfter(customClearAfter),
+      status: (saved.status as ManualStatus) ?? presence,
+      statusText:
+        saved.statusText !== undefined ? saved.statusText : cleaned,
+      manualStatusExpiresAt:
+        saved.manualStatusExpiresAt !== undefined
+          ? saved.manualStatusExpiresAt
+          : manualStatusExpiresAt ?? null,
+      statusTextExpiresAt:
+        saved.statusTextExpiresAt !== undefined
+          ? saved.statusTextExpiresAt
+          : clearText
+            ? null
+            : clearAfterToExpiryDate(customClearAfter)?.toISOString() ?? null,
     });
     onClose();
   }

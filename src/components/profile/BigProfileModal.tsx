@@ -182,6 +182,7 @@ export function BigProfileModal({
   const selfPresenceLabel = resolveDisplayStatus(liveStatus, liveLastSeen);
 
   // Keep status circle + caption synced from PresenceFeed for self and others.
+  // Expiry / manual_status come from profile props (ProfileProvider + notifyProfileUpdated).
   useEffect(() => {
     if (!feedPresence) return;
     if (feedPresence.status) setLiveStatus(feedPresence.status);
@@ -190,13 +191,32 @@ export function BigProfileModal({
     }
     if (feedPresence.statusText !== undefined) {
       setLiveStatusText(feedPresence.statusText);
+      // Timed custom clear: feed drops the text before profile props catch up —
+      // drop the stale "Doesn't clear" / expiry line immediately.
+      if (isSelf && !feedPresence.statusText?.trim()) {
+        setLiveCustomExpiresAt(null);
+      }
     }
   }, [
     feedPresence?.status,
     feedPresence?.lastSeenAt,
     feedPresence?.statusText,
     feedPresence,
+    isSelf,
   ]);
+
+  // When presence reverts to Online (timed clear), hide the main-status expiry line
+  // even if an optimistic local expires_at is still hanging around.
+  useEffect(() => {
+    if (!isSelf) return;
+    const manual = (liveManual ?? "").toLowerCase();
+    if (manual === "online" || manual === "") {
+      setLiveManualExpiresAt(null);
+    }
+    if (!liveStatusText?.trim()) {
+      setLiveCustomExpiresAt(null);
+    }
+  }, [isSelf, liveManual, liveStatusText]);
 
   useEffect(() => {
     setNickDraft(nickname ?? "");
@@ -422,11 +442,17 @@ export function BigProfileModal({
                       setLiveManual(next.status);
                       setLiveStatusText(next.statusText);
                       setLiveLastSeen(new Date().toISOString());
-                      if (next.manualStatusExpiresAt !== undefined) {
-                        setLiveManualExpiresAt(next.manualStatusExpiresAt);
-                      }
+                      setLiveManualExpiresAt(
+                        next.status === "online"
+                          ? null
+                          : (next.manualStatusExpiresAt ?? null),
+                      );
                       if (next.statusTextExpiresAt !== undefined) {
-                        setLiveCustomExpiresAt(next.statusTextExpiresAt);
+                        setLiveCustomExpiresAt(
+                          next.statusText?.trim()
+                            ? next.statusTextExpiresAt
+                            : null,
+                        );
                       }
                       setPresenceOpen(false);
                     }}
@@ -469,11 +495,17 @@ export function BigProfileModal({
                       setLiveStatusText(next.statusText);
                       setLiveLastSeen(new Date().toISOString());
                       if (next.manualStatusExpiresAt !== undefined) {
-                        setLiveManualExpiresAt(next.manualStatusExpiresAt);
+                        setLiveManualExpiresAt(
+                          next.status === "online"
+                            ? null
+                            : next.manualStatusExpiresAt,
+                        );
                       }
-                      if (next.statusTextExpiresAt !== undefined) {
-                        setLiveCustomExpiresAt(next.statusTextExpiresAt);
-                      }
+                      setLiveCustomExpiresAt(
+                        next.statusText?.trim()
+                          ? (next.statusTextExpiresAt ?? null)
+                          : null,
+                      );
                       setCustomOpen(false);
                     }}
                   />

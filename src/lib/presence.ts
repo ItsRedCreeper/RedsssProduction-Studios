@@ -133,19 +133,10 @@ export const STATUS_CLEAR_AFTER_OPTIONS = CUSTOM_STATUS_CLEAR_AFTER_OPTIONS;
 export function clearAfterToMinutes(value: StatusClearAfter): number | null {
   if (value === null) return 0; // explicit don't-clear
   if (typeof value === "number") return value;
-  const now = new Date();
-  if (value === "today") {
-    const end = new Date(now);
-    end.setHours(23, 59, 59, 999);
-    return Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 60_000));
-  }
-  // End of week = Sunday 23:59 local
-  const end = new Date(now);
-  const day = end.getDay(); // 0 Sun
-  const daysUntilSunday = day === 0 ? 0 : 7 - day;
-  end.setDate(end.getDate() + daysUntilSunday);
-  end.setHours(23, 59, 59, 999);
-  return Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 60_000));
+  // Match clearAfterToExpiryDate so RPC `now() + minutes` lands on the same instant.
+  const end = clearAfterToExpiryDate(value);
+  if (!end) return 0;
+  return Math.max(1, Math.round((end.getTime() - Date.now()) / 60_000));
 }
 
 /** Absolute local expiry for a Clear-after choice; null = forever. */
@@ -253,6 +244,16 @@ export function formatPresenceClearLabel(
   return null;
 }
 
+export type SetManualStatusResult = {
+  error: string | null;
+  /** Server truth after save — use these for UI expiry labels. */
+  manualStatusExpiresAt?: string | null;
+  statusTextExpiresAt?: string | null;
+  manualStatus?: string | null;
+  status?: string | null;
+  statusText?: string | null;
+};
+
 export async function setManualStatus(opts: {
   manualStatus: ManualStatus;
   statusText?: string | null;
@@ -261,7 +262,7 @@ export async function setManualStatus(opts: {
   clearAfterMinutes?: number | null;
   /** Minutes until idle/dnd/offline reverts to online; 0 = don't clear; omit = leave. */
   manualClearAfterMinutes?: number | null;
-}) {
+}): Promise<SetManualStatusResult> {
   const supabase = createClient();
   // Always send all named args so PostgREST never hits an overload clash.
   const { error } = await supabase.rpc("set_manual_status", {
@@ -276,8 +277,41 @@ export async function setManualStatus(opts: {
         : null,
   });
   if (error) return { error: error.message };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let manualStatusExpiresAt: string | null | undefined;
+  let statusTextExpiresAt: string | null | undefined;
+  let manualStatus: string | null | undefined;
+  let status: string | null | undefined;
+  let statusText: string | null | undefined;
+  if (user) {
+    const { data } = await supabase
+      .from("profiles")
+      .select(
+        "manual_status, status, status_text, manual_status_expires_at, status_text_expires_at",
+      )
+      .eq("id", user.id)
+      .maybeSingle();
+    if (data) {
+      manualStatusExpiresAt = data.manual_status_expires_at ?? null;
+      statusTextExpiresAt = data.status_text_expires_at ?? null;
+      manualStatus = data.manual_status ?? null;
+      status = data.status ?? null;
+      statusText = data.status_text ?? null;
+    }
+  }
+
   notifyProfileUpdated();
-  return { error: null as string | null };
+  return {
+    error: null,
+    manualStatusExpiresAt,
+    statusTextExpiresAt,
+    manualStatus,
+    status,
+    statusText,
+  };
 }
 
 export async function clearExpiredStatusText() {
