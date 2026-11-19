@@ -31,7 +31,13 @@ type MemberListProps = {
 type MemberGroup = {
   key: string;
   title: string;
+  /** People currently listed under this header. */
   members: MemberView[];
+  /**
+   * Header count. For role sections this is everyone who belongs to the role
+   * (online + offline) so the section stays visible when the group is offline.
+   */
+  count: number;
 };
 
 function MemberButton({
@@ -152,35 +158,40 @@ export function MemberList({
         return displayNameOf(a).localeCompare(displayNameOf(b));
       });
 
-    // Every role (including default Member) gets its own section when someone
-    // has it as their highest role — no separate hoist flag.
+    // Role sections: online members under their highest role. Offline members
+    // go to Offline — but the role header stays as long as anyone belongs to
+    // that role (count includes offline), so sections don't vanish when the
+    // whole group goes offline.
     const result: MemberGroup[] = [];
     const orderedRoles = [...roles].sort(compareRolePositionDesc);
     const assigned = new Set<string>();
 
     for (const role of orderedRoles) {
-      const rows = members.filter((member) => {
+      const belonging = members.filter((member) => {
         const group = memberListGroupRole(roles, member.roleIds);
         return group?.id === role.id;
       });
-      if (rows.length === 0) continue;
-      for (const row of rows) assigned.add(row.user_id);
+      if (belonging.length === 0) continue;
+      for (const row of belonging) assigned.add(row.user_id);
+      const onlineInRole = sortMembers(belonging.filter(isOnline));
       result.push({
         key: role.id,
         title: role.name,
-        members: sortMembers(rows),
+        members: onlineInRole,
+        count: belonging.length,
       });
     }
 
-    // Anyone somehow without a role still lands in Online / Offline.
+    // Online with no role group (rare) + everyone offline.
     const remainder = members.filter((member) => !assigned.has(member.user_id));
     const online = sortMembers(remainder.filter(isOnline));
-    const offline = sortMembers(remainder.filter((m) => !isOnline(m)));
+    const offline = sortMembers(members.filter((member) => !isOnline(member)));
     if (online.length > 0) {
       result.push({
         key: "online",
         title: "Online",
         members: online,
+        count: online.length,
       });
     }
     if (offline.length > 0) {
@@ -188,6 +199,7 @@ export function MemberList({
         key: "offline",
         title: "Offline",
         members: offline,
+        count: offline.length,
       });
     }
     return result;
@@ -203,7 +215,7 @@ export function MemberList({
     return (
       <section key={group.key} className="mb-3">
         <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-          {group.title} — {group.members.length}
+          {group.title} — {group.count}
         </p>
         <ul>
           {group.members.map((member) => {
