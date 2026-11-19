@@ -3069,7 +3069,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
     try {
       const res = await fetch(
-        `/api/gifs?download=${encodeURIComponent(gif.url)}`,
+        `/api/media-search?download=${encodeURIComponent(gif.url)}`,
       );
       if (!res.ok) throw new Error("Could not download GIF");
       const blob = await res.blob();

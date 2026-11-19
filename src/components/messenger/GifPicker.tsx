@@ -58,28 +58,29 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
     if (debounced) params.set("q", debounced);
 
     try {
-      const res = await fetch(`/api/gifs?${params.toString()}`, {
+      // Neutral path — ad blockers commonly filter /api/gifs and /api/giphy.
+      const res = await fetch(`/api/media-search?${params.toString()}`, {
         signal: controller.signal,
         credentials: "same-origin",
         headers: { Accept: "application/json" },
+        cache: "no-store",
       });
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        throw new Error(
-          res.redirected || res.url.includes("/login")
-            ? "Sign in required to search GIFs."
-            : "Could not load GIFs.",
-        );
-      }
       const body = (await res.json().catch(() => null)) as {
         error?: string;
         results?: GifResult[];
         hasMore?: boolean;
         nextOffset?: number;
       } | null;
+      if (!body || typeof body !== "object") {
+        throw new Error(
+          res.redirected || /\/login/i.test(res.url)
+            ? "Sign in required to search GIFs."
+            : "Could not load GIFs. If you use an ad blocker, allow this site.",
+        );
+      }
       if (!res.ok) {
         throw new Error(
-          body?.error ??
+          body.error ??
             (res.status === 429
               ? "GIF search hit the free rate limit. Wait a bit and try again."
               : "Could not load GIFs"),
@@ -107,7 +108,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
       if (/abort/i.test(raw)) return;
       setError(
         /failed to fetch/i.test(raw)
-          ? "Could not reach GIF search. Wait a moment and open GIFs again."
+          ? "Could not reach GIF search. If you use an ad blocker, allow this site."
           : raw,
       );
     } finally {
