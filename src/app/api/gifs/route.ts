@@ -26,7 +26,7 @@ function isAllowedGiphyHost(hostname: string) {
   );
 }
 
-function mapGif(row: GiphyItem, origin: string) {
+function mapGif(row: GiphyItem) {
   if (!row.id || !row.images) return null;
   // Prefer smaller assets to stay under beta rate limits / bandwidth.
   const full =
@@ -35,33 +35,40 @@ function mapGif(row: GiphyItem, origin: string) {
     row.images.fixed_width ||
     row.images.original;
   const preview =
+    row.images.fixed_width ||
     row.images.fixed_width_small ||
     row.images.preview_gif ||
-    row.images.fixed_width ||
     full;
   const url = full?.url;
   const previewUrl = preview?.url || url;
   if (!url || !previewUrl) return null;
-  // Serve media through our API so ad blockers don't see giphy.com URLs.
-  const proxiedPreview = `${origin}/api/gifs?media=${encodeURIComponent(previewUrl)}`;
+  // Relative proxy URL so previews work on custom CDN hosts too.
   return {
     id: row.id,
     title: row.title ?? "",
     url,
-    previewUrl: proxiedPreview,
+    previewUrl: `/api/gifs?media=${encodeURIComponent(previewUrl)}`,
     width: Number(full?.width ?? preview?.width ?? 0) || 0,
     height: Number(full?.height ?? preview?.height ?? 0) || 0,
   };
 }
 
 async function proxyMedia(rawUrl: string) {
-  const target = new URL(rawUrl);
+  let target: URL;
+  try {
+    target = new URL(rawUrl);
+  } catch {
+    return NextResponse.json({ error: "Invalid GIF url" }, { status: 400 });
+  }
   if (target.protocol !== "https:" || !isAllowedGiphyHost(target.hostname)) {
     return NextResponse.json({ error: "Invalid GIF url" }, { status: 400 });
   }
   const upstream = await fetch(target.toString(), {
-    headers: { Accept: "image/*,*/*" },
-    next: { revalidate: 3600 },
+    headers: {
+      Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      "User-Agent": "RedsssMessenger/1.0",
+    },
+    cache: "force-cache",
   });
   if (!upstream.ok) {
     return NextResponse.json(
@@ -70,8 +77,14 @@ async function proxyMedia(rawUrl: string) {
     );
   }
   const bytes = await upstream.arrayBuffer();
-  const type = upstream.headers.get("content-type") || "image/gif";
+  const upstreamType = upstream.headers.get("content-type") || "";
+  const type = upstreamType.startsWith("image/")
+    ? upstreamType
+    : target.pathname.toLowerCase().endsWith(".webp")
+      ? "image/webp"
+      : "image/gif";
   return new NextResponse(bytes, {
+    status: 200,
     headers: {
       "Content-Type": type,
       "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
@@ -90,7 +103,6 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const { searchParams } = url;
-  const origin = url.origin;
 
   const mediaUrl = searchParams.get("media")?.trim();
   if (mediaUrl) {
@@ -104,7 +116,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Download a selected GIF through our server (avoids browser CORS).
   const downloadUrl = searchParams.get("download")?.trim();
   if (downloadUrl) {
     try {
@@ -148,9 +159,7 @@ export async function GET(request: Request) {
       );
     }
     const data = (await res.json()) as { data?: GiphyItem[] };
-    const results = (data.data ?? [])
-      .map((row) => mapGif(row, origin))
-      .filter(Boolean);
+    const results = (data.data ?? []).map(mapGif).filter(Boolean);
     return NextResponse.json(
       { results },
       {

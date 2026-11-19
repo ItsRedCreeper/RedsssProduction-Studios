@@ -85,6 +85,14 @@ export async function fitImageToMaxBytes(
     return { file, compressed: false, error: null };
   }
 
+  // Never canvas-reencode GIFs — that freezes animation into a still WebP.
+  if (/^image\/gif$/i.test(file.type)) {
+    if (file.size > maxBytes) {
+      return { file, compressed: false, error: "GIF is too large." };
+    }
+    return { file, compressed: false, error: null };
+  }
+
   if (file.size <= maxBytes) {
     return { file, compressed: false, error: null };
   }

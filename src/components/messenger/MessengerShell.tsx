@@ -3076,8 +3076,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       const safeTitle = (gif.title || "gif")
         .replace(/[^\w\-]+/g, "_")
         .slice(0, 40);
-      const file = new File([blob], `${safeTitle || "gif"}.gif`, {
-        type: blob.type || "image/gif",
+      const mime = blob.type.startsWith("image/") ? blob.type : "image/gif";
+      const ext = mime.includes("webp") ? "webp" : "gif";
+      const file = new File([blob], `${safeTitle || "gif"}.${ext}`, {
+        type: mime,
       });
       await chooseFiles([file]);
     } catch {

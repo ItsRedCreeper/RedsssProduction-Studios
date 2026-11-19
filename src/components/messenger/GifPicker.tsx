@@ -144,7 +144,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={gif.previewUrl}
-                  alt={gif.title || "GIF"}
+                  alt=""
                   className="w-full object-cover"
                   loading="lazy"
                 />
