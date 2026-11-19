@@ -81,7 +81,12 @@ import {
 } from "@/lib/message-media";
 import { resolveEmojiShortcodes, type ServerEmoji } from "@/lib/emoji";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
-import { can, mergeRolePermissions, PERMISSIONS } from "@/lib/permissions";
+import {
+  can,
+  canAccessServerSettings,
+  mergeRolePermissions,
+  PERMISSIONS,
+} from "@/lib/permissions";
 import {
   displayMentionText,
   encodeMentions,
@@ -1833,7 +1838,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const canManageChannels = can(myPerms, PERMISSIONS.MANAGE_CHANNELS, {
     isOwner: isServerOwner,
   });
+  const canManageRoles = can(myPerms, PERMISSIONS.MANAGE_ROLES, {
+    isOwner: isServerOwner,
+  });
   const canManageEmojis = can(myPerms, PERMISSIONS.MANAGE_EMOJIS, {
+    isOwner: isServerOwner,
+  });
+  const canKickMembers = can(myPerms, PERMISSIONS.KICK_MEMBERS, {
+    isOwner: isServerOwner,
+  });
+  const canManageServer = can(myPerms, PERMISSIONS.MANAGE_SERVER, {
+    isOwner: isServerOwner,
+  });
+  const canOpenServerSettings = canAccessServerSettings(myPerms, {
     isOwner: isServerOwner,
   });
 
@@ -3020,8 +3037,21 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setInviteOpen(true);
   }
 
-  function openSettings() {
-    setSettingsTab("overview");
+  function openSettings(tab: SettingsTab = "overview") {
+    if (!canOpenServerSettings) {
+      setError("You don't have permission to open server settings.");
+      return;
+    }
+    // Land on a tab the viewer can actually use.
+    let next = tab;
+    if (tab === "overview" && !(isServerOwner || canManageServer || myPerms.ADMINISTRATOR)) {
+      if (canManageChannels) next = "channels";
+      else if (canManageRoles) next = "roles";
+      else if (canKickMembers || canManageRoles) next = "members";
+      else if (canManageEmojis) next = "emojis";
+      else if (canCreateInvites) next = "invites";
+    }
+    setSettingsTab(next);
     setSettingsOpen(true);
   }
 
@@ -3254,18 +3284,28 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             loading={false}
             previewMode={previewMode}
             canLeave={!previewMode && activeServer.owner_id !== user?.id}
-            canManageChannels={
-              !previewMode && (canManageChannels || isServerOwner)
-            }
+            canManageChannels={!previewMode && canManageChannels}
             connectedVoiceChannelId={
               previewMode ? null : connection?.channelId ?? null
             }
             onSelectChannel={selectChannel}
-            onInvite={openInvite}
-            onSettings={openSettings}
-            onCreateChannel={openCreateChannel}
-            onCreateCategory={openCreateCategory}
-            onRenameCategory={renameCategory}
+            onInvite={
+              !previewMode && canCreateInvites ? openInvite : undefined
+            }
+            onSettings={
+              !previewMode && canOpenServerSettings
+                ? () => openSettings()
+                : undefined
+            }
+            onCreateChannel={
+              !previewMode && canManageChannels ? openCreateChannel : undefined
+            }
+            onCreateCategory={
+              !previewMode && canManageChannels ? openCreateCategory : undefined
+            }
+            onRenameCategory={
+              !previewMode && canManageChannels ? renameCategory : undefined
+            }
             onLeave={() => setLeaveOpen(true)}
             footer={sidebarFooter}
           />
@@ -3297,10 +3337,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               <ServerHeaderMenu
                 serverName={activeServer.name}
                 interactive={!previewMode}
-                onInvite={previewMode ? undefined : openInvite}
-                onSettings={previewMode ? undefined : openSettings}
+                onInvite={
+                  !previewMode && canCreateInvites ? openInvite : undefined
+                }
+                onSettings={
+                  !previewMode && canOpenServerSettings
+                    ? () => openSettings()
+                    : undefined
+                }
                 onCreateChannel={
-                  previewMode ? undefined : () => openCreateChannel()
+                  !previewMode && canManageChannels
+                    ? () => openCreateChannel()
+                    : undefined
+                }
+                onCreateCategory={
+                  !previewMode && canManageChannels
+                    ? openCreateCategory
+                    : undefined
                 }
                 onLeave={
                   !previewMode && activeServer.owner_id !== user?.id
@@ -3541,7 +3594,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   : (messageId, emoji) => void toggleReaction(messageId, emoji)
               }
               onTogglePin={
-                previewMode
+                previewMode || !canManageMessages
                   ? undefined
                   : (message) => void togglePin(message)
               }
@@ -3761,7 +3814,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onReact={(messageId, emoji) =>
                   void toggleReaction(messageId, emoji)
                 }
-                onTogglePin={(message) => void togglePin(message)}
+                onTogglePin={
+                  canManageMessages
+                    ? (message) => void togglePin(message)
+                    : undefined
+                }
               />
               <MessageComposer
                 placeholder={
@@ -3874,14 +3931,20 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
       {user && activeServer && (
         <ServerSettingsModal
-          open={settingsOpen}
+          open={settingsOpen && canOpenServerSettings}
           server={activeServer}
           userId={user.id}
           members={members}
           channels={channels}
           categories={categories}
           initialTab={settingsTab}
-          canManageEmojis={canManageEmojis}
+          isOwner={isServerOwner}
+          canManageServer={canManageServer || !!myPerms.ADMINISTRATOR}
+          canManageChannels={canManageChannels}
+          canManageRoles={canManageRoles || !!myPerms.ADMINISTRATOR}
+          canKickMembers={canKickMembers || !!myPerms.ADMINISTRATOR}
+          canCreateInvites={canCreateInvites}
+          canManageEmojis={canManageEmojis || !!myPerms.ADMINISTRATOR}
           onClose={() => setSettingsOpen(false)}
           onServerUpdated={(next) => {
             setServers((prev) => prev.map((server) => (server.id === next.id ? next : server)));

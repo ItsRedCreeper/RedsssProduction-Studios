@@ -39,9 +39,12 @@ type ChannelSidebarProps = {
   previewMode?: boolean;
   connectedVoiceChannelId: string | null;
   onSelectChannel: (channelId: string) => void;
-  onInvite: () => void;
-  onSettings: () => void;
-  onCreateChannel: (options?: {
+  /** Omit to hide invite UI (no Create Invites permission). */
+  onInvite?: () => void;
+  /** Omit to hide Server Settings (no management permission). */
+  onSettings?: () => void;
+  /** Omit to hide channel create controls (no Manage Channels). */
+  onCreateChannel?: (options?: {
     type?: "text" | "voice";
     categoryId?: string | null;
   }) => void;
@@ -294,7 +297,9 @@ export function ChannelSidebar({
         onInvite={previewMode ? undefined : onInvite}
         onSettings={previewMode ? undefined : onSettings}
         onCreateChannel={
-          previewMode ? undefined : () => onCreateChannel()
+          !previewMode && onCreateChannel
+            ? () => onCreateChannel()
+            : undefined
         }
         onCreateCategory={
           !previewMode && canManageChannels && onCreateCategory
@@ -309,16 +314,18 @@ export function ChannelSidebar({
         ) : sections.length === 0 ? (
           <div className="px-2">
             <p className="mb-3 text-xs text-muted">No channels yet.</p>
-            {!previewMode && (
+            {!previewMode && (onCreateChannel || onCreateCategory) && (
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => onCreateChannel({ type: "text" })}
-                  className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
-                >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                  Create Channel
-                </button>
+                {onCreateChannel && (
+                  <button
+                    type="button"
+                    onClick={() => onCreateChannel({ type: "text" })}
+                    className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
+                  >
+                    <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                    Create Channel
+                  </button>
+                )}
                 {canManageChannels && onCreateCategory && (
                   <button
                     type="button"
@@ -407,7 +414,7 @@ export function ChannelSidebar({
                       </button>
                     </HoverTip>
                   )}
-                  {!previewMode && (
+                  {!previewMode && onCreateChannel && (
                     <HoverTip label="Create Channel" delayMs={40}>
                       <button
                         type="button"

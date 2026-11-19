@@ -290,8 +290,8 @@ export type Database = {
         Relationships: []
       }
       roles: {
-        Row: { id: string; server_id: string; name: string; permissions: Json; color: string; position: number; hoist: boolean; created_at: string }
-        Insert: { id?: string; server_id: string; name: string; permissions?: Json; color?: string; position?: number; hoist?: boolean; created_at?: string }
+        Row: { id: string; server_id: string; name: string; permissions: Json; color: string; position: number; hoist: boolean; is_default: boolean; created_at: string }
+        Insert: { id?: string; server_id: string; name: string; permissions?: Json; color?: string; position?: number; hoist?: boolean; is_default?: boolean; created_at?: string }
         Update: Partial<Database["public"]["Tables"]["roles"]["Insert"]>
         Relationships: []
       }

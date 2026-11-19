@@ -50,11 +50,13 @@ import type {
 
 const ROLE_PERM_OPTIONS: { key: Permission; label: string }[] = [
   { key: PERMISSIONS.ADMINISTRATOR, label: "Administrator" },
+  { key: PERMISSIONS.MANAGE_SERVER, label: "Manage server" },
   { key: PERMISSIONS.MANAGE_CHANNELS, label: "Manage channels" },
   { key: PERMISSIONS.MANAGE_ROLES, label: "Manage roles" },
   { key: PERMISSIONS.MANAGE_EMOJIS, label: "Manage emojis" },
   { key: PERMISSIONS.MANAGE_MESSAGES, label: "Manage messages" },
   { key: PERMISSIONS.KICK_MEMBERS, label: "Kick members" },
+  { key: PERMISSIONS.BAN_MEMBERS, label: "Ban members" },
   { key: PERMISSIONS.CREATE_INVITES, label: "Create invites" },
   { key: PERMISSIONS.SEND_MESSAGES, label: "Send messages" },
   { key: PERMISSIONS.CONNECT, label: "Connect to voice" },
@@ -79,6 +81,12 @@ type ServerSettingsModalProps = {
   channels: Channel[];
   categories: Category[];
   initialTab: SettingsTab;
+  isOwner?: boolean;
+  canManageServer?: boolean;
+  canManageChannels?: boolean;
+  canManageRoles?: boolean;
+  canKickMembers?: boolean;
+  canCreateInvites?: boolean;
   canManageEmojis?: boolean;
   onClose: () => void;
   onServerUpdated: (server: Server) => void;
@@ -95,6 +103,12 @@ export function ServerSettingsModal({
   channels,
   categories,
   initialTab,
+  isOwner = false,
+  canManageServer = false,
+  canManageChannels = false,
+  canManageRoles = false,
+  canKickMembers = false,
+  canCreateInvites = false,
   canManageEmojis = false,
   onClose,
   onServerUpdated,
@@ -128,9 +142,32 @@ export function ServerSettingsModal({
   const emojiFileRef = useRef<HTMLInputElement | null>(null);
   const creatingInvite = useRef(false);
 
+  const canEditOverview = isOwner || canManageServer;
+  const visibleTabs = TABS.filter((item) => {
+    switch (item.id) {
+      case "overview":
+        return canEditOverview;
+      case "roles":
+        return canManageRoles || isOwner;
+      case "members":
+        return canManageRoles || canKickMembers || isOwner;
+      case "invites":
+        return canCreateInvites || isOwner;
+      case "channels":
+        return canManageChannels || isOwner;
+      case "emojis":
+        return canManageEmojis || isOwner;
+      default:
+        return false;
+    }
+  });
+
   useEffect(() => {
     if (!open) return;
-    setTab(initialTab);
+    const allowed = visibleTabs.some((item) => item.id === initialTab)
+      ? initialTab
+      : visibleTabs[0]?.id ?? initialTab;
+    setTab(allowed);
     setName(server.name);
     setDescription(server.description ?? "");
     setIsPublic(server.is_public);
@@ -139,6 +176,8 @@ export function ServerSettingsModal({
     setEditingChannelId(null);
     setEmojiName("");
     setEmojiFile(null);
+    // visibleTabs is derived from stable permission props for this open session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialTab, server]);
 
   useEffect(() => {
@@ -339,6 +378,12 @@ export function ServerSettingsModal({
   }
 
   async function deleteRole(roleId: string) {
+    const target = roles.find((role) => role.id === roleId);
+    if (target?.is_default) {
+      setError("The default Member role cannot be deleted.");
+      setConfirmRoleId(null);
+      return;
+    }
     setError(null);
     const supabase = createClient();
     await supabase
@@ -397,6 +442,11 @@ export function ServerSettingsModal({
   }
 
   async function removeRole(memberId: string, roleId: string) {
+    const target = roles.find((role) => role.id === roleId);
+    if (target?.is_default) {
+      setError("The default Member role cannot be removed from members.");
+      return;
+    }
     setError(null);
     const supabase = createClient();
     const { error: deleteError } = await supabase
@@ -427,6 +477,7 @@ export function ServerSettingsModal({
   }
 
   async function kickMember(memberId: string) {
+    if (!canKickMembers && !isOwner) return;
     if (memberId === server.owner_id || memberId === userId) return;
     setError(null);
     const supabase = createClient();
@@ -751,7 +802,7 @@ export function ServerSettingsModal({
             {server.name}
           </p>
           <nav className="space-y-1">
-            {TABS.map((item) => {
+            {visibleTabs.map((item) => {
               const Icon = item.icon;
               const active = tab === item.id;
               return (
@@ -776,7 +827,8 @@ export function ServerSettingsModal({
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-between border-b border-black/30 px-5 py-3">
             <h2 className="text-base font-semibold text-white">
-              {TABS.find((item) => item.id === tab)?.label}
+              {visibleTabs.find((item) => item.id === tab)?.label ??
+                TABS.find((item) => item.id === tab)?.label}
             </h2>
             <button
               type="button"
@@ -795,7 +847,7 @@ export function ServerSettingsModal({
               </p>
             )}
 
-            {tab === "overview" && (
+            {tab === "overview" && canEditOverview && (
               <form onSubmit={saveOverview} className="space-y-4">
                 <label className="block space-y-1.5">
                   <span className="text-xs font-semibold uppercase tracking-wide text-muted">
@@ -842,7 +894,7 @@ export function ServerSettingsModal({
               </form>
             )}
 
-            {tab === "roles" && (
+            {tab === "roles" && (canManageRoles || isOwner) && (
               <div className="space-y-4">
                 <ul className="space-y-2">
                   {roles.length === 0 && (
@@ -853,6 +905,7 @@ export function ServerSettingsModal({
                       key={role.id}
                       role={role}
                       confirm={confirmRoleId === role.id}
+                      canDelete={!role.is_default}
                       onSave={saveRole}
                       onAskDelete={() => setConfirmRoleId(role.id)}
                       onCancelDelete={() => setConfirmRoleId(null)}
@@ -891,14 +944,15 @@ export function ServerSettingsModal({
               </div>
             )}
 
-            {tab === "members" && (
+            {tab === "members" &&
+              (canManageRoles || canKickMembers || isOwner) && (
               <ul className="space-y-2">
                 {members.length === 0 && (
                   <li className="text-sm text-muted">No members loaded.</li>
                 )}
                 {members.map((member) => {
                   const label = member.nickname || member.username;
-                  const isOwner = member.user_id === server.owner_id;
+                  const memberIsOwner = member.user_id === server.owner_id;
                   return (
                     <li
                       key={member.user_id}
@@ -913,7 +967,7 @@ export function ServerSettingsModal({
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm text-white">
                             {label}
-                            {isOwner && (
+                            {memberIsOwner && (
                               <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-accent">
                                 Owner
                               </span>
@@ -923,7 +977,9 @@ export function ServerSettingsModal({
                             {statusLabel(member.status)}
                           </p>
                         </div>
-                        {!isOwner && member.user_id !== userId && (
+                        {!memberIsOwner &&
+                          member.user_id !== userId &&
+                          (canKickMembers || isOwner) && (
                           <button
                             type="button"
                             onClick={() => void kickMember(member.user_id)}
@@ -937,6 +993,45 @@ export function ServerSettingsModal({
                         {member.roleIds.map((roleId) => {
                           const role = roleById.get(roleId);
                           if (!role) return null;
+                          if (role.is_default) {
+                            return (
+                              <span
+                                key={roleId}
+                                className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium text-white"
+                                style={{
+                                  backgroundColor: `${role.color || "#99aab5"}33`,
+                                }}
+                                title="Default role"
+                              >
+                                <span
+                                  className="h-2 w-2 rounded-full"
+                                  style={{
+                                    backgroundColor: role.color || "#99aab5",
+                                  }}
+                                />
+                                {role.name}
+                              </span>
+                            );
+                          }
+                          if (!canManageRoles && !isOwner) {
+                            return (
+                              <span
+                                key={roleId}
+                                className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium text-white"
+                                style={{
+                                  backgroundColor: `${role.color || "#dc2626"}33`,
+                                }}
+                              >
+                                <span
+                                  className="h-2 w-2 rounded-full"
+                                  style={{
+                                    backgroundColor: role.color || "#dc2626",
+                                  }}
+                                />
+                                {role.name}
+                              </span>
+                            );
+                          }
                           return (
                             <button
                               key={roleId}
@@ -955,7 +1050,7 @@ export function ServerSettingsModal({
                             </button>
                           );
                         })}
-                        {roles.length > 0 && (
+                        {(canManageRoles || isOwner) && roles.some((role) => !member.roleIds.includes(role.id) && !role.is_default) && (
                           <select
                             value=""
                             onChange={(event) => {
@@ -966,7 +1061,11 @@ export function ServerSettingsModal({
                           >
                             <option value="">Add role…</option>
                             {roles
-                              .filter((role) => !member.roleIds.includes(role.id))
+                              .filter(
+                                (role) =>
+                                  !role.is_default &&
+                                  !member.roleIds.includes(role.id),
+                              )
                               .map((role) => (
                                 <option key={role.id} value={role.id}>
                                   {role.name}
@@ -981,7 +1080,7 @@ export function ServerSettingsModal({
               </ul>
             )}
 
-            {tab === "invites" && (
+            {tab === "invites" && (canCreateInvites || isOwner) && (
               <div className="space-y-4">
                 <p className="text-sm text-[#b5bac1]">
                   This server has one permanent invite link. Use Invite People from the
@@ -1024,7 +1123,7 @@ export function ServerSettingsModal({
               </div>
             )}
 
-            {tab === "channels" && (
+            {tab === "channels" && (canManageChannels || isOwner) && (
               <div className="space-y-5">
                 <form onSubmit={createCategory} className="flex flex-wrap items-end gap-2">
                   <label className="space-y-1">
@@ -1217,13 +1316,13 @@ export function ServerSettingsModal({
               </div>
             )}
 
-            {tab === "emojis" && (
+            {tab === "emojis" && (canManageEmojis || isOwner) && (
               <div className="space-y-5">
                 <p className="text-sm text-[#b5bac1]">
                   Upload custom emojis for this server. Members can use them here,
                   in other servers, and in DMs while they stay in this server.
                 </p>
-                {canManageEmojis ? (
+                {canManageEmojis || isOwner ? (
                   <form
                     onSubmit={(event) => void uploadServerEmoji(event)}
                     className="space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3"
@@ -1334,6 +1433,7 @@ export function ServerSettingsModal({
 function RoleRow({
   role,
   confirm,
+  canDelete = true,
   onSave,
   onAskDelete,
   onCancelDelete,
@@ -1341,6 +1441,7 @@ function RoleRow({
 }: {
   role: Role;
   confirm: boolean;
+  canDelete?: boolean;
   onSave: (
     role: Role,
     name: string,
@@ -1407,7 +1508,11 @@ function RoleRow({
         label="Save"
         onClick={() => onSave(role, name, color, perms)}
       />
-      {confirm ? (
+      {role.is_default ? (
+        <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+          Default
+        </span>
+      ) : confirm ? (
         <>
           <button
             type="button"
@@ -1424,7 +1529,7 @@ function RoleRow({
             Cancel
           </button>
         </>
-      ) : (
+      ) : canDelete ? (
         <button
           type="button"
           onClick={onAskDelete}
@@ -1432,7 +1537,7 @@ function RoleRow({
         >
           Delete
         </button>
-      )}
+      ) : null}
       </div>
       <div className="grid grid-cols-2 gap-1.5 px-1 pb-1 sm:grid-cols-3">
         {ROLE_PERM_OPTIONS.map((option) => (

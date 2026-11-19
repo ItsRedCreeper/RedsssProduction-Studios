@@ -1,6 +1,7 @@
 /** Server / channel permission keys (roles.permissions jsonb + channel overrides). */
 export const PERMISSIONS = {
   ADMINISTRATOR: "ADMINISTRATOR",
+  MANAGE_SERVER: "MANAGE_SERVER",
   VIEW_CHANNEL: "VIEW_CHANNEL",
   SEND_MESSAGES: "SEND_MESSAGES",
   MANAGE_MESSAGES: "MANAGE_MESSAGES",
@@ -21,13 +22,18 @@ export type PermissionMap = Partial<Record<Permission, boolean>>;
 /** Channel overrides: target → permission → allow/deny. Targets: `@everyone`, role id, `user:<uuid>`. */
 export type ChannelOverrides = Record<string, PermissionMap>;
 
-const DEFAULT_MEMBER_PERMS: Permission[] = [
-  PERMISSIONS.VIEW_CHANNEL,
-  PERMISSIONS.SEND_MESSAGES,
-  PERMISSIONS.CONNECT,
-  PERMISSIONS.SPEAK,
-  PERMISSIONS.CREATE_INVITES,
-];
+/** Safe baseline for the default Member role (no management powers). */
+export const DEFAULT_MEMBER_PERMISSIONS: PermissionMap = {
+  [PERMISSIONS.VIEW_CHANNEL]: true,
+  [PERMISSIONS.SEND_MESSAGES]: true,
+  [PERMISSIONS.CONNECT]: true,
+  [PERMISSIONS.SPEAK]: true,
+  [PERMISSIONS.CREATE_INVITES]: true,
+};
+
+const DEFAULT_MEMBER_PERMS = Object.keys(
+  DEFAULT_MEMBER_PERMISSIONS,
+) as Permission[];
 
 function asPermMap(value: unknown): PermissionMap {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -38,9 +44,16 @@ function asPermMap(value: unknown): PermissionMap {
   return out;
 }
 
+/**
+ * Merge role permission maps (OR). Administrator grants everything.
+ * When the member has no roles yet (legacy), fill safe Member defaults.
+ * Once roles are assigned, permissions come only from those roles.
+ */
 export function mergeRolePermissions(rolePermissionList: unknown[]): PermissionMap {
   const merged: PermissionMap = {};
+  let sawRole = false;
   for (const perms of rolePermissionList) {
+    sawRole = true;
     const map = asPermMap(perms);
     if (map.ADMINISTRATOR) {
       for (const key of Object.values(PERMISSIONS)) merged[key] = true;
@@ -50,8 +63,8 @@ export function mergeRolePermissions(rolePermissionList: unknown[]): PermissionM
       if (value) merged[key as Permission] = true;
     }
   }
-  for (const key of DEFAULT_MEMBER_PERMS) {
-    if (merged[key] === undefined) merged[key] = true;
+  if (!sawRole) {
+    for (const key of DEFAULT_MEMBER_PERMS) merged[key] = true;
   }
   return merged;
 }
@@ -109,4 +122,20 @@ export function can(
   }
   if (opts?.isOwner || base.ADMINISTRATOR) return true;
   return Boolean(base[permission]);
+}
+
+/** Show Server Settings entry when the user can manage anything inside it. */
+export function canAccessServerSettings(
+  base: PermissionMap,
+  opts?: { isOwner?: boolean },
+) {
+  if (opts?.isOwner || base.ADMINISTRATOR) return true;
+  return Boolean(
+    base.MANAGE_SERVER ||
+      base.MANAGE_CHANNELS ||
+      base.MANAGE_ROLES ||
+      base.MANAGE_EMOJIS ||
+      base.KICK_MEMBERS ||
+      base.BAN_MEMBERS,
+  );
 }
