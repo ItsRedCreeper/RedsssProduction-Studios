@@ -20,7 +20,7 @@ type GifPickerProps = {
   className?: string;
 };
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 12;
 
 export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   const [query, setQuery] = useState("");
@@ -31,8 +31,11 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [moreError, setMoreError] = useState<string | null>(null);
   const seqRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const debouncedRef = useRef(debounced);
+  debouncedRef.current = debounced;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebounced(query.trim()), 350);
@@ -40,22 +43,30 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   }, [query]);
 
   async function fetchPage(offset: number, append: boolean) {
-    abortRef.current?.abort();
+    // Fresh searches cancel in-flight work; load-more uses its own controller
+    // so a slow page request isn't killed by preview traffic.
+    if (!append) {
+      abortRef.current?.abort();
+    }
     const controller = new AbortController();
-    abortRef.current = controller;
-    const seq = ++seqRef.current;
+    if (!append) abortRef.current = controller;
+    const seq = append ? seqRef.current : ++seqRef.current;
 
-    if (append) setLoadingMore(true);
-    else {
+    if (append) {
+      setLoadingMore(true);
+      setMoreError(null);
+    } else {
       setLoading(true);
       setError(null);
+      setMoreError(null);
     }
 
     const params = new URLSearchParams({
       limit: String(PAGE_SIZE),
       offset: String(offset),
     });
-    if (debounced) params.set("q", debounced);
+    const q = debouncedRef.current;
+    if (q) params.set("q", q);
 
     try {
       // Neutral path — ad blockers commonly filter /api/gifs and /api/giphy.
@@ -86,33 +97,40 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
               : "Could not load GIFs"),
         );
       }
-      if (seq !== seqRef.current) return;
-      const results = Array.isArray(body?.results) ? body.results : [];
+      if (!append && seq !== seqRef.current) return;
+      const results = Array.isArray(body.results) ? body.results : [];
       setItems((prev) => {
         if (!append) return results;
         const seen = new Set(prev.map((item) => item.id));
         return [...prev, ...results.filter((item) => !seen.has(item.id))];
       });
-      setHasMore(Boolean(body?.hasMore));
+      setHasMore(Boolean(body.hasMore));
       setNextOffset(
-        typeof body?.nextOffset === "number"
+        typeof body.nextOffset === "number"
           ? body.nextOffset
           : offset + results.length,
       );
-      setError(null);
+      if (append) setMoreError(null);
+      else setError(null);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
-      if (seq !== seqRef.current) return;
-      if (!append) setItems([]);
+      if (!append && seq !== seqRef.current) return;
       const raw = err instanceof Error ? err.message : "Could not load GIFs";
       if (/abort/i.test(raw)) return;
-      setError(
-        /failed to fetch/i.test(raw)
-          ? "Could not reach GIF search. If you use an ad blocker, allow this site."
-          : raw,
-      );
+      const message = /failed to fetch/i.test(raw)
+        ? "Could not reach GIF search. If you use an ad blocker, allow this site."
+        : raw;
+      // Keep already-loaded GIFs visible when pagination fails.
+      if (append) {
+        setMoreError(message);
+      } else {
+        setItems([]);
+        setError(message);
+      }
     } finally {
-      if (seq === seqRef.current) {
+      if (append) {
+        setLoadingMore(false);
+      } else if (seq === seqRef.current) {
         setLoading(false);
         setLoadingMore(false);
       }
@@ -123,12 +141,15 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
     setItems([]);
     setHasMore(false);
     setNextOffset(0);
+    setMoreError(null);
     void fetchPage(0, false);
     return () => {
       abortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when search changes
   }, [debounced]);
+
+  const showGrid = !loading && items.length > 0;
 
   return (
     <div
@@ -153,7 +174,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
             Loading…
           </div>
         )}
-        {!loading && error && (
+        {!loading && error && items.length === 0 && (
           <p className="px-2 py-8 text-center text-sm text-accent">{error}</p>
         )}
         {!loading && !error && items.length === 0 && (
@@ -161,7 +182,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
             No GIFs found.
           </p>
         )}
-        {!loading && !error && items.length > 0 && (
+        {showGrid && (
           <>
             <div className="columns-2 gap-2">
               {items.map((gif) => (
@@ -177,11 +198,15 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
                     alt=""
                     className="w-full object-cover"
                     loading="lazy"
+                    decoding="async"
                     referrerPolicy="no-referrer"
                   />
                 </button>
               ))}
             </div>
+            {moreError && (
+              <p className="mt-2 px-1 text-center text-xs text-accent">{moreError}</p>
+            )}
             {hasMore && (
               <button
                 type="button"
@@ -194,6 +219,8 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
                     <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
                     Loading…
                   </>
+                ) : moreError ? (
+                  "Try again"
                 ) : (
                   "Load more"
                 )}

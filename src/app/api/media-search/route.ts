@@ -33,14 +33,15 @@ function proxiedMediaPath(rawUrl: string) {
 function mapGif(row: GiphyItem) {
   if (!row.id || !row.images) return null;
   const full =
-    row.images.downsized_medium ||
     row.images.downsized ||
+    row.images.downsized_medium ||
     row.images.fixed_width ||
     row.images.original;
+  // Prefer tiny previews — fixed_width can be multi-MB and melt the proxy.
   const preview =
-    row.images.fixed_width ||
     row.images.fixed_width_small ||
     row.images.preview_gif ||
+    row.images.fixed_width ||
     full;
   const url = full?.url;
   const previewUrl = preview?.url || url;
@@ -56,7 +57,7 @@ function mapGif(row: GiphyItem) {
   };
 }
 
-async function proxyMedia(rawUrl: string) {
+async function proxyMedia(rawUrl: string, maxBytes = 1_500_000) {
   let target: URL;
   try {
     target = new URL(rawUrl);
@@ -71,7 +72,8 @@ async function proxyMedia(rawUrl: string) {
       Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
       "User-Agent": "RedsssMessenger/1.0",
     },
-    cache: "force-cache",
+    // Avoid Next data-cache for large GIFs (often >2MB).
+    cache: "no-store",
   });
   if (!upstream.ok) {
     return NextResponse.json(
@@ -80,6 +82,13 @@ async function proxyMedia(rawUrl: string) {
     );
   }
   const bytes = await upstream.arrayBuffer();
+  // Hard cap so a bad upstream asset can't blow the function response.
+  if (bytes.byteLength > maxBytes) {
+    return NextResponse.json(
+      { error: "Media too large." },
+      { status: 502 },
+    );
+  }
   const upstreamType = upstream.headers.get("content-type") || "";
   const type = upstreamType.startsWith("image/")
     ? upstreamType
@@ -110,7 +119,8 @@ export async function GET(request: Request) {
   const mediaUrl = searchParams.get("media")?.trim();
   if (mediaUrl) {
     try {
-      return await proxyMedia(mediaUrl);
+      // Grid previews only — keep responses small.
+      return await proxyMedia(mediaUrl, 1_500_000);
     } catch {
       return NextResponse.json(
         { error: "Could not load media." },
@@ -122,7 +132,8 @@ export async function GET(request: Request) {
   const downloadUrl = searchParams.get("download")?.trim();
   if (downloadUrl) {
     try {
-      return await proxyMedia(downloadUrl);
+      // Full GIF attach can be larger than preview thumbs.
+      return await proxyMedia(downloadUrl, 8_000_000);
     } catch {
       return NextResponse.json(
         { error: "Could not download media." },
@@ -133,8 +144,8 @@ export async function GET(request: Request) {
 
   const q = searchParams.get("q")?.trim() ?? "";
   const limit = Math.min(
-    50,
-    Math.max(1, Number(searchParams.get("limit") ?? "25") || 25),
+    24,
+    Math.max(1, Number(searchParams.get("limit") ?? "12") || 12),
   );
   const offset = Math.max(0, Number(searchParams.get("offset") ?? "0") || 0);
 
