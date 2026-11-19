@@ -3,19 +3,24 @@
 import type { ReactNode } from "react";
 import { CustomEmoji } from "@/components/messenger/CustomEmoji";
 import {
+  COMPOSER_SLOT_CHAR,
   findEmojiByName,
-  isComposerEmojiSlot,
   type ServerEmoji,
 } from "@/lib/emoji";
 
 type ComposerDraftMirrorProps = {
   draft: string;
-  slots: Map<string, string>;
+  /** Discord tokens parallel to each COMPOSER_SLOT_CHAR in draft. */
+  slots: string[];
   catalog: Map<string, ServerEmoji>;
   customEmojis: ServerEmoji[];
   preferredServerId?: string | null;
+  /** Measured textarea advance for one emoji slot — keeps caret aligned with chips. */
+  slotWidthPx?: number | null;
   className?: string;
 };
+
+const CHIP = "mx-0 inline-block align-[-0.15em] object-contain";
 
 /** Renders draft text with custom emoji chips (for the transparent textarea overlay). */
 export function ComposerDraftMirror({
@@ -24,45 +29,49 @@ export function ComposerDraftMirror({
   catalog,
   customEmojis,
   preferredServerId = null,
+  slotWidthPx = null,
   className = "",
 }: ComposerDraftMirrorProps) {
   const parts: ReactNode[] = [];
   let i = 0;
   let key = 0;
+  let slotIndex = 0;
+  const chipSize = slotWidthPx && slotWidthPx > 0 ? slotWidthPx : undefined;
+  const chipClass = chipSize ? CHIP : `${CHIP} h-[1em] w-[1em]`;
 
   while (i < draft.length) {
-    const ch = draft[i]!;
-    if (isComposerEmojiSlot(ch)) {
-      const token = slots.get(ch);
+    if (draft[i] === COMPOSER_SLOT_CHAR) {
+      const token = slots[slotIndex++];
       if (token) {
         parts.push(
           <CustomEmoji
             key={key++}
             token={token}
             catalog={catalog}
-            size={22}
+            size={chipSize ?? 15}
             title=""
-            className="mx-0.5"
+            className={chipClass}
+            style={
+              chipSize
+                ? { width: chipSize, height: chipSize }
+                : undefined
+            }
           />,
         );
-        i += 1;
-        continue;
+      } else {
+        parts.push(<span key={key++}>{COMPOSER_SLOT_CHAR}</span>);
       }
+      i += 1;
+      continue;
     }
 
     const slice = draft.slice(i);
-    const tokenMatch = slice.match(/^<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/i);
+    const tokenMatch = slice.match(
+      /^<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/i,
+    );
     if (tokenMatch) {
-      parts.push(
-        <CustomEmoji
-          key={key++}
-          token={tokenMatch[0]}
-          catalog={catalog}
-          size={22}
-          title=""
-          className="mx-0.5"
-        />,
-      );
+      // Keep raw token glyphs so width matches the textarea (until collapsed).
+      parts.push(<span key={key++}>{tokenMatch[0]}</span>);
       i += tokenMatch[0].length;
       continue;
     }
@@ -71,40 +80,23 @@ export function ComposerDraftMirror({
     if (short) {
       const hit = findEmojiByName(short[1], customEmojis, preferredServerId);
       if (hit) {
-        parts.push(
-          <CustomEmoji
-            key={key++}
-            emoji={hit}
-            catalog={catalog}
-            size={22}
-            title=""
-            className="mx-0.5"
-          />,
-        );
+        // Still typing/uncollapsed shortcode — show text width, not chip.
+        parts.push(<span key={key++}>{short[0]}</span>);
         i += short[0].length;
         continue;
       }
     }
 
-    // Plain run until next special.
     let next = i + 1;
     while (next < draft.length) {
       const c = draft[next]!;
-      if (
-        isComposerEmojiSlot(c) ||
-        c === "<" ||
-        c === ":" ||
-        (c === "h" && draft.slice(next, next + 4) === "http")
-      ) {
-        break;
-      }
+      if (c === COMPOSER_SLOT_CHAR || c === "<" || c === ":") break;
       next += 1;
     }
     parts.push(<span key={key++}>{draft.slice(i, next)}</span>);
     i = next;
   }
 
-  // Keep a trailing newline so empty last line still takes height like textarea.
   if (draft.endsWith("\n")) parts.push(<span key={key++}>{"\n"}</span>);
 
   return (

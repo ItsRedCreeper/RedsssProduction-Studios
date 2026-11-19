@@ -51,23 +51,111 @@ export function resolveEmojiShortcodes(
   });
 }
 
-/** Private-use slots so the composer can show an emoji chip instead of `<:name:uuid>`. */
+/**
+ * Composer chip placeholder: ideographic space (≈1em advance) so the caret
+ * lines up with a 1em mirror chip. Tokens live in a parallel ordered list.
+ */
+export const COMPOSER_SLOT_CHAR = "\u3000";
+
+export function makeComposerSlot(_seq?: number) {
+  return COMPOSER_SLOT_CHAR;
+}
+
+/** Length of a composer emoji slot starting at index, or 0. */
+export function isComposerEmojiSlotAt(
+  text: string,
+  index: number,
+  /** When using ordered slot lists, every ideographic space is a chip. */
+  orderedSlots?: boolean,
+) {
+  if (orderedSlots) {
+    return text[index] === COMPOSER_SLOT_CHAR ? 1 : 0;
+  }
+  const code = text.charCodeAt(index);
+  if (code >= 0xe000 && code <= 0xf8ff) return 1;
+  // Legacy: ideographic space + PUA / ZW id
+  if (text[index] === "\u3000") {
+    const mark = text.charCodeAt(index + 1);
+    if (mark >= 0xe000 && mark <= 0xf8ff) return 2;
+    if (index + 13 <= text.length) {
+      let ok = true;
+      for (let i = 1; i <= 12; i++) {
+        const c = text[index + i];
+        if (c !== "\u200B" && c !== "\u200C") {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return 13;
+    }
+  }
+  return 0;
+}
+
+/** @deprecated Use isComposerEmojiSlotAt */
 export function isComposerEmojiSlot(ch: string) {
   const code = ch.codePointAt(0) ?? 0;
-  return code >= 0xe000 && code <= 0xf8ff;
+  return (
+    ch === COMPOSER_SLOT_CHAR ||
+    ch === "\u200B" ||
+    ch === "\u200C" ||
+    (code >= 0xe000 && code <= 0xf8ff)
+  );
 }
 
 export function expandComposerDraft(
   text: string,
-  slots: Map<string, string>,
+  slots: Map<string, string> | string[],
   catalog: ServerEmoji[],
   preferredServerId?: string | null,
 ) {
   let out = "";
-  for (const ch of text) {
-    out += slots.get(ch) ?? ch;
+  let i = 0;
+  let slotIndex = 0;
+  const ordered = Array.isArray(slots);
+  while (i < text.length) {
+    const len = isComposerEmojiSlotAt(text, i, ordered);
+    if (len > 0) {
+      if (ordered) {
+        out += slots[slotIndex] ?? COMPOSER_SLOT_CHAR;
+        slotIndex += 1;
+      } else {
+        const key = text.slice(i, i + len);
+        out += slots.get(key) ?? key;
+      }
+      i += len;
+      continue;
+    }
+    out += text[i];
+    i += 1;
   }
   return resolveEmojiShortcodes(out, catalog, preferredServerId);
+}
+
+/** Index of the slot that contains/ends at `pos` (ordered list mode). */
+export function composerSlotIndexAt(text: string, pos: number) {
+  let n = 0;
+  for (let i = 0; i < text.length; ) {
+    if (text[i] === COMPOSER_SLOT_CHAR) {
+      if (i < pos && pos <= i + 1) return n;
+      if (i >= pos) return -1;
+      n += 1;
+      i += 1;
+      continue;
+    }
+    i += 1;
+  }
+  return -1;
+}
+
+/** How many slot chars appear in `text` before `end`. */
+export function countComposerSlotsBefore(text: string, end: number) {
+  let n = 0;
+  const lim = Math.min(end, text.length);
+  for (let i = 0; i < lim; i++) {
+    if (text[i] === COMPOSER_SLOT_CHAR) n += 1;
+  }
+  return n;
 }
 
 export function findEmojisByNamePrefix(

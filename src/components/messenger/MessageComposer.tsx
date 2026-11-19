@@ -33,11 +33,14 @@ import { CustomEmoji } from "@/components/messenger/CustomEmoji";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import {
+  COMPOSER_SLOT_CHAR,
+  countComposerSlotsBefore,
   customEmojiToken,
   expandComposerDraft,
   findEmojiByName,
   findEmojisByNamePrefix,
-  isComposerEmojiSlot,
+  isComposerEmojiSlotAt,
+  makeComposerSlot,
   type ServerEmoji,
 } from "@/lib/emoji";
 import {
@@ -124,9 +127,10 @@ export function MessageComposer({
   const gifBtnRef = useRef<HTMLButtonElement | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const typingStopTimer = useRef<number | null>(null);
-  const slotMapRef = useRef(new Map<string, string>());
-  const slotSeqRef = useRef(0);
+  /** Discord tokens parallel to each COMPOSER_SLOT_CHAR in the draft. */
+  const slotListRef = useRef<string[]>([]);
   const [slotVersion, setSlotVersion] = useState(0);
+  const [slotWidthPx, setSlotWidthPx] = useState<number | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [emojiSuggestIndex, setEmojiSuggestIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -134,6 +138,24 @@ export function MessageComposer({
   const [gifOpen, setGifOpen] = useState(false);
   const [pickerStyle, setPickerStyle] = useState<CSSProperties | null>(null);
   const replying = !!replyAuthor;
+
+  useLayoutEffect(() => {
+    const ta = inputRef.current;
+    if (!ta) return;
+    const cs = getComputedStyle(ta);
+    const probe = document.createElement("span");
+    probe.style.cssText =
+      "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;";
+    probe.style.font = cs.font;
+    probe.style.fontSize = cs.fontSize;
+    probe.style.lineHeight = cs.lineHeight;
+    probe.style.letterSpacing = cs.letterSpacing;
+    probe.textContent = COMPOSER_SLOT_CHAR;
+    document.body.appendChild(probe);
+    const width = probe.getBoundingClientRect().width;
+    document.body.removeChild(probe);
+    if (width > 0) setSlotWidthPx(width);
+  }, []);
 
   const emojiCatalog = useMemo(() => {
     const map = new Map<string, ServerEmoji>();
@@ -150,45 +172,140 @@ export function MessageComposer({
     return counts;
   }, [customEmojis]);
 
-  function allocEmojiSlot(emoji: ServerEmoji) {
-    const code = 0xe000 + (slotSeqRef.current % 6400);
-    slotSeqRef.current += 1;
-    const slot = String.fromCharCode(code);
-    slotMapRef.current.set(slot, customEmojiToken(emoji));
-    setSlotVersion((value) => value + 1);
-    return slot;
+  /** Insert a chip at `at` in `value`; keeps the ordered token list in sync. */
+  function insertEmojiSlot(emoji: ServerEmoji, value: string, at: number) {
+    const token = customEmojiToken(emoji);
+    const idx = countComposerSlotsBefore(value, at);
+    slotListRef.current.splice(idx, 0, token);
+    setSlotVersion((v) => v + 1);
+    return makeComposerSlot();
+  }
+
+  function removeEmojiSlotAt(value: string, at: number) {
+    const idx = countComposerSlotsBefore(value, at);
+    if (value[at] === COMPOSER_SLOT_CHAR) {
+      slotListRef.current.splice(idx, 1);
+      setSlotVersion((v) => v + 1);
+    }
+  }
+
+  /** Keep ordered tokens aligned when the user deletes/replaces text. */
+  function reconcileSlots(prev: string, next: string) {
+    if (prev === next) return;
+    let i = 0;
+    while (i < prev.length && i < next.length && prev[i] === next[i]) i += 1;
+    let jPrev = prev.length - 1;
+    let jNext = next.length - 1;
+    while (jPrev >= i && jNext >= i && prev[jPrev] === next[jNext]) {
+      jPrev -= 1;
+      jNext -= 1;
+    }
+    const removed = prev.slice(i, jPrev + 1);
+    let removedSlots = 0;
+    for (let k = 0; k < removed.length; k++) {
+      if (removed[k] === COMPOSER_SLOT_CHAR) removedSlots += 1;
+    }
+    if (removedSlots > 0) {
+      const startIdx = countComposerSlotsBefore(prev, i);
+      slotListRef.current.splice(startIdx, removedSlots);
+      setSlotVersion((v) => v + 1);
+    }
+    // Clamp if anything drifted (e.g. full clear).
+    const needed = countComposerSlotsBefore(next, next.length);
+    if (slotListRef.current.length > needed) {
+      slotListRef.current.length = needed;
+      setSlotVersion((v) => v + 1);
+    }
   }
 
   function expandForSend(value: string) {
     return expandComposerDraft(
       value,
-      slotMapRef.current,
+      slotListRef.current,
       customEmojis,
       preferredServerId,
     );
   }
 
-  /** Collapse completed `:name:` shortcodes into emoji chips (prefer current server). */
+  /** Collapse completed `:name:` / pasted `<:name:id>` into emoji chips. */
   function collapseShortcodes(value: string, cursor: number) {
-    const re = /(?<![<a]):([a-zA-Z0-9_]{2,32}):/g;
+    if (!value.includes(":") && !value.includes("<")) {
+      return { value, cursor, changed: false };
+    }
     let out = "";
     let last = 0;
     let nextCursor = cursor;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(value))) {
-      const name = match[1];
-      const hit = findEmojiByName(name, customEmojis, preferredServerId);
-      if (!hit) continue;
-      const slot = allocEmojiSlot(hit);
-      out += value.slice(last, match.index) + slot;
-      if (cursor > match.index) {
-        const removed = match[0].length - 1;
-        nextCursor = Math.max(match.index + 1, nextCursor - removed);
+    let changed = false;
+    let i = 0;
+    // Rebuild from the current draft prefix as we walk, so slot indices stay correct.
+    let built = "";
+    while (i < value.length) {
+      const slice = value.slice(i);
+      const tokenMatch = slice.match(
+        /^<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/i,
+      );
+      if (tokenMatch) {
+        const id = tokenMatch[3];
+        const fromCatalog = emojiCatalog.get(id);
+        const emoji =
+          fromCatalog ??
+          ({
+            id,
+            name: tokenMatch[2],
+            url: "",
+            animated: tokenMatch[1] === "a",
+            server_id: "",
+            created_by: "",
+            created_at: "",
+          } satisfies ServerEmoji);
+        const insertAt = built.length + (i - last);
+        // Flush pending literal text into built before inserting slot.
+        const prefix = value.slice(last, i);
+        built += prefix;
+        const slot = insertEmojiSlot(emoji, built, built.length);
+        built += slot;
+        out += prefix + slot;
+        if (cursor > i) {
+          nextCursor = Math.max(
+            insertAt + slot.length,
+            nextCursor - (tokenMatch[0].length - slot.length),
+          );
+        }
+        last = i + tokenMatch[0].length;
+        i = last;
+        changed = true;
+        continue;
       }
-      last = match.index + match[0].length;
+
+      const short = slice.match(/^:([a-zA-Z0-9_]{2,32}):/);
+      if (
+        short &&
+        (i === 0 || (value[i - 1] !== "<" && value[i - 1] !== "a"))
+      ) {
+        const hit = findEmojiByName(short[1], customEmojis, preferredServerId);
+        if (hit) {
+          const prefix = value.slice(last, i);
+          built += prefix;
+          const slot = insertEmojiSlot(hit, built, built.length);
+          built += slot;
+          out += prefix + slot;
+          if (cursor > i) {
+            nextCursor = Math.max(
+              built.length,
+              nextCursor - (short[0].length - slot.length),
+            );
+          }
+          last = i + short[0].length;
+          i = last;
+          changed = true;
+          continue;
+        }
+      }
+      i += 1;
     }
     out += value.slice(last);
-    return { value: out, cursor: nextCursor };
+    if (!changed) return { value, cursor, changed: false };
+    return { value: out, cursor: nextCursor, changed: true };
   }
 
   useEffect(() => {
@@ -198,6 +315,13 @@ export function MessageComposer({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (draft === "" && slotListRef.current.length > 0) {
+      slotListRef.current = [];
+      setSlotVersion((v) => v + 1);
+    }
+  }, [draft]);
 
   useEffect(() => {
     resizeTextarea(inputRef.current);
@@ -271,17 +395,19 @@ export function MessageComposer({
   }
 
   function setDraftValue(value: string, cursor?: number) {
-    const collapsed = collapseShortcodes(
-      value,
-      cursor ?? value.length,
-    );
+    // Reconcile deletions against the pre-collapse string first.
+    reconcileSlots(draft, value);
+    const collapsed = collapseShortcodes(value, cursor ?? value.length);
     let next = collapsed.value;
     if (next.length > MESSAGE_MAX) {
       next = next.slice(0, MESSAGE_MAX);
       onLimitReached?.(MESSAGE_MAX_REACHED);
     }
-    onDraft(next);
-    return collapsed.cursor;
+    if (next !== draft) onDraft(next);
+    return {
+      cursor: Math.min(collapsed.cursor, next.length),
+      changed: collapsed.changed || next !== value,
+    };
   }
 
   function insertAtCursor(text: string) {
@@ -289,7 +415,7 @@ export function MessageComposer({
     const start = el?.selectionStart ?? draft.length;
     const end = el?.selectionEnd ?? draft.length;
     const next = `${draft.slice(0, start)}${text}${draft.slice(end)}`;
-    const cursor = setDraftValue(next, start + text.length);
+    const { cursor } = setDraftValue(next, start + text.length);
     bumpTyping();
     requestAnimationFrame(() => {
       const pos = Math.min(cursor, MESSAGE_MAX);
@@ -299,8 +425,26 @@ export function MessageComposer({
     });
   }
 
+  function insertEmojiAtCursor(emoji: ServerEmoji) {
+    const el = inputRef.current;
+    const start = el?.selectionStart ?? draft.length;
+    const end = el?.selectionEnd ?? draft.length;
+    const base = `${draft.slice(0, start)}${draft.slice(end)}`;
+    reconcileSlots(draft, base);
+    const slot = insertEmojiSlot(emoji, base, start);
+    const next = `${base.slice(0, start)}${slot}${base.slice(start)}`;
+    onDraft(next.length > MESSAGE_MAX ? next.slice(0, MESSAGE_MAX) : next);
+    bumpTyping();
+    requestAnimationFrame(() => {
+      const pos = Math.min(start + slot.length, MESSAGE_MAX);
+      el?.setSelectionRange(pos, pos);
+      el?.focus();
+      resizeTextarea(el);
+    });
+  }
+
   function insertCustomEmoji(emoji: ServerEmoji) {
-    insertAtCursor(allocEmojiSlot(emoji));
+    insertEmojiAtCursor(emoji);
   }
 
   function takeFiles(list: FileList | File[] | null) {
@@ -380,7 +524,7 @@ export function MessageComposer({
     const before = draft.slice(0, mentionQuery.start);
     const after = draft.slice(inputRef.current?.selectionStart ?? draft.length);
     const next = `${before}${prefix}${item.label} ${after}`;
-    const cursor = setDraftValue(
+    const { cursor } = setDraftValue(
       next,
       before.length + prefix.length + item.label.length + 1,
     );
@@ -395,11 +539,13 @@ export function MessageComposer({
     if (!emojiQuery) return;
     const before = draft.slice(0, emojiQuery.start);
     const after = draft.slice(inputRef.current?.selectionStart ?? draft.length);
-    const slot = allocEmojiSlot(emoji);
+    const base = `${before}${after}`;
+    const slot = insertEmojiSlot(emoji, base, before.length);
     const next = `${before}${slot}${after}`;
-    const cursor = setDraftValue(next, before.length + 1);
+    onDraft(next.length > MESSAGE_MAX ? next.slice(0, MESSAGE_MAX) : next);
     bumpTyping();
     requestAnimationFrame(() => {
+      const cursor = before.length + slot.length;
       inputRef.current?.setSelectionRange(cursor, cursor);
       inputRef.current?.focus();
       resizeTextarea(inputRef.current);
@@ -647,10 +793,11 @@ export function MessageComposer({
               <span className="sr-only">{slotVersion}</span>
               <ComposerDraftMirror
                 draft={draft}
-                slots={slotMapRef.current}
+                slots={slotListRef.current}
                 catalog={emojiCatalog}
                 customEmojis={customEmojis}
                 preferredServerId={preferredServerId}
+                slotWidthPx={slotWidthPx}
               />
             </div>
             <textarea
@@ -659,16 +806,18 @@ export function MessageComposer({
               value={draft}
               onChange={(event) => {
                 const el = event.currentTarget;
-                const cursor = setDraftValue(
-                  event.target.value,
-                  el.selectionStart,
-                );
-                if (event.target.value.trim()) bumpTyping();
+                const raw = event.target.value;
+                const sel = el.selectionStart;
+                const { cursor, changed } = setDraftValue(raw, sel);
+                if (raw.trim()) bumpTyping();
                 else clearTypingSoon();
-                requestAnimationFrame(() => {
-                  el.setSelectionRange(cursor, cursor);
-                  resizeTextarea(el);
-                });
+                resizeTextarea(el);
+                // Only re-seat the caret when shortcodes collapsed into chips.
+                if (changed) {
+                  requestAnimationFrame(() => {
+                    el.setSelectionRange(cursor, cursor);
+                  });
+                }
               }}
               onScroll={(event) => {
                 if (mirrorRef.current) {
@@ -750,15 +899,14 @@ export function MessageComposer({
                   const start = el.selectionStart;
                   const end = el.selectionEnd;
                   if (start === end && start > 0) {
-                    const ch = draft[start - 1]!;
-                    if (isComposerEmojiSlot(ch)) {
+                    const at = start - 1;
+                    if (isComposerEmojiSlotAt(draft, at, true) > 0) {
                       event.preventDefault();
-                      const next = `${draft.slice(0, start - 1)}${draft.slice(end)}`;
-                      slotMapRef.current.delete(ch);
-                      setSlotVersion((value) => value + 1);
+                      removeEmojiSlotAt(draft, at);
+                      const next = `${draft.slice(0, at)}${draft.slice(end)}`;
                       onDraft(next);
                       requestAnimationFrame(() => {
-                        el.setSelectionRange(start - 1, start - 1);
+                        el.setSelectionRange(at, at);
                         resizeTextarea(el);
                       });
                       return;
