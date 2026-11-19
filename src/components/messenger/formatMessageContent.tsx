@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { MessageEmoji } from "@/components/messenger/EmojiInfo";
+import { SpoilerText } from "@/components/messenger/SpoilerText";
 import {
   findEmojiByName,
   isCustomEmojiOnlyMessage,
@@ -21,25 +22,141 @@ type FormatOpts = {
   serverNamesById?: Record<string, string>;
 };
 
+type NamedPattern = {
+  re: RegExp;
+  kind: "user" | "role" | "channel";
+  id?: string;
+  label: string;
+};
+
 /**
- * Tokenize message content. Prefer Discord-style ID mentions; also highlight
- * legacy plain @names / #channels (including spaces) via longest-name match.
+ * Discord Markdown Text 101 — bold/italic/underline/strike/spoilers/code,
+ * headers, subtext, quotes, lists, masked links — plus mentions & emojis.
+ * @see https://support.discord.com/hc/en-us/articles/210298617
  */
-export function formatMessageContent(content: string, opts: FormatOpts = {}): ReactNode[] {
+export function formatMessageContent(
+  content: string,
+  opts: FormatOpts = {},
+): ReactNode[] {
+  const key = { n: 0 };
+  const nextKey = () => key.n++;
+  const emojiSize = isCustomEmojiOnlyMessage(content) ? 48 : 32;
+  const namedPatterns = buildNamedPatterns(opts);
+
+  // Multiline quote (>>> ) consumes the rest of the message.
+  const multiQuote = content.match(/^>>> ?([\s\S]*)$/);
+  if (multiQuote) {
+    return [
+      <blockquote
+        key={nextKey()}
+        className="my-0.5 border-l-4 border-[#4e5058] pl-3 text-[#dbdee1]"
+      >
+        {parseInline(multiQuote[1], opts, namedPatterns, emojiSize, nextKey)}
+      </blockquote>,
+    ];
+  }
+
+  const lines = content.split("\n");
+  const parts: ReactNode[] = [];
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex]!;
+    const isLast = lineIndex === lines.length - 1;
+
+    const header = line.match(/^(#{1,3}) (.+)$/);
+    if (header) {
+      const level = header[1].length;
+      const className =
+        level === 1
+          ? "text-[1.5rem] font-bold leading-tight text-white"
+          : level === 2
+            ? "text-[1.25rem] font-bold leading-tight text-white"
+            : "text-[1.05rem] font-bold leading-tight text-white";
+      parts.push(
+        <div key={nextKey()} className={className}>
+          {parseInline(header[2], opts, namedPatterns, emojiSize, nextKey)}
+        </div>,
+      );
+      if (!isLast) parts.push("\n");
+      continue;
+    }
+
+    const subtext = line.match(/^-# (.+)$/);
+    if (subtext) {
+      parts.push(
+        <div key={nextKey()} className="text-xs text-[#949ba4]">
+          {parseInline(subtext[1], opts, namedPatterns, emojiSize, nextKey)}
+        </div>,
+      );
+      if (!isLast) parts.push("\n");
+      continue;
+    }
+
+    const quote = line.match(/^> (.+)$/);
+    if (quote) {
+      parts.push(
+        <blockquote
+          key={nextKey()}
+          className="my-0.5 border-l-4 border-[#4e5058] pl-3 text-[#dbdee1]"
+        >
+          {parseInline(quote[1], opts, namedPatterns, emojiSize, nextKey)}
+        </blockquote>,
+      );
+      if (!isLast) parts.push("\n");
+      continue;
+    }
+
+    const list = line.match(/^( {0,2})([*-]|\d+\.) (.+)$/);
+    if (list) {
+      const indent = list[1].length >= 2;
+      parts.push(
+        <div
+          key={nextKey()}
+          className={`flex gap-2 ${indent ? "pl-5" : "pl-1"}`}
+        >
+          <span className="shrink-0 text-[#b5bac1]">
+            {/^\d/.test(list[2]) ? list[2] : "•"}
+          </span>
+          <span className="min-w-0">
+            {parseInline(list[3], opts, namedPatterns, emojiSize, nextKey)}
+          </span>
+        </div>,
+      );
+      if (!isLast) parts.push("\n");
+      continue;
+    }
+
+    if (line.length === 0) {
+      parts.push(<br key={nextKey()} />);
+      continue;
+    }
+
+    parts.push(
+      ...parseInline(line, opts, namedPatterns, emojiSize, nextKey),
+    );
+    if (!isLast) parts.push("\n");
+  }
+
+  return parts;
+}
+
+function buildNamedPatterns(opts: FormatOpts): NamedPattern[] {
   const maps = opts.mentionMaps;
   const users = maps ? Object.values(maps.usersById) : [];
   const roles = maps ? Object.values(maps.rolesById) : [];
   const channels = maps ? Object.values(maps.channelsById) : [];
-
   const roleNameList =
     roles.length > 0 ? roles.map((r) => r.name) : (opts.roleNames ?? []);
   const channelNameList =
-    channels.length > 0 ? channels.map((c) => c.name) : (opts.channelNames ?? []);
+    channels.length > 0
+      ? channels.map((c) => c.name)
+      : (opts.channelNames ?? []);
 
-  const namedPatterns: { re: RegExp; kind: "user" | "role" | "channel"; id?: string; label: string }[] =
-    [];
+  const namedPatterns: NamedPattern[] = [];
 
-  for (const user of [...users].sort((a, b) => b.username.length - a.username.length)) {
+  for (const user of [...users].sort(
+    (a, b) => b.username.length - a.username.length,
+  )) {
     if (!user.username) continue;
     namedPatterns.push({
       re: new RegExp(`@${escapeRegExp(user.username)}(?=$|[\\s.,!?;:])`, "i"),
@@ -57,7 +174,9 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       label: role.name,
     });
   }
-  for (const channel of [...channels].sort((a, b) => b.name.length - a.name.length)) {
+  for (const channel of [...channels].sort(
+    (a, b) => b.name.length - a.name.length,
+  )) {
     if (!channel.name) continue;
     namedPatterns.push({
       re: new RegExp(`#${escapeRegExp(channel.name)}(?=$|[\\s.,!?;:])`, "i"),
@@ -67,7 +186,6 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
     });
   }
 
-  // Fallback plain names when maps are empty (legacy).
   if (namedPatterns.length === 0) {
     for (const name of [...roleNameList].sort((a, b) => b.length - a.length)) {
       namedPatterns.push({
@@ -76,7 +194,9 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
         label: name,
       });
     }
-    for (const name of [...channelNameList].sort((a, b) => b.length - a.length)) {
+    for (const name of [...channelNameList].sort(
+      (a, b) => b.length - a.length,
+    )) {
       namedPatterns.push({
         re: new RegExp(`#${escapeRegExp(name)}(?=$|[\\s.,!?;:])`, "i"),
         kind: "channel",
@@ -85,20 +205,54 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
     }
   }
 
+  return namedPatterns;
+}
+
+function parseInline(
+  content: string,
+  opts: FormatOpts,
+  namedPatterns: NamedPattern[],
+  emojiSize: number,
+  nextKey: () => number,
+): ReactNode[] {
   const parts: ReactNode[] = [];
-  let i = 0;
-  let key = 0;
-  const emojiSize = isCustomEmojiOnlyMessage(content) ? 48 : 32;
+  const maps = opts.mentionMaps;
   const customList = opts.customEmojis ?? [];
+  let i = 0;
 
   while (i < content.length) {
     const slice = content.slice(i);
 
-    const customEmoji = slice.match(/^<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/i);
+    // Fenced code block ```lang?\n...\n```
+    if (slice.startsWith("```")) {
+      const close = slice.indexOf("```", 3);
+      if (close > 3) {
+        let body = slice.slice(3, close);
+        // Optional language on first line
+        const langMatch = body.match(/^([a-zA-Z0-9_+-]+)\n([\s\S]*)$/);
+        if (langMatch) body = langMatch[2];
+        else if (body.startsWith("\n")) body = body.slice(1);
+        if (body.endsWith("\n")) body = body.slice(0, -1);
+        parts.push(
+          <pre
+            key={nextKey()}
+            className="my-1 overflow-x-auto rounded-md bg-[#1e1f22] p-2 font-mono text-[0.85em] text-[#f2f3f5]"
+          >
+            <code>{body}</code>
+          </pre>,
+        );
+        i += close + 3;
+        continue;
+      }
+    }
+
+    const customEmoji = slice.match(
+      /^<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/i,
+    );
     if (customEmoji) {
       parts.push(
         <MessageEmoji
-          key={key++}
+          key={nextKey()}
           token={customEmoji[0]}
           catalog={opts.emojiCatalog}
           serverNamesById={opts.serverNamesById}
@@ -110,7 +264,6 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       continue;
     }
 
-    // Typed `:name:` shortcodes (prefer current server on name collisions).
     const shortcode = slice.match(/^:([a-zA-Z0-9_]{2,32}):/);
     if (shortcode) {
       const hit = findEmojiByName(
@@ -121,7 +274,7 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       if (hit) {
         parts.push(
           <MessageEmoji
-            key={key++}
+            key={nextKey()}
             emoji={hit}
             catalog={opts.emojiCatalog}
             serverNamesById={opts.serverNamesById}
@@ -139,8 +292,9 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       const id = idUser[1];
       const user = maps?.usersById[id];
       const label = user?.username ?? "Unknown user";
-      const isSelf = id === opts.currentUserId;
-      parts.push(mentionChip(key++, `@${label}`, isSelf || false, "user"));
+      parts.push(
+        mentionChip(nextKey(), `@${label}`, id === opts.currentUserId, "user"),
+      );
       i += idUser[0].length;
       continue;
     }
@@ -149,8 +303,14 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
     if (idRole) {
       const id = idRole[1];
       const role = maps?.rolesById[id];
-      const label = role?.name ?? "unknown-role";
-      parts.push(mentionChip(key++, `@${label}`, true, "role"));
+      parts.push(
+        mentionChip(
+          nextKey(),
+          `@${role?.name ?? "unknown-role"}`,
+          true,
+          "role",
+        ),
+      );
       i += idRole[0].length;
       continue;
     }
@@ -159,19 +319,50 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
     if (idChannel) {
       const id = idChannel[1];
       const channel = maps?.channelsById[id];
-      const label = channel?.name ?? "unknown-channel";
-      parts.push(mentionChip(key++, `#${label}`, true, "channel"));
+      parts.push(
+        mentionChip(
+          nextKey(),
+          `#${channel?.name ?? "unknown-channel"}`,
+          true,
+          "channel",
+        ),
+      );
       i += idChannel[0].length;
       continue;
     }
 
-    let namedHit: { length: number; kind: "user" | "role" | "channel"; label: string; id?: string } | null =
-      null;
+    // <https://...> — link without triggering embed preference in Discord.
+    const bracketUrl = slice.match(/^<(https?:\/\/[^>\s]+)>/i);
+    if (bracketUrl) {
+      parts.push(linkNode(nextKey(), bracketUrl[1], bracketUrl[1]));
+      i += bracketUrl[0].length;
+      continue;
+    }
+
+    // Masked link [label](url)
+    const masked = slice.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/i);
+    if (masked) {
+      parts.push(linkNode(nextKey(), masked[1], masked[2]));
+      i += masked[0].length;
+      continue;
+    }
+
+    let namedHit: {
+      length: number;
+      kind: "user" | "role" | "channel";
+      label: string;
+      id?: string;
+    } | null = null;
     for (const pattern of namedPatterns) {
       const m = slice.match(pattern.re);
       if (m && m.index === 0) {
         if (!namedHit || m[0].length > namedHit.length) {
-          namedHit = { length: m[0].length, kind: pattern.kind, label: pattern.label, id: pattern.id };
+          namedHit = {
+            length: m[0].length,
+            kind: pattern.kind,
+            label: pattern.label,
+            id: pattern.id,
+          };
         }
       }
     }
@@ -179,13 +370,18 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       const isSelf =
         namedHit.kind === "user" &&
         (namedHit.id === opts.currentUserId ||
-          namedHit.label.toLowerCase() === (opts.currentUsername ?? "").toLowerCase());
+          namedHit.label.toLowerCase() ===
+            (opts.currentUsername ?? "").toLowerCase());
       const prefix = namedHit.kind === "channel" ? "#" : "@";
       parts.push(
         mentionChip(
-          key++,
+          nextKey(),
           `${prefix}${namedHit.label}`,
-          Boolean(isSelf || namedHit.kind === "role" || namedHit.kind === "channel"),
+          Boolean(
+            isSelf ||
+              namedHit.kind === "role" ||
+              namedHit.kind === "channel",
+          ),
           namedHit.kind,
         ),
       );
@@ -193,12 +389,89 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       continue;
     }
 
+    // Spoilers ||text||
+    if (slice.startsWith("||")) {
+      const end = slice.indexOf("||", 2);
+      if (end > 2) {
+        parts.push(
+          <SpoilerText key={nextKey()}>
+            {parseInline(
+              slice.slice(2, end),
+              opts,
+              namedPatterns,
+              emojiSize,
+              nextKey,
+            )}
+          </SpoilerText>,
+        );
+        i += end + 2;
+        continue;
+      }
+    }
+
+    // Combined underline + bold/italic: __*** __** __* __
+    const underlineWrap = matchWrapped(slice, "__");
+    if (underlineWrap) {
+      parts.push(
+        <span key={nextKey()} className="underline">
+          {parseInline(
+            underlineWrap.inner,
+            opts,
+            namedPatterns,
+            emojiSize,
+            nextKey,
+          )}
+        </span>,
+      );
+      i += underlineWrap.total;
+      continue;
+    }
+
+    // Strikethrough ~~text~~
+    const strike = matchWrapped(slice, "~~");
+    if (strike) {
+      parts.push(
+        <span key={nextKey()} className="line-through text-[#949ba4]">
+          {parseInline(strike.inner, opts, namedPatterns, emojiSize, nextKey)}
+        </span>,
+      );
+      i += strike.total;
+      continue;
+    }
+
+    // ***bold italic***
+    if (slice.startsWith("***")) {
+      const end = slice.indexOf("***", 3);
+      if (end > 3) {
+        parts.push(
+          <strong key={nextKey()} className="font-semibold italic text-white">
+            {parseInline(
+              slice.slice(3, end),
+              opts,
+              namedPatterns,
+              emojiSize,
+              nextKey,
+            )}
+          </strong>,
+        );
+        i += end + 3;
+        continue;
+      }
+    }
+
+    // **bold**
     if (slice.startsWith("**")) {
       const end = slice.indexOf("**", 2);
       if (end > 2) {
         parts.push(
-          <strong key={key++} className="font-semibold text-white">
-            {slice.slice(2, end)}
+          <strong key={nextKey()} className="font-semibold text-white">
+            {parseInline(
+              slice.slice(2, end),
+              opts,
+              namedPatterns,
+              emojiSize,
+              nextKey,
+            )}
           </strong>,
         );
         i += end + 2;
@@ -206,12 +479,19 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       }
     }
 
-    if (slice.startsWith("*")) {
-      const end = slice.indexOf("*", 1);
+    // *italic* (not **)
+    if (slice.startsWith("*") && !slice.startsWith("**")) {
+      const end = findClosingSingle(slice, "*", 1);
       if (end > 1) {
         parts.push(
-          <em key={key++} className="italic">
-            {slice.slice(1, end)}
+          <em key={nextKey()} className="italic">
+            {parseInline(
+              slice.slice(1, end),
+              opts,
+              namedPatterns,
+              emojiSize,
+              nextKey,
+            )}
           </em>,
         );
         i += end + 1;
@@ -219,12 +499,33 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       }
     }
 
-    if (slice.startsWith("`")) {
+    // _italic_ (single underscore, not __)
+    if (slice.startsWith("_") && !slice.startsWith("__")) {
+      const end = findClosingSingle(slice, "_", 1);
+      if (end > 1) {
+        parts.push(
+          <em key={nextKey()} className="italic">
+            {parseInline(
+              slice.slice(1, end),
+              opts,
+              namedPatterns,
+              emojiSize,
+              nextKey,
+            )}
+          </em>,
+        );
+        i += end + 1;
+        continue;
+      }
+    }
+
+    // Inline `code`
+    if (slice.startsWith("`") && !slice.startsWith("```")) {
       const end = slice.indexOf("`", 1);
       if (end > 1) {
         parts.push(
           <code
-            key={key++}
+            key={nextKey()}
             className="rounded bg-black/40 px-1 py-0.5 font-mono text-[0.85em] text-[#f2f3f5]"
           >
             {slice.slice(1, end)}
@@ -235,35 +536,30 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       }
     }
 
-    const url = slice.match(/^https?:\/\/[^\s<]+/);
+    const url = slice.match(/^https?:\/\/[^\s<]+/i);
     if (url) {
-      parts.push(
-        <a
-          key={key++}
-          href={url[0]}
-          target="_blank"
-          rel="noreferrer"
-          className="text-accent underline-offset-2 hover:underline"
-        >
-          {url[0]}
-        </a>,
-      );
-      i += url[0].length;
+      const cleaned = url[0].replace(/[).,!?]+$/g, "");
+      parts.push(linkNode(nextKey(), cleaned, cleaned));
+      i += cleaned.length;
       continue;
     }
 
-    // Consume plain text until next special marker.
+    // Plain text until next special marker.
     let next = i + 1;
     while (next < content.length) {
-      const ch = content[next];
+      const ch = content[next]!;
       if (
         ch === "@" ||
         ch === "#" ||
         ch === "*" ||
+        ch === "_" ||
         ch === "`" ||
         ch === "<" ||
         ch === ":" ||
-        (ch === "h" && content.slice(next, next + 4) === "http")
+        ch === "|" ||
+        ch === "~" ||
+        ch === "[" ||
+        (ch === "h" && content.slice(next, next + 4).toLowerCase() === "http")
       ) {
         break;
       }
@@ -274,6 +570,40 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
   }
 
   return parts;
+}
+
+function matchWrapped(slice: string, marker: string) {
+  if (!slice.startsWith(marker)) return null;
+  const end = slice.indexOf(marker, marker.length);
+  if (end <= marker.length) return null;
+  return {
+    inner: slice.slice(marker.length, end),
+    total: end + marker.length,
+  };
+}
+
+function findClosingSingle(slice: string, marker: string, from: number) {
+  for (let i = from; i < slice.length; i++) {
+    if (slice[i] !== marker) continue;
+    // Don't treat ** or __ as single close.
+    if (slice[i + 1] === marker) continue;
+    if (i > from) return i;
+  }
+  return -1;
+}
+
+function linkNode(key: number, label: string, href: string) {
+  return (
+    <a
+      key={key}
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="break-all text-[#00a8fc] hover:underline"
+    >
+      {label}
+    </a>
+  );
 }
 
 function escapeRegExp(value: string) {

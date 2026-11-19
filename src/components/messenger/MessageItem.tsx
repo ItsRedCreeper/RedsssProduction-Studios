@@ -454,7 +454,7 @@ export function MessageItem({
         ) : (
           <>
             {message.content && (
-              <p className="whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed text-[#dbdee1]">
+              <div className="break-words text-[0.95rem] leading-relaxed text-[#dbdee1] [overflow-wrap:anywhere] whitespace-pre-wrap">
                 {formatMessageContent(message.content, {
                   currentUserId,
                   currentUsername,
@@ -466,7 +466,7 @@ export function MessageItem({
                   preferredServerId,
                   serverNamesById,
                 })}
-              </p>
+              </div>
             )}
             <MessageMedia message={message} />
             {message.content && <LinkEmbeds content={message.content} />}

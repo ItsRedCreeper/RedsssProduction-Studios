@@ -110,3 +110,41 @@ export function extractUrls(text: string): string[] {
   return [...new Set(matches.map((url) => url.replace(/[).,!?]+$/g, "")))];
 }
 
+/**
+ * URLs that should generate a Discord-style link preview.
+ * Skips `<https://...>` (no-embed), fenced/inline code, and masked-link-only
+ * destinations that Discord still embeds — we embed any bare or masked URL
+ * that isn't angle-bracket suppressed.
+ */
+export function extractEmbeddableUrls(text: string): string[] {
+  // Strip fenced + inline code so URLs inside don't unfurl.
+  const withoutCode = text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]+`/g, " ");
+
+  // Collect <url> suppressions.
+  const suppressed = new Set(
+    [...withoutCode.matchAll(/<(https?:\/\/[^>\s]+)>/gi)].map((m) =>
+      m[1].replace(/[).,!?]+$/g, ""),
+    ),
+  );
+
+  const found: string[] = [];
+
+  // Bare URLs
+  for (const match of withoutCode.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
+    const url = match[0].replace(/[).,!?]+$/g, "");
+    if (!suppressed.has(url)) found.push(url);
+  }
+
+  // Masked links [label](url) — Discord still unfurls these.
+  for (const match of withoutCode.matchAll(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi,
+  )) {
+    const url = match[2].replace(/[).,!?]+$/g, "");
+    if (!suppressed.has(url)) found.push(url);
+  }
+
+  return [...new Set(found)];
+}
+

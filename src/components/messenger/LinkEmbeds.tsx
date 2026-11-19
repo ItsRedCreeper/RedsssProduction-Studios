@@ -2,45 +2,53 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Play } from "lucide-react";
-import { extractUrls, extractYoutubeId } from "@/lib/message-media";
+import {
+  extractEmbeddableUrls,
+  extractYoutubeId,
+} from "@/lib/message-media";
 
-type OEmbedData = {
+type LinkPreview = {
   title?: string;
+  description?: string;
   author_name?: string;
   thumbnail_url?: string;
   provider_name?: string;
-  html?: string;
+  site_name?: string;
+  url?: string;
 };
 
 type LinkEmbedsProps = {
   content: string;
 };
 
+/** Discord-style unfurl: inline URL stays in the message; this is the preview card. */
 export function LinkEmbeds({ content }: LinkEmbedsProps) {
-  const youtubeId = useMemo(() => extractYoutubeId(content), [content]);
-  const otherUrl = useMemo(() => {
-    if (youtubeId) return null;
-    return extractUrls(content)[0] ?? null;
-  }, [content, youtubeId]);
+  const urls = useMemo(() => extractEmbeddableUrls(content).slice(0, 2), [content]);
 
+  if (urls.length === 0) return null;
+
+  return (
+    <div className="mt-1.5 flex flex-col gap-2">
+      {urls.map((url) => (
+        <LinkPreviewCard key={url} url={url} />
+      ))}
+    </div>
+  );
+}
+
+function LinkPreviewCard({ url }: { url: string }) {
+  const youtubeId = useMemo(() => extractYoutubeId(url), [url]);
   const [open, setOpen] = useState(false);
-  const [meta, setMeta] = useState<OEmbedData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [meta, setMeta] = useState<LinkPreview | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const target = youtubeId
-      ? `https://www.youtube.com/watch?v=${youtubeId}`
-      : otherUrl;
-    if (!target) {
-      setMeta(null);
-      return;
-    }
     let cancelled = false;
     setLoading(true);
-    void fetch(`/api/oembed?url=${encodeURIComponent(target)}`)
+    void fetch(`/api/oembed?url=${encodeURIComponent(url)}`)
       .then(async (res) => {
         if (!res.ok) return null;
-        return (await res.json()) as OEmbedData;
+        return (await res.json()) as LinkPreview;
       })
       .then((data) => {
         if (!cancelled) setMeta(data);
@@ -54,84 +62,119 @@ export function LinkEmbeds({ content }: LinkEmbedsProps) {
     return () => {
       cancelled = true;
     };
-  }, [youtubeId, otherUrl]);
+  }, [url]);
 
-  if (!youtubeId && !otherUrl) return null;
+  const site =
+    meta?.site_name ||
+    meta?.provider_name ||
+    safeHostname(url) ||
+    "Link";
+  const title = meta?.title?.trim() || (loading ? "Loading preview…" : site);
+  const description = meta?.description?.trim();
+  const image =
+    meta?.thumbnail_url ||
+    (youtubeId ? `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg` : null);
+
+  if (!loading && !meta && !youtubeId) return null;
 
   if (youtubeId) {
     return (
-      <div className="mt-2 max-w-md overflow-hidden rounded-md border border-[#3f4147] bg-[#2b2d31]">
-        <div className="space-y-0.5 px-3 py-2">
-          <p className="truncate text-sm font-semibold text-white">
-            {meta?.title ?? (loading ? "Loading…" : "YouTube video")}
-          </p>
-          {meta?.author_name && (
-            <p className="truncate text-xs text-[#949ba4]">{meta.author_name}</p>
-          )}
-        </div>
-        {open ? (
-          <div className="aspect-video w-full bg-black">
-            <iframe
-              title={meta?.title ?? "YouTube video"}
-              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
-              className="h-full w-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
+      <div className="max-w-md overflow-hidden rounded-[4px] bg-[#2b2d31]">
+        <div className="flex">
+          <div className="w-1 shrink-0 bg-accent" aria-hidden />
+          <div className="min-w-0 flex-1 px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+              {site}
+            </p>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-0.5 line-clamp-2 text-base font-semibold text-[#00a8fc] hover:underline"
+            >
+              {title}
+            </a>
+            {meta?.author_name && (
+              <p className="mt-1 line-clamp-1 text-sm text-[#dbdee1]">
+                {meta.author_name}
+              </p>
+            )}
+            <div className="mt-2 overflow-hidden rounded">
+              {open ? (
+                <div className="aspect-video w-full bg-black">
+                  <iframe
+                    title={title}
+                    src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
+                    className="h-full w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  className="group relative block w-full text-left"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image ?? undefined}
+                    alt=""
+                    className="aspect-video w-full object-cover"
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/35 transition group-hover:bg-black/45">
+                    <span className="rounded-full bg-accent p-3 text-white shadow-lg">
+                      <Play className="h-5 w-5 fill-current" strokeWidth={0} />
+                    </span>
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="group relative block w-full text-left"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={
-                meta?.thumbnail_url ??
-                `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`
-              }
-              alt=""
-              className="aspect-video w-full object-cover"
-            />
-            <span className="absolute inset-0 flex items-center justify-center bg-black/35 transition group-hover:bg-black/45">
-              <span className="rounded-full bg-accent p-3 text-white shadow-lg">
-                <Play className="h-5 w-5 fill-current" strokeWidth={0} />
-              </span>
-            </span>
-          </button>
-        )}
+        </div>
       </div>
     );
   }
 
-  if (!meta && !loading) return null;
-
   return (
     <a
-      href={otherUrl ?? "#"}
+      href={url}
       target="_blank"
       rel="noreferrer"
-      className="mt-2 block max-w-md overflow-hidden rounded-md border border-[#3f4147] bg-[#2b2d31] hover:bg-[#32343a]"
+      className="block max-w-md overflow-hidden rounded-[4px] bg-[#2b2d31] transition hover:bg-[#2e3035]"
     >
-      <div className="space-y-0.5 px-3 py-2">
-        <p className="truncate text-sm font-semibold text-white">
-          {meta?.title ?? (loading ? "Loading…" : otherUrl)}
-        </p>
-        {(meta?.author_name || meta?.provider_name) && (
-          <p className="truncate text-xs text-[#949ba4]">
-            {meta.author_name ?? meta.provider_name}
+      <div className="flex">
+        <div className="w-1 shrink-0 bg-accent" aria-hidden />
+        <div className="min-w-0 flex-1 px-3 py-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+            {site}
           </p>
-        )}
+          <p className="mt-0.5 line-clamp-2 text-base font-semibold text-[#00a8fc]">
+            {title}
+          </p>
+          {description ? (
+            <p className="mt-1 line-clamp-3 text-sm leading-snug text-[#dbdee1]">
+              {description}
+            </p>
+          ) : null}
+          {image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={image}
+              alt=""
+              className="mt-2 max-h-52 w-full rounded object-cover"
+            />
+          ) : null}
+        </div>
       </div>
-      {meta?.thumbnail_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={meta.thumbnail_url}
-          alt=""
-          className="max-h-40 w-full object-cover"
-        />
-      )}
     </a>
   );
+}
+
+function safeHostname(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
