@@ -3068,9 +3068,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
     try {
-      const res = await fetch(
-        `/api/media-search?download=${encodeURIComponent(gif.url)}`,
-      );
+      // gif.url is already a first-party /api/m/:id proxy (no giphy host in browser).
+      const res = await fetch(gif.url, { credentials: "same-origin" });
       if (!res.ok) throw new Error("Could not download GIF");
       const blob = await res.blob();
       const safeTitle = (gif.title || "gif")

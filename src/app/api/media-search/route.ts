@@ -19,17 +19,6 @@ type GiphyItem = {
   };
 };
 
-function isAllowedGiphyHost(hostname: string) {
-  return (
-    /(^|\.)giphy\.com$/i.test(hostname) ||
-    /(^|\.)giphyusercontent\.com$/i.test(hostname)
-  );
-}
-
-function proxiedMediaPath(rawUrl: string) {
-  return `/api/media-search?media=${encodeURIComponent(rawUrl)}`;
-}
-
 function mapGif(row: GiphyItem) {
   if (!row.id || !row.images) return null;
   const full =
@@ -37,74 +26,24 @@ function mapGif(row: GiphyItem) {
     row.images.downsized_medium ||
     row.images.fixed_width ||
     row.images.original;
-  // Prefer tiny previews — fixed_width can be multi-MB and melt the proxy.
   const preview =
     row.images.fixed_width_small ||
     row.images.preview_gif ||
     row.images.fixed_width ||
     full;
-  const url = full?.url;
-  const previewUrl = preview?.url || url;
-  if (!url || !previewUrl) return null;
+  if (!full?.url && !preview?.url) return null;
+  // Discord-style: first-party URLs only — never expose giphy hosts to the browser.
   return {
     id: row.id,
     title: row.title ?? "",
-    url,
-    // Same-origin proxy so ad blockers that filter giphy.com still show the grid.
-    previewUrl: proxiedMediaPath(previewUrl),
+    url: `/api/m/${encodeURIComponent(row.id)}?v=f`,
+    previewUrl: `/api/m/${encodeURIComponent(row.id)}?v=p`,
     width: Number(full?.width ?? preview?.width ?? 0) || 0,
     height: Number(full?.height ?? preview?.height ?? 0) || 0,
   };
 }
 
-async function proxyMedia(rawUrl: string, maxBytes = 1_500_000) {
-  let target: URL;
-  try {
-    target = new URL(rawUrl);
-  } catch {
-    return NextResponse.json({ error: "Invalid media url" }, { status: 400 });
-  }
-  if (target.protocol !== "https:" || !isAllowedGiphyHost(target.hostname)) {
-    return NextResponse.json({ error: "Invalid media url" }, { status: 400 });
-  }
-  const upstream = await fetch(target.toString(), {
-    headers: {
-      Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-      "User-Agent": "RedsssMessenger/1.0",
-    },
-    // Avoid Next data-cache for large GIFs (often >2MB).
-    cache: "no-store",
-  });
-  if (!upstream.ok) {
-    return NextResponse.json(
-      { error: "Could not load media." },
-      { status: 502 },
-    );
-  }
-  const bytes = await upstream.arrayBuffer();
-  // Hard cap so a bad upstream asset can't blow the function response.
-  if (bytes.byteLength > maxBytes) {
-    return NextResponse.json(
-      { error: "Media too large." },
-      { status: 502 },
-    );
-  }
-  const upstreamType = upstream.headers.get("content-type") || "";
-  const type = upstreamType.startsWith("image/")
-    ? upstreamType
-    : target.pathname.toLowerCase().endsWith(".webp")
-      ? "image/webp"
-      : "image/gif";
-  return new NextResponse(bytes, {
-    status: 200,
-    headers: {
-      "Content-Type": type,
-      "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
-    },
-  });
-}
-
-export async function GET(request: Request) {
+async function searchGifs(q: string, limit: number, offset: number) {
   const key = process.env.GIPHY_API_KEY?.trim();
   if (!key) {
     return NextResponse.json(
@@ -112,42 +51,6 @@ export async function GET(request: Request) {
       { status: 503 },
     );
   }
-
-  const url = new URL(request.url);
-  const { searchParams } = url;
-
-  const mediaUrl = searchParams.get("media")?.trim();
-  if (mediaUrl) {
-    try {
-      // Grid previews only — keep responses small.
-      return await proxyMedia(mediaUrl, 1_500_000);
-    } catch {
-      return NextResponse.json(
-        { error: "Could not load media." },
-        { status: 502 },
-      );
-    }
-  }
-
-  const downloadUrl = searchParams.get("download")?.trim();
-  if (downloadUrl) {
-    try {
-      // Full GIF attach can be larger than preview thumbs.
-      return await proxyMedia(downloadUrl, 8_000_000);
-    } catch {
-      return NextResponse.json(
-        { error: "Could not download media." },
-        { status: 502 },
-      );
-    }
-  }
-
-  const q = searchParams.get("q")?.trim() ?? "";
-  const limit = Math.min(
-    24,
-    Math.max(1, Number(searchParams.get("limit") ?? "12") || 12),
-  );
-  const offset = Math.max(0, Number(searchParams.get("offset") ?? "0") || 0);
 
   const endpoint = q
     ? `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}&rating=pg-13&lang=en`
@@ -193,9 +96,7 @@ export async function GET(request: Request) {
       },
       {
         headers: {
-          "Cache-Control": q
-            ? "private, max-age=30"
-            : "private, max-age=120",
+          "Cache-Control": "private, no-store",
         },
       },
     );
@@ -205,4 +106,40 @@ export async function GET(request: Request) {
       { status: 502 },
     );
   }
+}
+
+function parsePaging(input: {
+  q?: unknown;
+  limit?: unknown;
+  offset?: unknown;
+}) {
+  const q = typeof input.q === "string" ? input.q.trim() : "";
+  const limit = Math.min(
+    24,
+    Math.max(1, Number(input.limit ?? 12) || 12),
+  );
+  const offset = Math.max(0, Number(input.offset ?? 0) || 0);
+  return { q, limit, offset };
+}
+
+/** Prefer POST — keeps search off filterable query strings. */
+export async function POST(request: Request) {
+  let body: { q?: unknown; limit?: unknown; offset?: unknown } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    body = {};
+  }
+  const { q, limit, offset } = parsePaging(body);
+  return searchGifs(q, limit, offset);
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const { q, limit, offset } = parsePaging({
+    q: searchParams.get("q") ?? "",
+    limit: searchParams.get("limit"),
+    offset: searchParams.get("offset"),
+  });
+  return searchGifs(q, limit, offset);
 }

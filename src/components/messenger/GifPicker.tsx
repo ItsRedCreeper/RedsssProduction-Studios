@@ -43,8 +43,6 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   }, [query]);
 
   async function fetchPage(offset: number, append: boolean) {
-    // Fresh searches cancel in-flight work; load-more uses its own controller
-    // so a slow page request isn't killed by preview traffic.
     if (!append) {
       abortRef.current?.abort();
     }
@@ -61,20 +59,23 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
       setMoreError(null);
     }
 
-    const params = new URLSearchParams({
-      limit: String(PAGE_SIZE),
-      offset: String(offset),
-    });
-    const q = debouncedRef.current;
-    if (q) params.set("q", q);
-
     try {
-      // Neutral path — ad blockers commonly filter /api/gifs and /api/giphy.
-      const res = await fetch(`/api/media-search?${params.toString()}`, {
+      // POST + first-party /api/m/* media — same pattern Discord uses so
+      // third-party GIF hosts never appear in the browser network panel.
+      const res = await fetch("/api/media-search", {
+        method: "POST",
         signal: controller.signal,
         credentials: "same-origin",
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
         cache: "no-store",
+        body: JSON.stringify({
+          q: debouncedRef.current || undefined,
+          limit: PAGE_SIZE,
+          offset,
+        }),
       });
       const body = (await res.json().catch(() => null)) as {
         error?: string;
@@ -86,7 +87,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
         throw new Error(
           res.redirected || /\/login/i.test(res.url)
             ? "Sign in required to search GIFs."
-            : "Could not load GIFs. If you use an ad blocker, allow this site.",
+            : "Could not load GIFs.",
         );
       }
       if (!res.ok) {
@@ -94,7 +95,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
           body.error ??
             (res.status === 429
               ? "GIF search hit the free rate limit. Wait a bit and try again."
-              : "Could not load GIFs"),
+              : "Could not load GIFs."),
         );
       }
       if (!append && seq !== seqRef.current) return;
@@ -115,12 +116,11 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       if (!append && seq !== seqRef.current) return;
-      const raw = err instanceof Error ? err.message : "Could not load GIFs";
+      const raw = err instanceof Error ? err.message : "Could not load GIFs.";
       if (/abort/i.test(raw)) return;
       const message = /failed to fetch/i.test(raw)
-        ? "Could not reach GIF search. If you use an ad blocker, allow this site."
+        ? "Could not reach GIF search. Wait a moment and try again."
         : raw;
-      // Keep already-loaded GIFs visible when pagination fails.
       if (append) {
         setMoreError(message);
       } else {
