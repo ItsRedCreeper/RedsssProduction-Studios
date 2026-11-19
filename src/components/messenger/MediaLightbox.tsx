@@ -1,7 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Minus,
+  Plus,
+  RotateCcw,
+  X,
+} from "lucide-react";
 import type { MessageAttachment } from "@/lib/message-media";
 import { isImageMime, isVideoMime } from "@/lib/message-media";
 
@@ -12,6 +25,10 @@ type MediaLightboxProps = {
   onIndexChange: (index: number) => void;
 };
 
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 5;
+const ZOOM_STEP = 0.25;
+
 export function MediaLightbox({
   items,
   index,
@@ -20,11 +37,41 @@ export function MediaLightbox({
 }: MediaLightboxProps) {
   const current = items[index];
   const hasMany = items.length > 1;
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+
+  useEffect(() => {
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  }, [index, current?.url]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
-      if (!hasMany) return;
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP));
+      }
+      if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        setZoom((value) => {
+          const next = Math.max(MIN_ZOOM, value - ZOOM_STEP);
+          if (next === MIN_ZOOM) setOffset({ x: 0, y: 0 });
+          return next;
+        });
+      }
+      if (event.key === "0") {
+        setZoom(1);
+        setOffset({ x: 0, y: 0 });
+      }
+      if (!hasMany || zoom > 1) return;
       if (event.key === "ArrowRight") {
         onIndexChange((index + 1) % items.length);
       }
@@ -34,18 +81,65 @@ export function MediaLightbox({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasMany, index, items.length, onClose, onIndexChange]);
+  }, [hasMany, index, items.length, onClose, onIndexChange, zoom]);
 
   if (!current) return null;
 
   const image = isImageMime(current.type, current.url);
   const video = isVideoMime(current.type, current.url);
+  const zoomed = zoom > 1;
+
+  function bumpZoom(delta: number) {
+    setZoom((value) => {
+      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value + delta));
+      if (next === MIN_ZOOM) setOffset({ x: 0, y: 0 });
+      return Math.round(next * 100) / 100;
+    });
+  }
+
+  function resetZoom() {
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  }
+
+  function onWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    if (!image) return;
+    event.preventDefault();
+    bumpZoom(event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP);
+  }
+
+  function onPointerDown(event: ReactPointerEvent<HTMLImageElement>) {
+    if (!image || !zoomed) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: offset.x,
+      originY: offset.y,
+    };
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLImageElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    setOffset({
+      x: drag.originX + (event.clientX - drag.startX),
+      y: drag.originY + (event.clientY - drag.startY),
+    });
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLImageElement>) {
+    if (dragRef.current?.pointerId === event.pointerId) {
+      dragRef.current = null;
+    }
+  }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <button
         type="button"
-        className="absolute inset-0 bg-black/85"
+        className="absolute inset-0 bg-black/90"
         aria-label="Close media"
         onClick={onClose}
       />
@@ -57,15 +151,54 @@ export function MediaLightbox({
       >
         <X className="h-5 w-5" strokeWidth={2} />
       </button>
-      <div className="relative z-10 flex max-h-[90vh] w-fit max-w-[min(100%,80rem)] flex-col items-center">
-        <div className="relative flex max-h-[85vh] w-full items-center justify-center">
-          {hasMany && (
+
+      {image && (
+        <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-white/10 bg-black/70 p-1 shadow-lg backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={() => bumpZoom(-ZOOM_STEP)}
+            disabled={zoom <= MIN_ZOOM}
+            className="rounded-md p-2 text-white hover:bg-white/10 disabled:opacity-40"
+            aria-label="Zoom out"
+          >
+            <Minus className="h-4 w-4" strokeWidth={2} />
+          </button>
+          <span className="min-w-[3.25rem] text-center text-xs font-medium tabular-nums text-[#dbdee1]">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            type="button"
+            onClick={() => bumpZoom(ZOOM_STEP)}
+            disabled={zoom >= MAX_ZOOM}
+            className="rounded-md p-2 text-white hover:bg-white/10 disabled:opacity-40"
+            aria-label="Zoom in"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            onClick={resetZoom}
+            disabled={zoom === MIN_ZOOM && offset.x === 0 && offset.y === 0}
+            className="rounded-md p-2 text-white hover:bg-white/10 disabled:opacity-40"
+            aria-label="Reset zoom"
+          >
+            <RotateCcw className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </div>
+      )}
+
+      <div className="relative z-10 flex h-full w-full max-w-[100vw] flex-col items-center justify-center px-2 py-14 sm:px-4">
+        <div
+          className="relative flex h-full max-h-[92vh] w-full max-w-[96vw] items-center justify-center overflow-hidden"
+          onWheel={onWheel}
+        >
+          {hasMany && !zoomed && (
             <button
               type="button"
               onClick={() =>
                 onIndexChange((index - 1 + items.length) % items.length)
               }
-              className="absolute -left-12 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 sm:left-2"
+              className="absolute left-2 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 sm:left-4"
               aria-label="Previous"
             >
               <ChevronLeft className="h-5 w-5" strokeWidth={2} />
@@ -76,14 +209,28 @@ export function MediaLightbox({
             <img
               src={current.url}
               alt=""
-              className="max-h-[85vh] max-w-full rounded-md object-contain"
+              draggable={false}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onDoubleClick={() => {
+                if (zoom > 1) resetZoom();
+                else bumpZoom(1);
+              }}
+              style={{
+                transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+              }}
+              className={`max-h-[92vh] max-w-[96vw] select-none rounded-md object-contain transition-transform duration-100 will-change-transform ${
+                zoomed ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"
+              }`}
             />
           ) : video ? (
             <video
               src={current.url}
               controls
               autoPlay
-              className="max-h-[85vh] max-w-full rounded-md bg-black"
+              className="max-h-[92vh] max-w-[96vw] rounded-md bg-black"
             />
           ) : (
             <a
@@ -95,11 +242,11 @@ export function MediaLightbox({
               Open file
             </a>
           )}
-          {hasMany && (
+          {hasMany && !zoomed && (
             <button
               type="button"
               onClick={() => onIndexChange((index + 1) % items.length)}
-              className="absolute -right-12 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 sm:right-2"
+              className="absolute right-2 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 sm:right-4"
               aria-label="Next"
             >
               <ChevronRight className="h-5 w-5" strokeWidth={2} />
@@ -107,7 +254,7 @@ export function MediaLightbox({
           )}
         </div>
         {hasMany && (
-          <p className="mt-3 text-xs text-[#949ba4]">
+          <p className="mt-2 text-xs text-[#949ba4]">
             {index + 1} / {items.length}
           </p>
         )}

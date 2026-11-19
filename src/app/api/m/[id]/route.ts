@@ -4,7 +4,8 @@ type Variant = "p" | "f";
 
 function upstreamFor(id: string, variant: Variant) {
   // Stable short Giphy CDN paths — avoids leaking long v1 URLs to the client.
-  const file = variant === "p" ? "100w.gif" : "giphy.gif";
+  // 200w keeps picker thumbs sharp without multi‑MB fixed_width files.
+  const file = variant === "p" ? "200w.gif" : "giphy.gif";
   return `https://media.giphy.com/media/${encodeURIComponent(id)}/${file}`;
 }
 

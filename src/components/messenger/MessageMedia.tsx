@@ -36,7 +36,7 @@ export function MessageMedia({ message }: MessageMediaProps) {
 
   return (
     <>
-      <div className="mt-2 flex max-w-xl flex-col gap-2">
+      <div className="mt-2 flex max-w-3xl flex-col gap-2">
         {items.map((item) => {
           const image = isImageMime(item.type, item.url);
           const video = isVideoMime(item.type, item.url);
@@ -52,7 +52,7 @@ export function MessageMedia({ message }: MessageMediaProps) {
                 <img
                   src={item.url}
                   alt=""
-                  className="max-h-80 max-w-full rounded-md object-contain"
+                  className="max-h-[32rem] max-w-full rounded-md object-contain"
                 />
               </button>
             );
@@ -67,7 +67,7 @@ export function MessageMedia({ message }: MessageMediaProps) {
                   src={item.url}
                   controls
                   preload="metadata"
-                  className="max-h-80 max-w-full"
+                  className="max-h-[32rem] max-w-full"
                 />
                 <button
                   type="button"

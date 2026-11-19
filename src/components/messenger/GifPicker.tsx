@@ -193,7 +193,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
 
   return (
     <div
-      className={`flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-[#1e1f22] bg-[#2b2d31] shadow-2xl shadow-black/50 ${className}`}
+      className={`flex w-[28rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-[#1e1f22] bg-[#2b2d31] shadow-2xl shadow-black/50 ${className}`}
     >
       <div className="border-b border-black/30 p-2">
         <label className="flex items-center gap-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5">
@@ -233,7 +233,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
           </div>
         )}
       </div>
-      <div className="max-h-80 overflow-y-auto p-2">
+      <div className="max-h-[26rem] overflow-y-auto p-2">
         {loading && (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-[#949ba4]">
             <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
@@ -250,19 +250,19 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
         )}
         {showGrid && (
           <>
-            <div className="columns-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {items.map((gif) => (
                 <button
                   key={gif.id}
                   type="button"
                   onClick={() => onPick(gif)}
-                  className="mb-2 block w-full overflow-hidden rounded-md bg-[#1e1f22] break-inside-avoid hover:ring-2 hover:ring-accent/70"
+                  className="aspect-square overflow-hidden rounded-md bg-[#1e1f22] hover:ring-2 hover:ring-accent/70"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={gif.previewUrl}
                     alt=""
-                    className="w-full object-cover"
+                    className="h-full w-full object-cover"
                     loading="lazy"
                     decoding="async"
                     referrerPolicy="no-referrer"
