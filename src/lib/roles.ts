@@ -1,5 +1,8 @@
 import type { Role } from "@/components/messenger/types";
 
+/** Stock default role color — treated as “no color” for username tinting. */
+export const NEUTRAL_ROLE_COLOR = "#99aab5";
+
 /** Higher `position` = higher in the hierarchy (Discord-style). */
 export function compareRolePositionDesc(a: Role, b: Role) {
   if (a.position !== b.position) return b.position - a.position;
@@ -28,18 +31,27 @@ export function highestRole(
   return owned[0] ?? null;
 }
 
+/** True when the role has a custom (non-stock) color. */
+export function hasCustomRoleColor(role: Pick<Role, "color">): boolean {
+  const color = role.color?.trim();
+  if (!color) return false;
+  const normalized = normalizeHex(color);
+  if (!normalized) return true;
+  return normalized.toLowerCase() !== NEUTRAL_ROLE_COLOR;
+}
+
 /**
- * Color for usernames: highest non-default role that has a color.
- * Default/@everyone alone → null (use default username color).
+ * Color for usernames: highest role (by position) with a custom color.
+ * Includes the default Member role when its color was customized.
+ * Stock `#99aab5` / empty → null (use default username color).
  */
 export function roleColorForMember(
   roles: Role[],
   roleIds: string[],
 ): string | null {
   for (const role of rolesForMember(roles, roleIds)) {
-    if (role.is_default) continue;
-    const color = role.color?.trim();
-    if (color) return ensureReadableRoleColor(color);
+    if (!hasCustomRoleColor(role)) continue;
+    return ensureReadableRoleColor(role.color.trim());
   }
   return null;
 }
@@ -56,14 +68,19 @@ export function highestHoistedRole(
   return null;
 }
 
-/** Roles to show as pills on profiles (highest first; skip default-only). */
+/**
+ * Roles to show as pills on profiles (highest first).
+ * Prefer non-default roles; if the member only has the default Member role,
+ * still show it when its color was customized so recoloring Member is visible.
+ */
 export function displayRolesForMember(
   roles: Role[],
   roleIds: string[],
 ): Role[] {
   const owned = rolesForMember(roles, roleIds);
-  const meaningful = owned.filter((role) => !role.is_default);
-  return meaningful.length > 0 ? meaningful : [];
+  const custom = owned.filter((role) => !role.is_default);
+  if (custom.length > 0) return custom;
+  return owned.filter((role) => hasCustomRoleColor(role));
 }
 
 /** Lift very dark role colors so names stay readable on dark UI. */

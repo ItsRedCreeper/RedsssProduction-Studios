@@ -939,12 +939,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       const nextMembers = (memberResult.data ?? []).map((row) => {
         const memberProfile = profileMap.get(row.user_id);
         const fromJunction = rolesByUser.get(row.user_id) ?? [];
-        const roleIds =
-          fromJunction.length > 0
-            ? fromJunction
-            : row.role_id
-              ? [row.role_id]
-              : [];
+        // Union junction + legacy server_members.role_id so neither path is dropped.
+        const roleIds = [
+          ...new Set([
+            ...fromJunction,
+            ...(row.role_id ? [row.role_id] : []),
+          ]),
+        ];
         return {
           user_id: row.user_id,
           nickname: row.nickname,
@@ -1184,9 +1185,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     let cancelled = false;
 
     async function reloadRoles() {
-      const [roleResult, rolesTable] = await Promise.all([
+      const [roleResult, rolesTable, memberResult] = await Promise.all([
         supabase.from("member_roles").select("*").eq("server_id", serverId),
         supabase.from("roles").select("*").eq("server_id", serverId),
+        supabase
+          .from("server_members")
+          .select("user_id, role_id")
+          .eq("server_id", serverId),
       ]);
       if (cancelled) return;
       const nextRoles = (rolesTable.data as Role[] | null) ?? [];
@@ -1197,11 +1202,22 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         list.push(row.role_id);
         rolesByUser.set(row.user_id, list);
       }
+      const legacyRoleByUser = new Map<string, string | null>();
+      for (const row of memberResult.data ?? []) {
+        legacyRoleByUser.set(row.user_id, row.role_id);
+      }
       setMembers((prev) =>
-        prev.map((member) => ({
-          ...member,
-          roleIds: rolesByUser.get(member.user_id) ?? [],
-        })),
+        prev.map((member) => {
+          const fromJunction = rolesByUser.get(member.user_id) ?? [];
+          const legacy = legacyRoleByUser.get(member.user_id);
+          const roleIds = [
+            ...new Set([
+              ...fromJunction,
+              ...(legacy ? [legacy] : []),
+            ]),
+          ];
+          return { ...member, roleIds };
+        }),
       );
     }
 
