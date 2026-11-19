@@ -28,7 +28,6 @@ function isAllowedGiphyHost(hostname: string) {
 
 function mapGif(row: GiphyItem) {
   if (!row.id || !row.images) return null;
-  // Prefer smaller assets to stay under beta rate limits / bandwidth.
   const full =
     row.images.downsized_medium ||
     row.images.downsized ||
@@ -42,12 +41,12 @@ function mapGif(row: GiphyItem) {
   const url = full?.url;
   const previewUrl = preview?.url || url;
   if (!url || !previewUrl) return null;
-  // Relative proxy URL so previews work on custom CDN hosts too.
   return {
     id: row.id,
     title: row.title ?? "",
     url,
-    previewUrl: `/api/gifs?media=${encodeURIComponent(previewUrl)}`,
+    // Direct CDN for grid speed; download still goes through our proxy.
+    previewUrl,
     width: Number(full?.width ?? preview?.width ?? 0) || 0,
     height: Number(full?.height ?? preview?.height ?? 0) || 0,
   };
@@ -130,18 +129,19 @@ export async function GET(request: Request) {
 
   const q = searchParams.get("q")?.trim() ?? "";
   const limit = Math.min(
-    20,
-    Math.max(1, Number(searchParams.get("limit") ?? "16") || 16),
+    50,
+    Math.max(1, Number(searchParams.get("limit") ?? "25") || 25),
   );
+  const offset = Math.max(0, Number(searchParams.get("offset") ?? "0") || 0);
 
   const endpoint = q
-    ? `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&limit=${limit}&rating=pg-13&lang=en`
-    : `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(key)}&limit=${limit}&rating=pg-13`;
+    ? `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}&rating=pg-13&lang=en`
+    : `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(key)}&limit=${limit}&offset=${offset}&rating=pg-13`;
 
   try {
     const res = await fetch(endpoint, {
       headers: { Accept: "application/json" },
-      next: { revalidate: q ? 30 : 120 },
+      cache: "no-store",
     });
     if (res.status === 429) {
       return NextResponse.json(
@@ -158,18 +158,23 @@ export async function GET(request: Request) {
         { status: 502 },
       );
     }
-    const data = (await res.json()) as { data?: GiphyItem[] };
+    const data = (await res.json()) as {
+      data?: GiphyItem[];
+      pagination?: {
+        total_count?: number;
+        count?: number;
+        offset?: number;
+      };
+    };
     const results = (data.data ?? []).map(mapGif).filter(Boolean);
-    return NextResponse.json(
-      { results },
-      {
-        headers: {
-          "Cache-Control": q
-            ? "private, max-age=30"
-            : "private, max-age=120",
-        },
-      },
-    );
+    const total = data.pagination?.total_count ?? results.length;
+    const nextOffset = offset + results.length;
+    return NextResponse.json({
+      results,
+      nextOffset,
+      hasMore: nextOffset < total && results.length > 0,
+      total,
+    });
   } catch {
     return NextResponse.json(
       { error: "Could not load GIFs." },

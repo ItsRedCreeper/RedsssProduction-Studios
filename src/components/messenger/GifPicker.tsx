@@ -20,85 +20,99 @@ type GifPickerProps = {
   className?: string;
 };
 
-type CacheEntry = { at: number; results: GifResult[] };
-
-const cache = new Map<string, CacheEntry>();
-const CACHE_MS = 2 * 60 * 1000;
+const PAGE_SIZE = 25;
 
 export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [items, setItems] = useState<GifResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const seqRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebounced(query.trim()), 350);
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  useEffect(() => {
-    const key = debounced.toLowerCase();
-    const cached = cache.get(key);
-    if (cached && Date.now() - cached.at < CACHE_MS) {
-      setItems(cached.results);
+  async function fetchPage(offset: number, append: boolean) {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const seq = ++seqRef.current;
+
+    if (append) setLoadingMore(true);
+    else {
+      setLoading(true);
       setError(null);
-      setLoading(false);
-      return;
     }
 
-    const seq = ++seqRef.current;
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(offset),
+    });
+    if (debounced) params.set("q", debounced);
 
-    const path = debounced
-      ? `/api/gifs?q=${encodeURIComponent(debounced)}&limit=16`
-      : "/api/gifs?limit=16";
-
-    void fetch(path, { signal: controller.signal })
-      .then(async (res) => {
-        const body = (await res.json().catch(() => null)) as {
-          error?: string;
-          results?: GifResult[];
-        } | null;
-        if (!res.ok) {
-          throw new Error(
-            body?.error ??
-              (res.status === 429
-                ? "GIF search hit the free rate limit. Wait a bit and try again."
-                : "Could not load GIFs"),
-          );
-        }
-        return body?.results ?? [];
-      })
-      .then((results) => {
-        if (seq !== seqRef.current) return;
-        cache.set(key, { at: Date.now(), results });
-        setItems(results);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        if (controller.signal.aborted) return;
-        if (seq !== seqRef.current) return;
-        setItems([]);
-        const raw =
-          err instanceof Error ? err.message : "Could not load GIFs";
-        if (/abort/i.test(raw)) return;
-        setError(
-          /failed to fetch/i.test(raw)
-            ? "Could not reach GIF search. Wait a moment and open GIFs again."
-            : raw,
-        );
-      })
-      .finally(() => {
-        if (seq === seqRef.current) setLoading(false);
+    try {
+      const res = await fetch(`/api/gifs?${params.toString()}`, {
+        signal: controller.signal,
       });
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+        results?: GifResult[];
+        hasMore?: boolean;
+        nextOffset?: number;
+      } | null;
+      if (!res.ok) {
+        throw new Error(
+          body?.error ??
+            (res.status === 429
+              ? "GIF search hit the free rate limit. Wait a bit and try again."
+              : "Could not load GIFs"),
+        );
+      }
+      if (seq !== seqRef.current) return;
+      const results = body?.results ?? [];
+      setItems((prev) => {
+        if (!append) return results;
+        const seen = new Set(prev.map((item) => item.id));
+        return [...prev, ...results.filter((item) => !seen.has(item.id))];
+      });
+      setHasMore(Boolean(body?.hasMore));
+      setNextOffset(body?.nextOffset ?? offset + results.length);
+      setError(null);
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      if (seq !== seqRef.current) return;
+      if (!append) setItems([]);
+      const raw = err instanceof Error ? err.message : "Could not load GIFs";
+      if (/abort/i.test(raw)) return;
+      setError(
+        /failed to fetch/i.test(raw)
+          ? "Could not reach GIF search. Wait a moment and open GIFs again."
+          : raw,
+      );
+    } finally {
+      if (seq === seqRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    }
+  }
 
+  useEffect(() => {
+    setItems([]);
+    setHasMore(false);
+    setNextOffset(0);
+    void fetchPage(0, false);
     return () => {
-      controller.abort();
+      abortRef.current?.abort();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when search changes
   }, [debounced]);
 
   return (
@@ -133,24 +147,44 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
           </p>
         )}
         {!loading && !error && items.length > 0 && (
-          <div className="columns-2 gap-2">
-            {items.map((gif) => (
+          <>
+            <div className="columns-2 gap-2">
+              {items.map((gif) => (
+                <button
+                  key={gif.id}
+                  type="button"
+                  onClick={() => onPick(gif)}
+                  className="mb-2 block w-full overflow-hidden rounded-md bg-[#1e1f22] break-inside-avoid hover:ring-2 hover:ring-accent/70"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={gif.previewUrl}
+                    alt=""
+                    className="w-full object-cover"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                </button>
+              ))}
+            </div>
+            {hasMore && (
               <button
-                key={gif.id}
                 type="button"
-                onClick={() => onPick(gif)}
-                className="mb-2 block w-full overflow-hidden rounded-md bg-[#1e1f22] break-inside-avoid hover:ring-2 hover:ring-accent/70"
+                disabled={loadingMore}
+                onClick={() => void fetchPage(nextOffset, true)}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-md bg-[#1e1f22] px-3 py-2 text-sm font-medium text-[#dbdee1] hover:bg-[#232428] disabled:opacity-60"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={gif.previewUrl}
-                  alt=""
-                  className="w-full object-cover"
-                  loading="lazy"
-                />
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+                    Loading…
+                  </>
+                ) : (
+                  "Load more"
+                )}
               </button>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>
