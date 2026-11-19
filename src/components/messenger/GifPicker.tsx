@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 
 export type GifResult = {
@@ -20,55 +20,84 @@ type GifPickerProps = {
   className?: string;
 };
 
+type CacheEntry = { at: number; results: GifResult[] };
+
+const cache = new Map<string, CacheEntry>();
+const CACHE_MS = 2 * 60 * 1000;
+
 export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [items, setItems] = useState<GifResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const seqRef = useRef(0);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(query.trim()), 280);
+    const timer = window.setTimeout(() => setDebounced(query.trim()), 350);
     return () => window.clearTimeout(timer);
   }, [query]);
 
   useEffect(() => {
-    let cancelled = false;
+    const key = debounced.toLowerCase();
+    const cached = cache.get(key);
+    if (cached && Date.now() - cached.at < CACHE_MS) {
+      setItems(cached.results);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    const seq = ++seqRef.current;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
+
     const path = debounced
-      ? `/api/gifs?q=${encodeURIComponent(debounced)}`
-      : "/api/gifs";
-    void fetch(path)
+      ? `/api/gifs?q=${encodeURIComponent(debounced)}&limit=16`
+      : "/api/gifs?limit=16";
+
+    void fetch(path, { signal: controller.signal })
       .then(async (res) => {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+          results?: GifResult[];
+        } | null;
         if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as {
-            error?: string;
-          } | null;
-          throw new Error(body?.error ?? "Could not load GIFs");
-        }
-        return (await res.json()) as { results: GifResult[] };
-      })
-      .then((data) => {
-        if (!cancelled) setItems(data.results ?? []);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setItems([]);
-          const raw =
-            err instanceof Error ? err.message : "Could not load GIFs";
-          setError(
-            /failed to fetch/i.test(raw)
-              ? "Could not reach GIF search. Try disabling blockers, or refresh."
-              : raw,
+          throw new Error(
+            body?.error ??
+              (res.status === 429
+                ? "GIF search hit the free rate limit. Wait a bit and try again."
+                : "Could not load GIFs"),
           );
         }
+        return body?.results ?? [];
+      })
+      .then((results) => {
+        if (seq !== seqRef.current) return;
+        cache.set(key, { at: Date.now(), results });
+        setItems(results);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        if (seq !== seqRef.current) return;
+        setItems([]);
+        const raw =
+          err instanceof Error ? err.message : "Could not load GIFs";
+        if (/abort/i.test(raw)) return;
+        setError(
+          /failed to fetch/i.test(raw)
+            ? "Could not reach GIF search. Wait a moment and open GIFs again."
+            : raw,
+        );
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (seq === seqRef.current) setLoading(false);
       });
+
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [debounced]);
 
@@ -82,7 +111,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search GIPHY"
+            placeholder="Search GIFs"
             className="min-w-0 flex-1 bg-transparent text-sm text-[#dbdee1] outline-none placeholder:text-[#6d6f78]"
             autoFocus
           />
