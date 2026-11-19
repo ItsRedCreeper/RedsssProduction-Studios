@@ -57,16 +57,18 @@ export function roleColorForMember(
   return null;
 }
 
-/** Highest hoisted role (for member-list section). Default role never hoists. */
-export function highestHoistedRole(
+/**
+ * Role used for member-list grouping: highest role by position.
+ * Every role counts the same (including the default Member role).
+ * If the member has no role ids, fall back to the server default role.
+ */
+export function memberListGroupRole(
   roles: Role[],
   roleIds: string[],
 ): Role | null {
-  for (const role of rolesForMember(roles, roleIds)) {
-    if (role.is_default) continue;
-    if (role.hoist) return role;
-  }
-  return null;
+  const highest = highestRole(roles, roleIds);
+  if (highest) return highest;
+  return roles.find((role) => role.is_default) ?? null;
 }
 
 /**

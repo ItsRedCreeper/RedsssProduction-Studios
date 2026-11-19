@@ -361,7 +361,6 @@ export function ServerSettingsModal({
     role: Role,
     nextName: string,
     nextColor: string,
-    nextHoist: boolean,
     nextPermissions: Record<string, boolean>,
   ) {
     const trimmed = nextName.trim();
@@ -380,7 +379,6 @@ export function ServerSettingsModal({
       .update({
         name: trimmed,
         color: nextColor,
-        hoist: role.is_default ? false : nextHoist,
         permissions: nextPermissions,
       })
       .eq("id", role.id)
@@ -397,6 +395,73 @@ export function ServerSettingsModal({
     onRolesChanged?.(next);
   }
 
+  async function setDefaultRole(roleId: string) {
+    const target = roles.find((role) => role.id === roleId);
+    if (!target || target.is_default) return;
+    setError(null);
+    const supabase = createClient();
+    const previous = roles.find((role) => role.is_default);
+
+    // Only one default per server — clear others, then mark this one.
+    const { error: clearError } = await supabase
+      .from("roles")
+      .update({ is_default: false })
+      .eq("server_id", server.id)
+      .eq("is_default", true);
+    if (clearError) {
+      setError(clearError.message);
+      return;
+    }
+    const { data, error: setErrorMsg } = await supabase
+      .from("roles")
+      .update({ is_default: true })
+      .eq("id", roleId)
+      .select("*")
+      .single();
+    if (setErrorMsg || !data) {
+      setError(setErrorMsg?.message ?? "Could not set default role.");
+      return;
+    }
+
+    // Everyone gets the new default (like Discord @everyone — always present).
+    const missing = members.filter((member) => !member.roleIds.includes(roleId));
+    if (missing.length > 0) {
+      const { error: assignError } = await supabase.from("member_roles").insert(
+        missing.map((member) => ({
+          server_id: server.id,
+          user_id: member.user_id,
+          role_id: roleId,
+        })),
+      );
+      // Unique conflicts are fine if some already had it.
+      if (assignError && !/duplicate|unique/i.test(assignError.message)) {
+        setError(assignError.message);
+        return;
+      }
+      onMembersChanged(
+        members.map((member) =>
+          member.roleIds.includes(roleId)
+            ? member
+            : {
+                ...member,
+                roleIds: [...member.roleIds, roleId],
+              },
+        ),
+      );
+    }
+
+    const next = roles
+      .map((role) => {
+        if (role.id === roleId) return { ...data, is_default: true };
+        if (previous && role.id === previous.id)
+          return { ...role, is_default: false };
+        return { ...role, is_default: false };
+      })
+      .sort(compareRolePositionDesc);
+    setRoles(next);
+    onRolesChanged?.(next);
+  }
+
   async function moveRole(roleId: string, direction: -1 | 1) {
     // Display is highest-first; direction -1 = move up in list = higher position.
     const ordered = [...roles].sort(compareRolePositionDesc);
@@ -407,10 +472,6 @@ export function ServerSettingsModal({
     const current = ordered[index];
     const other = ordered[swapIndex];
     if (!current || !other) return;
-    if (current.is_default || other.is_default) {
-      setError("The default Member role stays at the bottom of the hierarchy.");
-      return;
-    }
     setError(null);
     const supabase = createClient();
     const aPos = current.position;
@@ -968,8 +1029,10 @@ export function ServerSettingsModal({
               <div className="space-y-4">
                 <p className="text-xs text-muted">
                   Higher roles appear first in the member list and win for
-                  username color. Use Display separately to hoist a role as its
-                  own member-list section.
+                  username color. Every role (including the default) gets its
+                  own member-list section. The default role is always on every
+                  member and cannot be removed from them — same as Discord’s
+                  @everyone.
                 </p>
                 <ul className="space-y-2">
                   {roles.length === 0 && (
@@ -981,18 +1044,11 @@ export function ServerSettingsModal({
                       role={role}
                       confirm={confirmRoleId === role.id}
                       canDelete={!role.is_default}
-                      canMoveUp={
-                        !role.is_default &&
-                        index > 0 &&
-                        !roles[index - 1]?.is_default
-                      }
-                      canMoveDown={
-                        !role.is_default &&
-                        index < roles.length - 1 &&
-                        !roles[index + 1]?.is_default
-                      }
+                      canMoveUp={index > 0}
+                      canMoveDown={index < roles.length - 1}
                       onMoveUp={() => void moveRole(role.id, -1)}
                       onMoveDown={() => void moveRole(role.id, 1)}
+                      onSetDefault={() => void setDefaultRole(role.id)}
                       onSave={saveRole}
                       onAskDelete={() => setConfirmRoleId(role.id)}
                       onCancelDelete={() => setConfirmRoleId(null)}
@@ -1525,6 +1581,7 @@ function RoleRow({
   canMoveDown = false,
   onMoveUp,
   onMoveDown,
+  onSetDefault,
   onSave,
   onAskDelete,
   onCancelDelete,
@@ -1537,11 +1594,11 @@ function RoleRow({
   canMoveDown?: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onSetDefault: () => void;
   onSave: (
     role: Role,
     name: string,
     color: string,
-    hoist: boolean,
     permissions: Record<string, boolean>,
   ) => void;
   onAskDelete: () => void;
@@ -1550,7 +1607,6 @@ function RoleRow({
 }) {
   const [name, setName] = useState(role.name);
   const [color, setColor] = useState(role.color || "#dc2626");
-  const [hoist, setHoist] = useState(Boolean(role.hoist));
   const [perms, setPerms] = useState<Record<string, boolean>>(() => {
     const raw = role.permissions;
     return raw && typeof raw === "object" && !Array.isArray(raw)
@@ -1561,14 +1617,13 @@ function RoleRow({
   useEffect(() => {
     setName(role.name);
     setColor(role.color || "#dc2626");
-    setHoist(Boolean(role.hoist));
     const raw = role.permissions;
     setPerms(
       raw && typeof raw === "object" && !Array.isArray(raw)
         ? (raw as Record<string, boolean>)
         : {},
     );
-  }, [role.name, role.color, role.hoist, role.permissions]);
+  }, [role.name, role.color, role.permissions]);
 
   const baselinePerms =
     role.permissions &&
@@ -1580,7 +1635,6 @@ function RoleRow({
     name.trim() !== role.name ||
     (color || "#dc2626").toLowerCase() !==
       (role.color || "#dc2626").toLowerCase() ||
-    Boolean(hoist) !== Boolean(role.hoist) ||
     ROLE_PERM_OPTIONS.some(
       (option) => Boolean(perms[option.key]) !== Boolean(baselinePerms[option.key]),
     );
@@ -1625,13 +1679,22 @@ function RoleRow({
           dirty={dirty}
           disabled={!name.trim()}
           label="Save"
-          onClick={() => onSave(role, name, color, hoist, perms)}
+          onClick={() => onSave(role, name, color, perms)}
         />
         {role.is_default ? (
           <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
             Default
           </span>
-        ) : confirm ? (
+        ) : (
+          <button
+            type="button"
+            onClick={onSetDefault}
+            className="rounded-md px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#b5bac1] hover:bg-white/10 hover:text-white"
+          >
+            Make default
+          </button>
+        )}
+        {role.is_default ? null : confirm ? (
           <>
             <button
               type="button"
@@ -1658,19 +1721,6 @@ function RoleRow({
           </button>
         ) : null}
       </div>
-      {!role.is_default && (
-        <label className="flex items-start gap-2 px-1 text-[11px] text-[#dbdee1]">
-          <input
-            type="checkbox"
-            checked={hoist}
-            onChange={(event) => setHoist(event.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
-          />
-          <span>
-            Display role members separately from online members
-          </span>
-        </label>
-      )}
       <div className="grid grid-cols-2 gap-1.5 px-1 pb-1 sm:grid-cols-3">
         {ROLE_PERM_OPTIONS.map((option) => (
           <label

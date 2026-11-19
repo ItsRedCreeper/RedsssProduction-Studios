@@ -12,7 +12,8 @@ import { resolveDisplayStatus } from "@/lib/presence";
 import {
   compareRolePositionDesc,
   ensureReadableRoleColor,
-  highestHoistedRole,
+  hasCustomRoleColor,
+  memberListGroupRole,
   roleColorForMember,
 } from "@/lib/roles";
 
@@ -154,29 +155,30 @@ export function MemberList({
         return displayNameOf(a).localeCompare(displayNameOf(b));
       });
 
+    // Every role (including default Member) gets its own section when someone
+    // has it as their highest role — no separate hoist flag.
     const result: MemberGroup[] = [];
-    const hoisted = [...roles]
-      .filter((role) => role.hoist && !role.is_default)
-      .sort(compareRolePositionDesc);
-
+    const orderedRoles = [...roles].sort(compareRolePositionDesc);
     const assigned = new Set<string>();
-    for (const role of hoisted) {
+
+    for (const role of orderedRoles) {
       const rows = members.filter((member) => {
-        const hoist = highestHoistedRole(roles, member.roleIds);
-        return hoist?.id === role.id;
+        const group = memberListGroupRole(roles, member.roleIds);
+        return group?.id === role.id;
       });
       if (rows.length === 0) continue;
       for (const row of rows) assigned.add(row.user_id);
       result.push({
         key: role.id,
         title: role.name,
-        color: role.color?.trim()
+        color: hasCustomRoleColor(role)
           ? ensureReadableRoleColor(role.color)
           : null,
         members: sortMembers(rows),
       });
     }
 
+    // Anyone somehow without a role still lands in Online / Offline.
     const remainder = members.filter((member) => !assigned.has(member.user_id));
     const online = sortMembers(remainder.filter(isOnline));
     const offline = sortMembers(remainder.filter((m) => !isOnline(m)));
