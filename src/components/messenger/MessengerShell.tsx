@@ -3068,10 +3068,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
     try {
-      const res = await fetch(gif.url);
+      const res = await fetch(
+        `/api/gifs?download=${encodeURIComponent(gif.url)}`,
+      );
       if (!res.ok) throw new Error("Could not download GIF");
       const blob = await res.blob();
-      const safeTitle = (gif.title || "giphy")
+      const safeTitle = (gif.title || "gif")
         .replace(/[^\w\-]+/g, "_")
         .slice(0, 40);
       const file = new File([blob], `${safeTitle || "gif"}.gif`, {

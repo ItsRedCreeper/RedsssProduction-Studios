@@ -37,8 +37,8 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
     setLoading(true);
     setError(null);
     const path = debounced
-      ? `/api/giphy?q=${encodeURIComponent(debounced)}`
-      : "/api/giphy";
+      ? `/api/gifs?q=${encodeURIComponent(debounced)}`
+      : "/api/gifs";
     void fetch(path)
       .then(async (res) => {
         if (!res.ok) {
@@ -55,7 +55,13 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
       .catch((err: unknown) => {
         if (!cancelled) {
           setItems([]);
-          setError(err instanceof Error ? err.message : "Could not load GIFs");
+          const raw =
+            err instanceof Error ? err.message : "Could not load GIFs";
+          setError(
+            /failed to fetch/i.test(raw)
+              ? "Could not reach GIF search. Try disabling blockers, or refresh."
+              : raw,
+          );
         }
       })
       .finally(() => {
