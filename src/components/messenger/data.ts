@@ -35,6 +35,77 @@ export function formatTimestamp(iso: string) {
   return `${month} ${day}, ${hours}:${minutes} ${ampm}`;
 }
 
+/** Short time for compact message gutter hover (Discord-style). */
+export function formatMessageTime(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${hours}:${minutes} ${ampm}`;
+}
+
+/** Discord groups consecutive same-author messages within ~7 minutes. */
+export const MESSAGE_GROUP_WINDOW_MS = 7 * 60 * 1000;
+
+function sameLocalDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * Whether `current` should render without avatar/username under `previous`
+ * (Discord message grouping).
+ */
+export function shouldGroupWithPrevious(
+  previous:
+    | {
+        user_id: string;
+        created_at: string;
+        reply_to_id?: string | null;
+        reply_to?: unknown;
+      }
+    | null
+    | undefined,
+  current: {
+    user_id: string;
+    created_at: string;
+    reply_to_id?: string | null;
+    reply_to?: unknown;
+  },
+) {
+  if (!previous) return false;
+  if (previous.user_id !== current.user_id) return false;
+  // Replies start a new group so the reply preview sits under a full header.
+  if (current.reply_to_id || current.reply_to) return false;
+  const prevT = Date.parse(previous.created_at);
+  const curT = Date.parse(current.created_at);
+  if (Number.isNaN(prevT) || Number.isNaN(curT)) return false;
+  if (Math.abs(curT - prevT) > MESSAGE_GROUP_WINDOW_MS) return false;
+  if (!sameLocalDay(new Date(prevT), new Date(curT))) return false;
+  return true;
+}
+
+/** Day divider label: Today / Yesterday / Month Day, Year */
+export function formatDayDivider(iso: string, now = Date.now()) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const current = new Date(now);
+  if (sameLocalDay(date, current)) return "Today";
+  const yesterday = new Date(current);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (sameLocalDay(date, yesterday)) return "Yesterday";
+  const month = MONTHS[date.getMonth()];
+  const day = date.getDate();
+  const year = date.getFullYear();
+  if (year === current.getFullYear()) return `${month} ${day}`;
+  return `${month} ${day}, ${year}`;
+}
+
 export type PresenceStatus = "online" | "idle" | "dnd" | "offline" | "invisible";
 
 export function statusLabel(status: string | null | undefined) {

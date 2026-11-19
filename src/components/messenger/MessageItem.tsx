@@ -26,7 +26,10 @@ import {
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { formatTimestamp } from "@/components/messenger/data";
+import {
+  formatMessageTime,
+  formatTimestamp,
+} from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
 import { LinkEmbeds } from "@/components/messenger/LinkEmbeds";
 import { MessageMedia } from "@/components/messenger/MessageMedia";
@@ -106,6 +109,11 @@ function MessageFloatingMenu({
 type MessageItemProps = {
   message: ChatMessage;
   isOwn: boolean;
+  /**
+   * Discord consecutive-message grouping: hide avatar + username and show a
+   * hover timestamp in the left gutter instead.
+   */
+  compact?: boolean;
   reactions?: ReactionGroup[];
   currentUserId?: string | null;
   currentUsername?: string | null;
@@ -136,6 +144,7 @@ type MessageItemProps = {
 export function MessageItem({
   message,
   isOwn,
+  compact = false,
   reactions = [],
   currentUserId = null,
   currentUsername,
@@ -259,30 +268,65 @@ export function MessageItem({
     }
   }
 
+  const statusBits = (
+    <>
+      {message.edited_at && (
+        <span className="text-[11px] text-muted">(edited)</span>
+      )}
+      {message.pinned && (
+        <span className="inline-flex items-center gap-1 text-[11px] text-accent">
+          <Pin className="h-3 w-3" strokeWidth={2} />
+          Pinned
+        </span>
+      )}
+      {message.optimistic && !message.failed && (
+        <span className="text-[11px] text-muted">Sending…</span>
+      )}
+      {message.failed && (
+        <span className="text-[11px] text-accent">Failed to send</span>
+      )}
+    </>
+  );
+
   return (
     <>
     <article
       id={`message-${message.id}`}
       data-message-id={message.id}
-      className={`group relative flex items-start gap-4 px-4 py-0.5 transition-colors hover:bg-white/[0.03] ${
-        message.optimistic ? "opacity-70" : ""
-      } ${message.failed ? "bg-accent-muted/40" : ""}`}
+      className={`group relative flex gap-4 px-4 transition-colors hover:bg-white/[0.03] ${
+        compact ? "items-start py-0.5" : "items-start py-0.5"
+      } ${message.optimistic ? "opacity-70" : ""} ${
+        message.failed ? "bg-accent-muted/40" : ""
+      }`}
     >
-      <button
-        type="button"
-        className="mt-0.5 shrink-0 self-start rounded-full"
-        onClick={(event) => openAuthorProfile(event.currentTarget)}
-        aria-label={`Open ${author}'s profile`}
-      >
-        <UserAvatar
-          username={author}
-          avatarUrl={message.profiles?.avatar_url}
-          size="md"
-        />
-      </button>
+      {compact ? (
+        <div className="flex w-10 shrink-0 justify-end self-start pt-1">
+          <time
+            dateTime={message.created_at}
+            title={formatTimestamp(message.created_at)}
+            className="select-none text-[10px] leading-5 text-[#949ba4] opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            {formatMessageTime(message.created_at)}
+          </time>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="mt-0.5 shrink-0 self-start rounded-full"
+          onClick={(event) => openAuthorProfile(event.currentTarget)}
+          aria-label={`Open ${author}'s profile`}
+        >
+          <UserAvatar
+            username={author}
+            avatarUrl={message.profiles?.avatar_url}
+            size="md"
+          />
+        </button>
+      )}
 
-      <div className="min-w-0 flex-1 py-0.5 pr-2">
-        {reply &&
+      <div className={`min-w-0 flex-1 pr-2 ${compact ? "py-0" : "py-0.5"}`}>
+        {!compact &&
+          reply &&
           (replyHidden ? (
             <div className="mb-1 flex max-w-full items-center gap-1.5 text-left">
               <span
@@ -322,33 +366,31 @@ export function MessageItem({
             </button>
           ))}
 
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <button
-            type="button"
-            onClick={(event) => openAuthorProfile(event.currentTarget)}
-            className="text-[0.95rem] font-medium text-foreground hover:underline"
-          >
-            {author}
-          </button>
-          <time className="text-[11px] text-muted">
-            {formatTimestamp(message.created_at)}
-          </time>
-          {message.edited_at && (
-            <span className="text-[11px] text-muted">(edited)</span>
+        {!compact && (
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <button
+              type="button"
+              onClick={(event) => openAuthorProfile(event.currentTarget)}
+              className="text-[0.95rem] font-medium text-foreground hover:underline"
+            >
+              {author}
+            </button>
+            <time className="text-[11px] text-muted">
+              {formatTimestamp(message.created_at)}
+            </time>
+            {statusBits}
+          </div>
+        )}
+
+        {compact &&
+          (message.edited_at ||
+            message.pinned ||
+            message.optimistic ||
+            message.failed) && (
+            <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              {statusBits}
+            </div>
           )}
-          {message.pinned && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-accent">
-              <Pin className="h-3 w-3" strokeWidth={2} />
-              Pinned
-            </span>
-          )}
-          {message.optimistic && !message.failed && (
-            <span className="text-[11px] text-muted">Sending…</span>
-          )}
-          {message.failed && (
-            <span className="text-[11px] text-accent">Failed to send</span>
-          )}
-        </div>
 
         {editing ? (
           <div className="mt-1 space-y-2">

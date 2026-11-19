@@ -3,6 +3,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, Hash, MessagesSquare } from "lucide-react";
 import { MessageItem } from "@/components/messenger/MessageItem";
+import {
+  formatDayDivider,
+  shouldGroupWithPrevious,
+} from "@/components/messenger/data";
 import type { ServerEmoji } from "@/lib/emoji";
 import type { MentionMaps } from "@/lib/mentions";
 import type { ChatMessage, ReactionGroup } from "@/components/messenger/types";
@@ -276,42 +280,69 @@ export function ChatTimeline({
               </div>
             )}
 
-            {messages.map((message) => (
-              <MessageItem
-                key={message.id}
-                message={message}
-                isOwn={!!currentUserId && message.user_id === currentUserId}
-                currentUserId={currentUserId}
-                currentUsername={currentUsername}
-                roleNames={roleNames}
-                channelNames={channelNames}
-                mentionMaps={mentionMaps}
-                canDeleteOthers={canDeleteOthers}
-                preferFriendNickname={preferFriendNickname}
-                serverNickByUserId={serverNickByUserId}
-                readOnly={readOnly}
-                reactions={reactionMap[message.id] ?? []}
-                customEmojis={customEmojis}
-                emojiCatalog={emojiCatalog}
-                serverNamesById={serverNamesById}
-                preferredServerId={preferredServerId}
-                reactorNamesById={reactorNamesById}
-                onReply={onReply}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onJumpToReply={onJumpToReply}
-                onReact={
-                  readOnly || !onReact
-                    ? undefined
-                    : (emoji) => onReact(message.id, emoji)
-                }
-                onTogglePin={
-                  readOnly || !onTogglePin
-                    ? undefined
-                    : () => onTogglePin(message)
-                }
-              />
-            ))}
+            {messages.map((message, index) => {
+              const previous = index > 0 ? messages[index - 1] : null;
+              const compact = shouldGroupWithPrevious(previous, message);
+              const prevDay = previous
+                ? formatDayDivider(previous.created_at)
+                : null;
+              const dayLabel = formatDayDivider(message.created_at);
+              const showDayDivider = !previous || prevDay !== dayLabel;
+
+              return (
+                <div key={message.id}>
+                  {showDayDivider && dayLabel ? (
+                    <div
+                      className="relative mx-4 my-3 flex items-center"
+                      role="separator"
+                      aria-label={dayLabel}
+                    >
+                      <div className="h-px flex-1 bg-[#3f4147]" />
+                      <span className="px-2 text-[12px] font-semibold text-[#949ba4]">
+                        {dayLabel}
+                      </span>
+                      <div className="h-px flex-1 bg-[#3f4147]" />
+                    </div>
+                  ) : null}
+                  <MessageItem
+                    message={message}
+                    compact={compact && !showDayDivider}
+                    isOwn={
+                      !!currentUserId && message.user_id === currentUserId
+                    }
+                    currentUserId={currentUserId}
+                    currentUsername={currentUsername}
+                    roleNames={roleNames}
+                    channelNames={channelNames}
+                    mentionMaps={mentionMaps}
+                    canDeleteOthers={canDeleteOthers}
+                    preferFriendNickname={preferFriendNickname}
+                    serverNickByUserId={serverNickByUserId}
+                    readOnly={readOnly}
+                    reactions={reactionMap[message.id] ?? []}
+                    customEmojis={customEmojis}
+                    emojiCatalog={emojiCatalog}
+                    serverNamesById={serverNamesById}
+                    preferredServerId={preferredServerId}
+                    reactorNamesById={reactorNamesById}
+                    onReply={onReply}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onJumpToReply={onJumpToReply}
+                    onReact={
+                      readOnly || !onReact
+                        ? undefined
+                        : (emoji) => onReact(message.id, emoji)
+                    }
+                    onTogglePin={
+                      readOnly || !onTogglePin
+                        ? undefined
+                        : () => onTogglePin(message)
+                    }
+                  />
+                </div>
+              );
+            })}
             <div ref={bottomRef} aria-hidden className="h-px w-full" />
           </div>
         )}
