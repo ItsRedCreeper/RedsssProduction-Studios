@@ -20,11 +20,41 @@ type GifPickerProps = {
   className?: string;
 };
 
+type GifCategory = {
+  id: string;
+  label: string;
+  /** Empty = trending endpoint; otherwise a search query. */
+  query: string;
+};
+
+/** Curated like Discord — static list so listing categories doesn't burn API quota. */
+const CATEGORIES: GifCategory[] = [
+  { id: "trending", label: "Trending", query: "" },
+  { id: "celebrate", label: "Celebrate", query: "celebrate" },
+  { id: "love", label: "Love", query: "love" },
+  { id: "happy", label: "Happy", query: "happy" },
+  { id: "sad", label: "Sad", query: "sad" },
+  { id: "angry", label: "Angry", query: "angry" },
+  { id: "excited", label: "Excited", query: "excited" },
+  { id: "dance", label: "Dance", query: "dance" },
+  { id: "agree", label: "Agree", query: "agree yes" },
+  { id: "no", label: "No", query: "no nope" },
+  { id: "shrug", label: "Shrug", query: "shrug" },
+  { id: "facepalm", label: "Facepalm", query: "facepalm" },
+  { id: "confused", label: "Confused", query: "confused" },
+  { id: "awkward", label: "Awkward", query: "awkward" },
+  { id: "hungry", label: "Hungry", query: "hungry food" },
+  { id: "sleepy", label: "Sleepy", query: "sleepy tired" },
+  { id: "wow", label: "Wow", query: "wow mind blown" },
+  { id: "lol", label: "LOL", query: "lol laughing" },
+];
+
 const PAGE_SIZE = 12;
 
 export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
+  const [categoryId, setCategoryId] = useState("trending");
   const [items, setItems] = useState<GifResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -34,8 +64,13 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   const [moreError, setMoreError] = useState<string | null>(null);
   const seqRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-  const debouncedRef = useRef(debounced);
-  debouncedRef.current = debounced;
+
+  const activeCategory =
+    CATEGORIES.find((cat) => cat.id === categoryId) ?? CATEGORIES[0];
+  // Typed search wins; otherwise use the selected category query ("" = trending).
+  const searchTerm = debounced || activeCategory.query;
+  const searchTermRef = useRef(searchTerm);
+  searchTermRef.current = searchTerm;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebounced(query.trim()), 350);
@@ -60,8 +95,6 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
     }
 
     try {
-      // POST + first-party /api/m/* media — same pattern Discord uses so
-      // third-party GIF hosts never appear in the browser network panel.
       const res = await fetch("/api/media-search", {
         method: "POST",
         signal: controller.signal,
@@ -72,7 +105,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
         },
         cache: "no-store",
         body: JSON.stringify({
-          q: debouncedRef.current || undefined,
+          q: searchTermRef.current || undefined,
           limit: PAGE_SIZE,
           offset,
         }),
@@ -146,10 +179,17 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
     return () => {
       abortRef.current?.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when search changes
-  }, [debounced]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when search/category changes
+  }, [searchTerm]);
+
+  function selectCategory(cat: GifCategory) {
+    setCategoryId(cat.id);
+    setQuery("");
+    setDebounced("");
+  }
 
   const showGrid = !loading && items.length > 0;
+  const browsingCategories = !debounced;
 
   return (
     <div
@@ -160,12 +200,38 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
           <Search className="h-3.5 w-3.5 shrink-0 text-[#949ba4]" strokeWidth={2} />
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              if (event.target.value.trim()) {
+                setCategoryId("trending");
+              }
+            }}
             placeholder="Search GIFs"
             className="min-w-0 flex-1 bg-transparent text-sm text-[#dbdee1] outline-none placeholder:text-[#6d6f78]"
             autoFocus
           />
         </label>
+        {browsingCategories && (
+          <div className="mt-2 -mx-0.5 flex gap-1 overflow-x-auto px-0.5 pb-0.5 [scrollbar-width:thin]">
+            {CATEGORIES.map((cat) => {
+              const active = cat.id === categoryId;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => selectCategory(cat)}
+                  className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-accent text-white"
+                      : "bg-[#1e1f22] text-[#dbdee1] hover:bg-[#232428] hover:text-white"
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="max-h-80 overflow-y-auto p-2">
         {loading && (
