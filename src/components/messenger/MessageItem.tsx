@@ -32,11 +32,11 @@ import { LinkEmbeds } from "@/components/messenger/LinkEmbeds";
 import { MessageMedia } from "@/components/messenger/MessageMedia";
 import { EmojiPicker } from "@/components/messenger/EmojiPicker";
 import { ReactionEmoji } from "@/components/messenger/CustomEmoji";
+import { ReactionInfoTip } from "@/components/messenger/EmojiInfo";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { displayMentionText, type MentionMaps } from "@/lib/mentions";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import {
-  emojiDisplayName,
   QUICK_REACTION_EMOJIS,
   type ServerEmoji,
 } from "@/lib/emoji";
@@ -132,28 +132,6 @@ type MessageItemProps = {
   onReact?: (emoji: string) => void;
   onTogglePin?: () => void;
 };
-
-function reactionTooltip(
-  reaction: ReactionGroup,
-  catalog: Map<string, ServerEmoji> | undefined,
-  namesById: Record<string, string>,
-) {
-  const emojiName = emojiDisplayName(reaction.emoji, catalog);
-  const names = reaction.userIds
-    .map((id) => namesById[id])
-    .filter(Boolean) as string[];
-  const shown = names.slice(0, 3);
-  const extra = Math.max(0, reaction.count - shown.length);
-  const who =
-    shown.length === 0
-      ? `${reaction.count} reaction${reaction.count === 1 ? "" : "s"}`
-      : extra > 0
-        ? `${shown.join(", ")} and ${extra} other${extra === 1 ? "" : "s"}`
-        : shown.length === 1
-          ? shown[0]
-          : `${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
-  return `${emojiName}\n${who}`;
-}
 
 export function MessageItem({
   message,
@@ -442,6 +420,7 @@ export function MessageItem({
                   emojiCatalog,
                   customEmojis,
                   preferredServerId,
+                  serverNamesById,
                 })}
               </p>
             )}
@@ -453,11 +432,6 @@ export function MessageItem({
         {reactions.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {reactions.map((reaction) => {
-              const tip = reactionTooltip(
-                reaction,
-                emojiCatalog,
-                reactorNamesById,
-              );
               const pillClass = `inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition ${
                 reaction.reacted
                   ? "border-accent/70 bg-accent-muted text-white"
@@ -473,20 +447,26 @@ export function MessageItem({
                   <span>{reaction.count}</span>
                 </>
               );
-              return readOnly ? (
-                <HoverTip key={reaction.emoji} label={tip} delayMs={40}>
-                  <span className={pillClass}>{body}</span>
-                </HoverTip>
-              ) : (
-                <HoverTip key={reaction.emoji} label={tip} delayMs={40}>
-                  <button
-                    type="button"
-                    onClick={() => onReact?.(reaction.emoji)}
-                    className={pillClass}
-                  >
-                    {body}
-                  </button>
-                </HoverTip>
+              return (
+                <ReactionInfoTip
+                  key={reaction.emoji}
+                  reaction={reaction}
+                  catalog={emojiCatalog}
+                  reactorNamesById={reactorNamesById}
+                  currentUserId={currentUserId}
+                >
+                  {readOnly ? (
+                    <span className={pillClass}>{body}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onReact?.(reaction.emoji)}
+                      className={pillClass}
+                    >
+                      {body}
+                    </button>
+                  )}
+                </ReactionInfoTip>
               );
             })}
             {showToolbar && onReact && (

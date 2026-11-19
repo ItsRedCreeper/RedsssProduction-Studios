@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CustomEmoji } from "@/components/messenger/CustomEmoji";
+import { MessageEmoji } from "@/components/messenger/EmojiInfo";
 import {
   findEmojiByName,
   isCustomEmojiOnlyMessage,
@@ -18,6 +18,7 @@ type FormatOpts = {
   emojiCatalog?: Map<string, ServerEmoji>;
   customEmojis?: ServerEmoji[];
   preferredServerId?: string | null;
+  serverNamesById?: Record<string, string>;
 };
 
 /**
@@ -96,10 +97,11 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
     const customEmoji = slice.match(/^<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/i);
     if (customEmoji) {
       parts.push(
-        <CustomEmoji
+        <MessageEmoji
           key={key++}
           token={customEmoji[0]}
           catalog={opts.emojiCatalog}
+          serverNamesById={opts.serverNamesById}
           size={emojiSize}
           className="mx-0.5"
         />,
@@ -118,10 +120,11 @@ export function formatMessageContent(content: string, opts: FormatOpts = {}): Re
       );
       if (hit) {
         parts.push(
-          <CustomEmoji
+          <MessageEmoji
             key={key++}
             emoji={hit}
             catalog={opts.emojiCatalog}
+            serverNamesById={opts.serverNamesById}
             size={emojiSize}
             className="mx-0.5"
           />,

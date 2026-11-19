@@ -40,9 +40,12 @@ export function CustomEmoji({
     return <span className={className}>{token}</span>;
   }
 
+  const tip =
+    title === undefined ? `:${resolved.name}:` : title || undefined;
+
   if (!resolved.url) {
     return (
-      <span className={`text-[#949ba4] ${className}`} title={title ?? `:${resolved.name}:`}>
+      <span className={`text-[#949ba4] ${className}`} title={tip}>
         :{resolved.name}:
       </span>
     );
@@ -53,7 +56,7 @@ export function CustomEmoji({
     <img
       src={resolved.url}
       alt={`:${resolved.name}:`}
-      title={title ?? `:${resolved.name}:`}
+      title={tip}
       width={size}
       height={size}
       className={`inline-block align-middle object-contain ${className}`}
