@@ -33,7 +33,7 @@ import {
   type MentionSuggestion,
   type PendingAttachment,
 } from "@/components/messenger/MessageComposer";
-import type { TenorGif } from "@/components/messenger/GifPicker";
+import type { GifResult } from "@/components/messenger/GifPicker";
 import type { TypingPerson } from "@/components/messenger/TypingIndicator";
 import { MemberList } from "@/components/messenger/MemberList";
 import { VoicePane } from "@/components/messenger/VoicePane";
@@ -3061,7 +3061,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     });
   }
 
-  async function pickGif(gif: TenorGif) {
+  async function pickGif(gif: GifResult) {
     setError(null);
     if (pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE) {
       setError(`You can attach up to ${MAX_ATTACHMENTS_PER_MESSAGE} files.`);
@@ -3071,7 +3071,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       const res = await fetch(gif.url);
       if (!res.ok) throw new Error("Could not download GIF");
       const blob = await res.blob();
-      const safeTitle = (gif.title || "tenor")
+      const safeTitle = (gif.title || "giphy")
         .replace(/[^\w\-]+/g, "_")
         .slice(0, 40);
       const file = new File([blob], `${safeTitle || "gif"}.gif`, {

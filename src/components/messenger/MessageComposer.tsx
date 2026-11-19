@@ -27,7 +27,7 @@ import {
   type TypingPerson,
 } from "@/components/messenger/TypingIndicator";
 import { EmojiPicker, type EmojiPick } from "@/components/messenger/EmojiPicker";
-import { GifPicker, type TenorGif } from "@/components/messenger/GifPicker";
+import { GifPicker, type GifResult } from "@/components/messenger/GifPicker";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import type { ServerEmoji } from "@/lib/emoji";
@@ -68,7 +68,7 @@ type MessageComposerProps = {
   onCancelReply: () => void;
   onFiles: (files: File[]) => void;
   onRemoveFile: (id: string) => void;
-  onPickGif?: (gif: TenorGif) => void;
+  onPickGif?: (gif: GifResult) => void;
   onSubmit: () => void;
   onTyping?: () => void;
   onTypingStop?: () => void;

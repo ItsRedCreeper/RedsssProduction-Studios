@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 
-export type TenorGif = {
+export type GifResult = {
   id: string;
   title: string;
   url: string;
@@ -12,15 +12,18 @@ export type TenorGif = {
   height: number;
 };
 
+/** @deprecated Use GifResult */
+export type TenorGif = GifResult;
+
 type GifPickerProps = {
-  onPick: (gif: TenorGif) => void;
+  onPick: (gif: GifResult) => void;
   className?: string;
 };
 
 export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
-  const [items, setItems] = useState<TenorGif[]>([]);
+  const [items, setItems] = useState<GifResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,8 +37,8 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
     setLoading(true);
     setError(null);
     const path = debounced
-      ? `/api/tenor?q=${encodeURIComponent(debounced)}`
-      : "/api/tenor";
+      ? `/api/giphy?q=${encodeURIComponent(debounced)}`
+      : "/api/giphy";
     void fetch(path)
       .then(async (res) => {
         if (!res.ok) {
@@ -44,7 +47,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
           } | null;
           throw new Error(body?.error ?? "Could not load GIFs");
         }
-        return (await res.json()) as { results: TenorGif[] };
+        return (await res.json()) as { results: GifResult[] };
       })
       .then((data) => {
         if (!cancelled) setItems(data.results ?? []);
@@ -73,7 +76,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search Tenor"
+            placeholder="Search GIPHY"
             className="min-w-0 flex-1 bg-transparent text-sm text-[#dbdee1] outline-none placeholder:text-[#6d6f78]"
             autoFocus
           />
