@@ -294,17 +294,19 @@ export function MessageItem({
       id={`message-${message.id}`}
       data-message-id={message.id}
       className={`group relative flex gap-4 px-4 transition-colors hover:bg-white/[0.03] ${
-        compact ? "items-start py-0.5" : "items-start py-0.5"
+        compact ? "items-start py-0" : "items-start py-0.5"
       } ${message.optimistic ? "opacity-70" : ""} ${
         message.failed ? "bg-accent-muted/40" : ""
       }`}
     >
       {compact ? (
-        <div className="flex w-10 shrink-0 justify-end self-start pt-1">
+        // Match avatar column width; keep timestamp out of flow so it can't
+        // wrap and invent blank lines under short messages.
+        <div className="relative w-10 shrink-0 self-stretch">
           <time
             dateTime={message.created_at}
             title={formatTimestamp(message.created_at)}
-            className="select-none text-[10px] leading-5 text-[#949ba4] opacity-0 transition-opacity group-hover:opacity-100"
+            className="pointer-events-none absolute right-0 top-0 select-none whitespace-nowrap text-[10px] leading-[1.375rem] text-[#949ba4] opacity-0 transition-opacity group-hover:opacity-100"
           >
             {formatMessageTime(message.created_at)}
           </time>

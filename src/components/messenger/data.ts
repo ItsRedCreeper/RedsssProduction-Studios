@@ -90,6 +90,13 @@ export function shouldGroupWithPrevious(
   return true;
 }
 
+/** Stable local calendar-day key for divider / grouping checks. */
+export function localDayKey(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
 /** Day divider label: Today / Yesterday / Month Day, Year */
 export function formatDayDivider(iso: string, now = Date.now()) {
   const date = new Date(iso);

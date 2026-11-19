@@ -5,6 +5,7 @@ import { ArrowDown, Hash, MessagesSquare } from "lucide-react";
 import { MessageItem } from "@/components/messenger/MessageItem";
 import {
   formatDayDivider,
+  localDayKey,
   shouldGroupWithPrevious,
 } from "@/components/messenger/data";
 import type { ServerEmoji } from "@/lib/emoji";
@@ -243,9 +244,7 @@ export function ChatTimeline({
         ) : (
           <div
             className={
-              messages.length === 0
-                ? "flex h-full min-h-0 flex-col"
-                : "space-y-0.5"
+              messages.length === 0 ? "flex h-full min-h-0 flex-col" : undefined
             }
           >
             {(hasMore || loadingOlder) && (
@@ -282,18 +281,31 @@ export function ChatTimeline({
 
             {messages.map((message, index) => {
               const previous = index > 0 ? messages[index - 1] : null;
-              const compact = shouldGroupWithPrevious(previous, message);
-              const prevDay = previous
-                ? formatDayDivider(previous.created_at)
-                : null;
-              const dayLabel = formatDayDivider(message.created_at);
-              const showDayDivider = !previous || prevDay !== dayLabel;
+              const dayChanged =
+                !!previous &&
+                localDayKey(previous.created_at) !==
+                  localDayKey(message.created_at);
+              const compact =
+                !dayChanged && shouldGroupWithPrevious(previous, message);
+              const dayLabel = dayChanged
+                ? formatDayDivider(message.created_at)
+                : index === 0
+                  ? formatDayDivider(message.created_at)
+                  : "";
+              const showDayDivider = Boolean(dayLabel) && (index === 0 || dayChanged);
 
               return (
-                <div key={message.id}>
-                  {showDayDivider && dayLabel ? (
+                <div
+                  key={message.id}
+                  className={
+                    !compact && index > 0 && !showDayDivider ? "mt-4" : undefined
+                  }
+                >
+                  {showDayDivider ? (
                     <div
-                      className="relative mx-4 my-3 flex items-center"
+                      className={`relative mx-4 flex items-center ${
+                        index === 0 ? "mb-2 mt-1" : "mb-2 mt-4"
+                      }`}
                       role="separator"
                       aria-label={dayLabel}
                     >
@@ -306,7 +318,7 @@ export function ChatTimeline({
                   ) : null}
                   <MessageItem
                     message={message}
-                    compact={compact && !showDayDivider}
+                    compact={compact}
                     isOwn={
                       !!currentUserId && message.user_id === currentUserId
                     }
@@ -343,7 +355,7 @@ export function ChatTimeline({
                 </div>
               );
             })}
-            <div ref={bottomRef} aria-hidden className="h-px w-full" />
+            <div ref={bottomRef} aria-hidden className="h-px w-full shrink-0" />
           </div>
         )}
       </div>
