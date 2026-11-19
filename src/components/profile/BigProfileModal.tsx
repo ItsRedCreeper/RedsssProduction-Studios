@@ -51,6 +51,8 @@ import {
   FRIEND_NOTE_MAX as NOTE_MAX,
   NICKNAME_MAX,
 } from "@/lib/field-limits";
+import type { Role } from "@/components/messenger/types";
+import { RolePills } from "@/components/messenger/RolePills";
 
 const VISIBLE_LIMIT = 6;
 
@@ -72,6 +74,10 @@ type BigProfileModalProps = {
   isIgnored?: boolean;
   displayName?: string;
   nickname?: string | null;
+  /** Highest role color when viewing inside a server. */
+  nameColor?: string | null;
+  /** Server roles for the viewed member (highest first). */
+  roles?: Role[];
   focusSection?: MutualFocus | null;
   onClose: () => void;
   onMessage: () => void;
@@ -92,6 +98,8 @@ export function BigProfileModal({
   isIgnored = false,
   displayName,
   nickname = null,
+  nameColor = null,
+  roles = [],
   focusSection = null,
   onClose,
   onMessage,
@@ -606,7 +614,10 @@ export function BigProfileModal({
           <div className="rounded-lg bg-[#1e1f22] p-4">
             <h2
               id="big-profile-title"
-              className="text-2xl font-bold tracking-tight text-white"
+              className={`text-2xl font-bold tracking-tight ${
+                nameColor ? "" : "text-white"
+              }`}
+              style={nameColor ? { color: nameColor } : undefined}
             >
               {shownName}
             </h2>
@@ -622,6 +633,14 @@ export function BigProfileModal({
                 className="mt-1"
               />
             ) : null}
+            {roles.length > 0 && (
+              <div className="mt-3">
+                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+                  Roles
+                </h3>
+                <RolePills roles={roles} size="md" />
+              </div>
+            )}
             {isSelf && (presenceExpiryLabel || customExpiryLabel) ? (
               <div className="mt-2 space-y-0.5 text-[11px] leading-snug text-[#949ba4]">
                 {presenceExpiryLabel ? (

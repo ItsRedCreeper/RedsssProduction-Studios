@@ -87,6 +87,7 @@ import {
   mergeRolePermissions,
   PERMISSIONS,
 } from "@/lib/permissions";
+import { roleColorForMember } from "@/lib/roles";
 import {
   displayMentionText,
   encodeMentions,
@@ -1175,6 +1176,94 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     };
   }, [activeServerId]);
 
+  // Live role / member_role updates for member list colors + grouping.
+  useEffect(() => {
+    if (!activeServerId || previewMode) return;
+    const serverId = activeServerId;
+    const supabase = createClient();
+    let cancelled = false;
+
+    async function reloadRoles() {
+      const [roleResult, rolesTable] = await Promise.all([
+        supabase.from("member_roles").select("*").eq("server_id", serverId),
+        supabase.from("roles").select("*").eq("server_id", serverId),
+      ]);
+      if (cancelled) return;
+      const nextRoles = (rolesTable.data as Role[] | null) ?? [];
+      setServerRoles(nextRoles);
+      const rolesByUser = new Map<string, string[]>();
+      for (const row of roleResult.data ?? []) {
+        const list = rolesByUser.get(row.user_id) ?? [];
+        list.push(row.role_id);
+        rolesByUser.set(row.user_id, list);
+      }
+      setMembers((prev) =>
+        prev.map((member) => ({
+          ...member,
+          roleIds: rolesByUser.get(member.user_id) ?? [],
+        })),
+      );
+    }
+
+    const channel = supabase
+      .channel(`server-roles:${serverId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "roles",
+          filter: `server_id=eq.${serverId}`,
+        },
+        () => {
+          void reloadRoles();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "member_roles",
+          filter: `server_id=eq.${serverId}`,
+        },
+        () => {
+          void reloadRoles();
+        },
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [activeServerId, previewMode]);
+
+  // Keep profile cards aware of the active server's roles.
+  const setServerMemberRoles = profileUi?.setServerMemberRoles;
+  useEffect(() => {
+    if (!setServerMemberRoles) return;
+    if (pane !== "server" || !activeServerId || previewMode) {
+      setServerMemberRoles(null);
+      return;
+    }
+    const roleIdsByUserId: Record<string, string[]> = {};
+    for (const member of members) {
+      roleIdsByUserId[member.user_id] = member.roleIds;
+    }
+    setServerMemberRoles({
+      serverId: activeServerId,
+      roles: serverRoles,
+      roleIdsByUserId,
+    });
+  }, [
+    setServerMemberRoles,
+    pane,
+    activeServerId,
+    previewMode,
+    members,
+    serverRoles,
+  ]);
+
   useEffect(() => {
     if (!activeServerId || previewMode) {
       setVoiceStates([]);
@@ -2045,6 +2134,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
     return map;
   }, [members]);
+
+  const roleColorByUserId = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (pane !== "server" || previewMode) return map;
+    for (const member of members) {
+      const color = roleColorForMember(serverRoles, member.roleIds);
+      if (color) map[member.user_id] = color;
+    }
+    return map;
+  }, [members, serverRoles, pane, previewMode]);
 
   const loadOlderChannel = useCallback(async () => {
     if (!activeChannelId || loadingOlderMessages || !channelHasMore) return;
@@ -3579,6 +3678,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               preferredServerId={activeServer?.id ?? null}
               reactorNamesById={reactorNamesById}
               serverNickByUserId={serverNickByUserId}
+              roleColorByUserId={roleColorByUserId}
               hasMore={!searchNeedle && channelHasMore}
               loadingOlder={loadingOlderMessages}
               onLoadOlder={() => void loadOlderChannel()}
@@ -3754,6 +3854,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         )}
         <MemberList
           members={visibleMembers}
+          roles={serverRoles}
           ownerId={activeServer?.owner_id ?? null}
           currentUserId={user?.id ?? null}
           typingUserIds={typingUserIds}
@@ -3804,6 +3905,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 preferredServerId={activeServer?.id ?? null}
                 reactorNamesById={reactorNamesById}
                 serverNickByUserId={serverNickByUserId}
+                roleColorByUserId={roleColorByUserId}
                 hasMore={channelHasMore}
                 loadingOlder={loadingOlderMessages}
                 onLoadOlder={() => void loadOlderChannel()}
@@ -3959,6 +4061,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             });
           }}
           onMembersChanged={setMembers}
+          onRolesChanged={setServerRoles}
           onEmojisChanged={() => void loadCustomEmojis()}
         />
       )}

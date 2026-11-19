@@ -42,8 +42,21 @@ import {
 } from "@/components/profile/BigProfileModal";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import type { Role } from "@/components/messenger/types";
+import {
+  displayRolesForMember,
+  roleColorForMember,
+} from "@/lib/roles";
 
 export type FriendsTab = "friends" | "pending" | "add" | "blocked" | "ignored";
+
+/** Active server role snapshot for profile cards opened from a server. */
+export type ServerMemberRolesContext = {
+  serverId: string;
+  roles: Role[];
+  /** userId → role ids in that server */
+  roleIdsByUserId: Record<string, string[]>;
+};
 
 type Anchor = { top: number; left: number };
 
@@ -71,6 +84,9 @@ type ProfileContextValue = {
     friendId: string,
     nickname: string,
   ) => Promise<{ error: string | null }>;
+  /** Set by MessengerShell when viewing a server; cleared in DMs/home. */
+  setServerMemberRoles: (ctx: ServerMemberRolesContext | null) => void;
+  serverMemberRoles: ServerMemberRolesContext | null;
 };
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -167,6 +183,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const [ignoring, setIgnoring] = useState(false);
   const [messageNotice, setMessageNotice] = useState<string | null>(null);
+  const [serverMemberRoles, setServerMemberRoles] =
+    useState<ServerMemberRolesContext | null>(null);
 
   // Keep own big/small profile status + expiry labels in sync after StatusPicker /
   // heartbeat / timed revert (clear_expired_status_text).
@@ -480,6 +498,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       nicknames,
       nicknameFor,
       setNickname,
+      setServerMemberRoles,
+      serverMemberRoles,
     }),
     [
       openSmallProfile,
@@ -501,8 +521,35 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       nicknames,
       nicknameFor,
       setNickname,
+      serverMemberRoles,
     ],
   );
+
+  const smallRoleIds =
+    small && serverMemberRoles
+      ? (serverMemberRoles.roleIdsByUserId[small.profile.id] ?? [])
+      : [];
+  const smallRoles =
+    small && serverMemberRoles
+      ? displayRolesForMember(serverMemberRoles.roles, smallRoleIds)
+      : [];
+  const smallNameColor =
+    small && serverMemberRoles
+      ? roleColorForMember(serverMemberRoles.roles, smallRoleIds)
+      : null;
+
+  const bigRoleIds =
+    big && serverMemberRoles
+      ? (serverMemberRoles.roleIdsByUserId[big.profile.id] ?? [])
+      : [];
+  const bigRoles =
+    big && serverMemberRoles
+      ? displayRolesForMember(serverMemberRoles.roles, bigRoleIds)
+      : [];
+  const bigNameColor =
+    big && serverMemberRoles
+      ? roleColorForMember(serverMemberRoles.roles, bigRoleIds)
+      : null;
 
   return (
     <ProfileContext.Provider value={value}>
@@ -548,6 +595,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             displayName={
               nicknameFor(small.profile.id) || small.profile.username
             }
+            nameColor={smallNameColor}
+            roles={smallRoles}
             onIgnore={() =>
               requestIgnore(small.profile.id, small.profile.username)
             }
@@ -565,6 +614,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           isIgnored={isIgnored(big.profile.id)}
           displayName={nicknameFor(big.profile.id) || big.profile.username}
           nickname={nicknameFor(big.profile.id)}
+          nameColor={bigNameColor}
+          roles={bigRoles}
           focusSection={bigFocus}
           onClose={() => {
             setBig(null);

@@ -40,6 +40,8 @@ type ChatTimelineProps = {
   preferFriendNickname?: boolean;
   /** Server nicknames for channel message authors. */
   serverNickByUserId?: Record<string, string>;
+  /** Highest-role username colors for channel message authors. */
+  roleColorByUserId?: Record<string, string>;
   readOnly?: boolean;
   /** When false, hide the Discord-style channel/DM start header (e.g. search). */
   showChannelStart?: boolean;
@@ -116,6 +118,7 @@ export function ChatTimeline({
   onLoadOlder,
   preferFriendNickname = false,
   serverNickByUserId,
+  roleColorByUserId,
   readOnly = false,
   showChannelStart = true,
   onReply,
@@ -330,6 +333,7 @@ export function ChatTimeline({
                     canDeleteOthers={canDeleteOthers}
                     preferFriendNickname={preferFriendNickname}
                     serverNickByUserId={serverNickByUserId}
+                    roleColorByUserId={roleColorByUserId}
                     readOnly={readOnly}
                     reactions={reactionMap[message.id] ?? []}
                     customEmojis={customEmojis}

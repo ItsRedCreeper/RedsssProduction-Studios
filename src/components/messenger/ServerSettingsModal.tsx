@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Hash,
   Link2,
@@ -15,6 +17,7 @@ import {
   Volume2,
   X,
 } from "lucide-react";
+import { compareRolePositionDesc } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DirtySaveButton } from "@/components/ui/DirtySaveButton";
@@ -92,6 +95,7 @@ type ServerSettingsModalProps = {
   onServerUpdated: (server: Server) => void;
   onChannelsChanged: (channels: Channel[], categories: Category[]) => void;
   onMembersChanged: (members: MemberView[]) => void;
+  onRolesChanged?: (roles: Role[]) => void;
   onEmojisChanged?: () => void;
 };
 
@@ -114,6 +118,7 @@ export function ServerSettingsModal({
   onServerUpdated,
   onChannelsChanged,
   onMembersChanged,
+  onRolesChanged,
   onEmojisChanged,
 }: ServerSettingsModalProps) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
@@ -205,7 +210,11 @@ export function ServerSettingsModal({
       ]);
       if (cancelled) return;
       if (rolesResult.error) setError(rolesResult.error.message);
-      else setRoles(rolesResult.data ?? []);
+      else {
+        const next = [...(rolesResult.data ?? [])].sort(compareRolePositionDesc);
+        setRoles(next);
+        onRolesChanged?.(next);
+      }
       if (invitesResult.error) setError(invitesResult.error.message);
       if (emojiResult.error) setError(emojiResult.error.message);
       else setServerEmojis((emojiResult.data as ServerEmoji[]) ?? []);
@@ -321,13 +330,18 @@ export function ServerSettingsModal({
     setSaving(true);
     setError(null);
     const supabase = createClient();
+    const maxPosition = roles.reduce(
+      (max, role) => Math.max(max, role.position),
+      -1,
+    );
     const { data, error: insertError } = await supabase
       .from("roles")
       .insert({
         server_id: server.id,
         name: trimmed,
         color: roleColor,
-        position: roles.length,
+        position: maxPosition + 1,
+        hoist: false,
         permissions: {},
       })
       .select("*")
@@ -337,7 +351,9 @@ export function ServerSettingsModal({
       setError(insertError?.message ?? "Could not create role.");
       return;
     }
-    setRoles((current) => [...current, data].sort(byPosition));
+    const next = [...roles, data].sort(compareRolePositionDesc);
+    setRoles(next);
+    onRolesChanged?.(next);
     setRoleName("");
   }
 
@@ -345,6 +361,7 @@ export function ServerSettingsModal({
     role: Role,
     nextName: string,
     nextColor: string,
+    nextHoist: boolean,
     nextPermissions: Record<string, boolean>,
   ) {
     const trimmed = nextName.trim();
@@ -363,6 +380,7 @@ export function ServerSettingsModal({
       .update({
         name: trimmed,
         color: nextColor,
+        hoist: role.is_default ? false : nextHoist,
         permissions: nextPermissions,
       })
       .eq("id", role.id)
@@ -372,9 +390,59 @@ export function ServerSettingsModal({
       setError(updateError?.message ?? "Could not update role.");
       return;
     }
-    setRoles((current) =>
-      current.map((item) => (item.id === role.id ? data : item)),
-    );
+    const next = roles
+      .map((item) => (item.id === role.id ? data : item))
+      .sort(compareRolePositionDesc);
+    setRoles(next);
+    onRolesChanged?.(next);
+  }
+
+  async function moveRole(roleId: string, direction: -1 | 1) {
+    // Display is highest-first; direction -1 = move up in list = higher position.
+    const ordered = [...roles].sort(compareRolePositionDesc);
+    const index = ordered.findIndex((role) => role.id === roleId);
+    if (index < 0) return;
+    const swapIndex = index + direction;
+    if (swapIndex < 0 || swapIndex >= ordered.length) return;
+    const current = ordered[index];
+    const other = ordered[swapIndex];
+    if (!current || !other) return;
+    if (current.is_default || other.is_default) {
+      setError("The default Member role stays at the bottom of the hierarchy.");
+      return;
+    }
+    setError(null);
+    const supabase = createClient();
+    const aPos = current.position;
+    const bPos = other.position;
+    const [aResult, bResult] = await Promise.all([
+      supabase
+        .from("roles")
+        .update({ position: bPos })
+        .eq("id", current.id)
+        .select("*")
+        .single(),
+      supabase
+        .from("roles")
+        .update({ position: aPos })
+        .eq("id", other.id)
+        .select("*")
+        .single(),
+    ]);
+    if (aResult.error || bResult.error || !aResult.data || !bResult.data) {
+      setError(
+        aResult.error?.message ??
+          bResult.error?.message ??
+          "Could not reorder roles.",
+      );
+      return;
+    }
+    const byId = new Map(roles.map((role) => [role.id, role]));
+    byId.set(aResult.data.id, aResult.data);
+    byId.set(bResult.data.id, bResult.data);
+    const next = [...byId.values()].sort(compareRolePositionDesc);
+    setRoles(next);
+    onRolesChanged?.(next);
   }
 
   async function deleteRole(roleId: string) {
@@ -400,7 +468,9 @@ export function ServerSettingsModal({
       setConfirmRoleId(null);
       return;
     }
-    setRoles((current) => current.filter((role) => role.id !== roleId));
+    const next = roles.filter((role) => role.id !== roleId);
+    setRoles(next);
+    onRolesChanged?.(next);
     onMembersChanged(
       members.map((member) => ({
         ...member,
@@ -896,16 +966,33 @@ export function ServerSettingsModal({
 
             {tab === "roles" && (canManageRoles || isOwner) && (
               <div className="space-y-4">
+                <p className="text-xs text-muted">
+                  Higher roles appear first in the member list and win for
+                  username color. Use Display separately to hoist a role as its
+                  own member-list section.
+                </p>
                 <ul className="space-y-2">
                   {roles.length === 0 && (
                     <li className="text-sm text-muted">No roles yet.</li>
                   )}
-                  {roles.map((role) => (
+                  {roles.map((role, index) => (
                     <RoleRow
                       key={role.id}
                       role={role}
                       confirm={confirmRoleId === role.id}
                       canDelete={!role.is_default}
+                      canMoveUp={
+                        !role.is_default &&
+                        index > 0 &&
+                        !roles[index - 1]?.is_default
+                      }
+                      canMoveDown={
+                        !role.is_default &&
+                        index < roles.length - 1 &&
+                        !roles[index + 1]?.is_default
+                      }
+                      onMoveUp={() => void moveRole(role.id, -1)}
+                      onMoveDown={() => void moveRole(role.id, 1)}
                       onSave={saveRole}
                       onAskDelete={() => setConfirmRoleId(role.id)}
                       onCancelDelete={() => setConfirmRoleId(null)}
@@ -1434,6 +1521,10 @@ function RoleRow({
   role,
   confirm,
   canDelete = true,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMoveUp,
+  onMoveDown,
   onSave,
   onAskDelete,
   onCancelDelete,
@@ -1442,10 +1533,15 @@ function RoleRow({
   role: Role;
   confirm: boolean;
   canDelete?: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onSave: (
     role: Role,
     name: string,
     color: string,
+    hoist: boolean,
     permissions: Record<string, boolean>,
   ) => void;
   onAskDelete: () => void;
@@ -1454,6 +1550,7 @@ function RoleRow({
 }) {
   const [name, setName] = useState(role.name);
   const [color, setColor] = useState(role.color || "#dc2626");
+  const [hoist, setHoist] = useState(Boolean(role.hoist));
   const [perms, setPerms] = useState<Record<string, boolean>>(() => {
     const raw = role.permissions;
     return raw && typeof raw === "object" && !Array.isArray(raw)
@@ -1464,13 +1561,14 @@ function RoleRow({
   useEffect(() => {
     setName(role.name);
     setColor(role.color || "#dc2626");
+    setHoist(Boolean(role.hoist));
     const raw = role.permissions;
     setPerms(
       raw && typeof raw === "object" && !Array.isArray(raw)
         ? (raw as Record<string, boolean>)
         : {},
     );
-  }, [role.name, role.color, role.permissions]);
+  }, [role.name, role.color, role.hoist, role.permissions]);
 
   const baselinePerms =
     role.permissions &&
@@ -1482,6 +1580,7 @@ function RoleRow({
     name.trim() !== role.name ||
     (color || "#dc2626").toLowerCase() !==
       (role.color || "#dc2626").toLowerCase() ||
+    Boolean(hoist) !== Boolean(role.hoist) ||
     ROLE_PERM_OPTIONS.some(
       (option) => Boolean(perms[option.key]) !== Boolean(baselinePerms[option.key]),
     );
@@ -1489,56 +1588,89 @@ function RoleRow({
   return (
     <li className="space-y-2 rounded-md bg-[#2b2d31] px-2 py-2">
       <div className="flex flex-wrap items-center gap-2">
-      <input
-        type="color"
-        value={color}
-        onChange={(event) => setColor(event.target.value)}
-        aria-label={`${role.name} color`}
-        className="h-8 w-10 cursor-pointer rounded-md border border-border bg-transparent"
-      />
-      <input
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-white outline-none focus:border-accent/40"
-      />
-      <DirtySaveButton
-        size="sm"
-        dirty={dirty}
-        disabled={!name.trim()}
-        label="Save"
-        onClick={() => onSave(role, name, color, perms)}
-      />
-      {role.is_default ? (
-        <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
-          Default
-        </span>
-      ) : confirm ? (
-        <>
+        <div className="flex flex-col gap-0.5">
           <button
             type="button"
-            onClick={onDelete}
-            className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white"
+            onClick={onMoveUp}
+            disabled={!canMoveUp}
+            className="rounded p-0.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-30"
+            aria-label={`Move ${role.name} up`}
           >
-            Confirm
+            <ChevronUp className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
           <button
             type="button"
-            onClick={onCancelDelete}
-            className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-white"
+            onClick={onMoveDown}
+            disabled={!canMoveDown}
+            className="rounded p-0.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-30"
+            aria-label={`Move ${role.name} down`}
           >
-            Cancel
+            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
-        </>
-      ) : canDelete ? (
-        <button
-          type="button"
-          onClick={onAskDelete}
-          className="rounded-md px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-accent-muted"
-        >
-          Delete
-        </button>
-      ) : null}
+        </div>
+        <input
+          type="color"
+          value={color}
+          onChange={(event) => setColor(event.target.value)}
+          aria-label={`${role.name} color`}
+          className="h-8 w-10 cursor-pointer rounded-md border border-border bg-transparent"
+        />
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-white outline-none focus:border-accent/40"
+        />
+        <DirtySaveButton
+          size="sm"
+          dirty={dirty}
+          disabled={!name.trim()}
+          label="Save"
+          onClick={() => onSave(role, name, color, hoist, perms)}
+        />
+        {role.is_default ? (
+          <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+            Default
+          </span>
+        ) : confirm ? (
+          <>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white"
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              onClick={onCancelDelete}
+              className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-white"
+            >
+              Cancel
+            </button>
+          </>
+        ) : canDelete ? (
+          <button
+            type="button"
+            onClick={onAskDelete}
+            className="rounded-md px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-accent-muted"
+          >
+            Delete
+          </button>
+        ) : null}
       </div>
+      {!role.is_default && (
+        <label className="flex items-start gap-2 px-1 text-[11px] text-[#dbdee1]">
+          <input
+            type="checkbox"
+            checked={hoist}
+            onChange={(event) => setHoist(event.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
+          />
+          <span>
+            Display role members separately from online members
+          </span>
+        </label>
+      )}
       <div className="grid grid-cols-2 gap-1.5 px-1 pb-1 sm:grid-cols-3">
         {ROLE_PERM_OPTIONS.map((option) => (
           <label

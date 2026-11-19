@@ -4,14 +4,21 @@ import { useEffect, useMemo, useState } from "react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { isPresenceOnline } from "@/components/messenger/data";
 import { StatusPresenceBadge } from "@/components/messenger/StatusPresenceBadge";
-import type { MemberView } from "@/components/messenger/types";
+import type { MemberView, Role } from "@/components/messenger/types";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
 import { useOptionalPresenceFeed } from "@/components/presence/PresenceFeed";
 import { resolveDisplayStatus } from "@/lib/presence";
+import {
+  compareRolePositionDesc,
+  ensureReadableRoleColor,
+  highestHoistedRole,
+  roleColorForMember,
+} from "@/lib/roles";
 
 type MemberListProps = {
   members: MemberView[];
+  roles: Role[];
   ownerId: string | null;
   currentUserId: string | null;
   /** Users typing in the open channel — status badge becomes animated dots. */
@@ -22,16 +29,27 @@ type MemberListProps = {
   className?: string;
 };
 
+type MemberGroup = {
+  key: string;
+  title: string;
+  color: string | null;
+  members: MemberView[];
+};
+
 function MemberButton({
   member,
   owner,
   displayName,
+  nameColor,
+  online,
   typing,
   onClick,
 }: {
   member: MemberView;
   owner: boolean;
   displayName: string;
+  nameColor: string | null;
+  online: boolean;
   typing: boolean;
   onClick: (element: HTMLButtonElement) => void;
 }) {
@@ -42,7 +60,9 @@ function MemberButton({
     <button
       type="button"
       onClick={(event) => onClick(event.currentTarget)}
-      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
+      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5 ${
+        online ? "" : "opacity-50"
+      }`}
     >
       <span className="relative shrink-0 overflow-visible">
         <UserAvatar
@@ -60,7 +80,12 @@ function MemberButton({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm text-[#dbdee1]">{displayName}</span>
+          <span
+            className="truncate text-sm"
+            style={{ color: nameColor ?? "#dbdee1" }}
+          >
+            {displayName}
+          </span>
           {owner && (
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-accent">
               Owner
@@ -80,6 +105,7 @@ function MemberButton({
 
 export function MemberList({
   members,
+  roles,
   ownerId,
   currentUserId: _currentUserId,
   typingUserIds,
@@ -107,11 +133,8 @@ export function MemberList({
   const displayNameOf = (member: MemberView) =>
     member.nickname?.trim() || member.username;
 
-  const { online, offline } = useMemo(() => {
+  const groups = useMemo(() => {
     const now = Date.now();
-    const sorted = [...members].sort((a, b) =>
-      displayNameOf(a).localeCompare(displayNameOf(b)),
-    );
     const statusOf = (member: MemberView) => {
       const live = feed?.get(member.user_id);
       return resolveDisplayStatus(
@@ -120,37 +143,102 @@ export function MemberList({
         now,
       );
     };
-    return {
-      online: sorted.filter((member) => isPresenceOnline(statusOf(member))),
-      offline: sorted.filter((member) => !isPresenceOnline(statusOf(member))),
-    };
+    const isOnline = (member: MemberView) =>
+      isPresenceOnline(statusOf(member));
+
+    const sortMembers = (rows: MemberView[]) =>
+      [...rows].sort((a, b) => {
+        const aOnline = isOnline(a) ? 0 : 1;
+        const bOnline = isOnline(b) ? 0 : 1;
+        if (aOnline !== bOnline) return aOnline - bOnline;
+        return displayNameOf(a).localeCompare(displayNameOf(b));
+      });
+
+    const result: MemberGroup[] = [];
+    const hoisted = [...roles]
+      .filter((role) => role.hoist && !role.is_default)
+      .sort(compareRolePositionDesc);
+
+    const assigned = new Set<string>();
+    for (const role of hoisted) {
+      const rows = members.filter((member) => {
+        const hoist = highestHoistedRole(roles, member.roleIds);
+        return hoist?.id === role.id;
+      });
+      if (rows.length === 0) continue;
+      for (const row of rows) assigned.add(row.user_id);
+      result.push({
+        key: role.id,
+        title: role.name,
+        color: role.color?.trim()
+          ? ensureReadableRoleColor(role.color)
+          : null,
+        members: sortMembers(rows),
+      });
+    }
+
+    const remainder = members.filter((member) => !assigned.has(member.user_id));
+    const online = sortMembers(remainder.filter(isOnline));
+    const offline = sortMembers(remainder.filter((m) => !isOnline(m)));
+    if (online.length > 0) {
+      result.push({
+        key: "online",
+        title: "Online",
+        color: null,
+        members: online,
+      });
+    }
+    if (offline.length > 0) {
+      result.push({
+        key: "offline",
+        title: "Offline",
+        color: null,
+        members: offline,
+      });
+    }
+    return result;
     // feedVersion/nowTick intentionally included for live + stale flips.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [members, nowTick, feedVersion, feed]);
+  }, [members, roles, nowTick, feedVersion, feed]);
 
   function openPopover(member: MemberView, element: HTMLButtonElement) {
     void profileUi?.openSmallProfile(member.user_id, element);
   }
 
-  function renderGroup(title: string, rows: MemberView[]) {
-    if (rows.length === 0) return null;
+  function renderGroup(group: MemberGroup) {
     return (
-      <section className="mb-3">
-        <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-          {title} — {rows.length}
+      <section key={group.key} className="mb-3">
+        <p
+          className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide"
+          style={{ color: group.color ?? "#949ba4" }}
+        >
+          {group.title} — {group.members.length}
         </p>
         <ul>
-          {rows.map((member) => (
-            <li key={member.user_id}>
-              <MemberButton
-                member={member}
-                displayName={displayNameOf(member)}
-                owner={member.user_id === ownerId}
-                typing={Boolean(typingUserIds?.has(member.user_id))}
-                onClick={(el) => openPopover(member, el)}
-              />
-            </li>
-          ))}
+          {group.members.map((member) => {
+            const now = Date.now();
+            const live = feed?.get(member.user_id);
+            const online = isPresenceOnline(
+              resolveDisplayStatus(
+                live?.status ?? member.status,
+                live?.lastSeenAt ?? member.last_seen_at,
+                now,
+              ),
+            );
+            return (
+              <li key={member.user_id}>
+                <MemberButton
+                  member={member}
+                  displayName={displayNameOf(member)}
+                  nameColor={roleColorForMember(roles, member.roleIds)}
+                  owner={member.user_id === ownerId}
+                  online={online}
+                  typing={Boolean(typingUserIds?.has(member.user_id))}
+                  onClick={(el) => openPopover(member, el)}
+                />
+              </li>
+            );
+          })}
         </ul>
       </section>
     );
@@ -165,10 +253,7 @@ export function MemberList({
         {members.length === 0 ? (
           <p className="px-2 text-xs text-muted">No members loaded.</p>
         ) : (
-          <>
-            {renderGroup("Online", online)}
-            {renderGroup("Offline", offline)}
-          </>
+          groups.map(renderGroup)
         )}
       </div>
     </aside>

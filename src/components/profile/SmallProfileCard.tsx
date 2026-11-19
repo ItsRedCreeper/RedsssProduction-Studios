@@ -15,6 +15,8 @@ import type {
   MutualFriend,
   MutualServer,
 } from "@/lib/friends";
+import type { Role } from "@/components/messenger/types";
+import { RolePills } from "@/components/messenger/RolePills";
 
 export type MutualFocus = "friends" | "servers";
 
@@ -37,6 +39,10 @@ type SmallProfileCardProps = {
   isBlocked?: boolean;
   isIgnored?: boolean;
   displayName?: string;
+  /** Highest role color when viewing inside a server. */
+  nameColor?: string | null;
+  /** Server roles for the viewed member (highest first). */
+  roles?: Role[];
   /** Preloaded so the card opens at full size in one paint. */
   ready: SmallProfileReadyData;
   onClose: () => void;
@@ -57,6 +63,8 @@ export function SmallProfileCard({
   isBlocked = false,
   isIgnored = false,
   displayName,
+  nameColor = null,
+  roles = [],
   ready,
   onClose,
   onMessage,
@@ -193,7 +201,12 @@ export function SmallProfileCard({
           className="block w-full text-left"
         >
           <HoverTip label={shownName} onlyIfTruncated delayMs={40} className="block min-w-0">
-            <p className="truncate text-base font-semibold text-white">
+            <p
+              className={`truncate text-base font-semibold ${
+                nameColor ? "" : "text-white"
+              }`}
+              style={nameColor ? { color: nameColor } : undefined}
+            >
               {shownName}
             </p>
           </HoverTip>
@@ -219,6 +232,15 @@ export function SmallProfileCard({
             />
           ) : null}
         </button>
+
+        {roles.length > 0 && (
+          <div className="mt-2">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+              Roles
+            </p>
+            <RolePills roles={roles} size="sm" />
+          </div>
+        )}
 
         {bio && bio !== profile.status_text?.trim() && (
           <p className="mt-2 line-clamp-2 text-sm text-[#dbdee1]">{bio}</p>

@@ -125,6 +125,8 @@ type MessageItemProps = {
   preferFriendNickname?: boolean;
   /** Server nicknames keyed by user id (channel messages). */
   serverNickByUserId?: Record<string, string>;
+  /** Highest-role username colors keyed by user id (server channels). */
+  roleColorByUserId?: Record<string, string>;
   /** Discover preview: look around only — no reply/edit/react/delete. */
   readOnly?: boolean;
   customEmojis?: ServerEmoji[];
@@ -154,6 +156,7 @@ export function MessageItem({
   canDeleteOthers = false,
   preferFriendNickname = false,
   serverNickByUserId,
+  roleColorByUserId,
   readOnly = false,
   customEmojis = [],
   emojiCatalog,
@@ -193,6 +196,10 @@ export function MessageItem({
     : preferFriendNickname
       ? profileUi?.nicknameFor(reply.user_id)?.trim() || replyBase
       : serverNickByUserId?.[reply.user_id] || replyBase;
+  const authorRoleColor = roleColorByUserId?.[message.user_id] ?? null;
+  const replyRoleColor = reply
+    ? (roleColorByUserId?.[reply.user_id] ?? null)
+    : null;
   const replyBlocked =
     !!reply && (profileUi?.blockedIds?.includes(reply.user_id) ?? false);
   const replyIgnored =
@@ -357,7 +364,10 @@ export function MessageItem({
                 size="sm"
                 className="!h-4 !w-4 !text-[9px]"
               />
-              <span className="shrink-0 text-xs font-medium text-accent hover:underline">
+              <span
+                className="shrink-0 text-xs font-medium hover:underline"
+                style={{ color: replyRoleColor ?? "var(--accent)" }}
+              >
                 {replyAuthor}
               </span>
               <span className="min-w-0 truncate text-xs text-muted">
@@ -373,7 +383,10 @@ export function MessageItem({
             <button
               type="button"
               onClick={(event) => openAuthorProfile(event.currentTarget)}
-              className="text-[0.95rem] font-medium text-foreground hover:underline"
+              className={`text-[0.95rem] font-medium hover:underline ${
+                authorRoleColor ? "" : "text-foreground"
+              }`}
+              style={authorRoleColor ? { color: authorRoleColor } : undefined}
             >
               {author}
             </button>
