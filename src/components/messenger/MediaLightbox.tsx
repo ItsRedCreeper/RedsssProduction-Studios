@@ -168,23 +168,23 @@ export function MediaLightbox({
         aria-label="Close media"
         onClick={onClose}
       />
-      <div className="absolute right-4 top-4 z-20 flex items-center gap-1">
+      <div className="absolute right-3 top-3 z-30 flex items-center gap-1.5 sm:right-4 sm:top-4">
         <button
           type="button"
           onClick={() => void downloadCurrent()}
           disabled={downloading}
-          className="rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-50"
+          className="rounded-full bg-black/60 p-2 text-white shadow-lg backdrop-blur-sm hover:bg-black/80 disabled:opacity-50"
           aria-label="Download"
         >
-          <Download className="h-5 w-5" strokeWidth={2} />
+          <Download className="h-5 w-5" strokeWidth={2.25} />
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white"
+          className="rounded-full bg-black/60 p-2 text-white shadow-lg backdrop-blur-sm hover:bg-black/80"
           aria-label="Close"
         >
-          <X className="h-5 w-5" strokeWidth={2} />
+          <X className="h-5 w-5" strokeWidth={2.25} />
         </button>
       </div>
 
@@ -232,6 +232,15 @@ export function MediaLightbox({
           aria-label="Download"
         >
           <Download className="h-4 w-4" strokeWidth={2} />
+        </button>
+        <span className="mx-1 h-4 w-px bg-white/20" aria-hidden />
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md p-2 text-white hover:bg-white/10"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" strokeWidth={2.25} />
         </button>
       </div>
 
