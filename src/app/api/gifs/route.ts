@@ -169,12 +169,21 @@ export async function GET(request: Request) {
     const results = (data.data ?? []).map(mapGif).filter(Boolean);
     const total = data.pagination?.total_count ?? results.length;
     const nextOffset = offset + results.length;
-    return NextResponse.json({
-      results,
-      nextOffset,
-      hasMore: nextOffset < total && results.length > 0,
-      total,
-    });
+    return NextResponse.json(
+      {
+        results,
+        nextOffset,
+        hasMore: nextOffset < total && results.length > 0,
+        total,
+      },
+      {
+        headers: {
+          "Cache-Control": q
+            ? "private, max-age=30"
+            : "private, max-age=120",
+        },
+      },
+    );
   } catch {
     return NextResponse.json(
       { error: "Could not load GIFs." },

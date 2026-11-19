@@ -56,30 +56,35 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const origin = publicRequestOrigin(request);
+  const isApiRoute = path.startsWith("/api/");
   const isAuthRoute =
     path === "/login" ||
     path.startsWith("/login/") ||
     path.startsWith("/auth/");
+
+  // API routes must never HTML-redirect to login. Fetch follows those as 200
+  // and the GIF picker treats the login page as an empty result set.
+  if (isApiRoute) {
+    return supabaseResponse;
+  }
 
   // Unauthenticated: only auth screens are allowed.
   if (!user && !isAuthRoute) {
     const next = path === "/" ? "/" : path;
     const loginUrl = new URL("/login", `${origin}/`);
     loginUrl.searchParams.set("next", next);
-    return withSessionCookies(
-      supabaseResponse,
-      NextResponse.redirect(loginUrl),
-    );
+    const redirect = NextResponse.redirect(loginUrl);
+    redirect.headers.set("Cache-Control", "private, no-store");
+    return withSessionCookies(supabaseResponse, redirect);
   }
 
   // Authenticated users leave auth screens (Home by default).
   if (user && isAuthRoute && !path.startsWith("/auth/callback")) {
     const next = request.nextUrl.searchParams.get("next");
     const safeNext = next && next.startsWith("/") ? next : "/";
-    return withSessionCookies(
-      supabaseResponse,
-      NextResponse.redirect(new URL(safeNext, `${origin}/`)),
-    );
+    const redirect = NextResponse.redirect(new URL(safeNext, `${origin}/`));
+    redirect.headers.set("Cache-Control", "private, no-store");
+    return withSessionCookies(supabaseResponse, redirect);
   }
 
   return supabaseResponse;

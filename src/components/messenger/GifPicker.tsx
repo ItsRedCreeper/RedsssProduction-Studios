@@ -60,7 +60,17 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
     try {
       const res = await fetch(`/api/gifs?${params.toString()}`, {
         signal: controller.signal,
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
       });
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(
+          res.redirected || res.url.includes("/login")
+            ? "Sign in required to search GIFs."
+            : "Could not load GIFs.",
+        );
+      }
       const body = (await res.json().catch(() => null)) as {
         error?: string;
         results?: GifResult[];
@@ -76,14 +86,18 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
         );
       }
       if (seq !== seqRef.current) return;
-      const results = body?.results ?? [];
+      const results = Array.isArray(body?.results) ? body.results : [];
       setItems((prev) => {
         if (!append) return results;
         const seen = new Set(prev.map((item) => item.id));
         return [...prev, ...results.filter((item) => !seen.has(item.id))];
       });
       setHasMore(Boolean(body?.hasMore));
-      setNextOffset(body?.nextOffset ?? offset + results.length);
+      setNextOffset(
+        typeof body?.nextOffset === "number"
+          ? body.nextOffset
+          : offset + results.length,
+      );
       setError(null);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
