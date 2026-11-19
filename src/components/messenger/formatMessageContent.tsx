@@ -536,9 +536,10 @@ function parseInline(
       }
     }
 
-    const url = slice.match(/^https?:\/\/[^\s<]+/i);
+    // Stop at | so spoilers like ||https://…|| don't glue bars into the href.
+    const url = slice.match(/^https?:\/\/[^\s<|]+/i);
     if (url) {
-      const cleaned = url[0].replace(/[).,!?]+$/g, "");
+      const cleaned = url[0].replace(/[).,!?;:|]+$/g, "");
       parts.push(linkNode(nextKey(), cleaned, cleaned));
       i += cleaned.length;
       continue;

@@ -365,8 +365,10 @@ export function MessageItem({
                 className="!h-4 !w-4 !text-[9px]"
               />
               <span
-                className="shrink-0 text-xs font-medium hover:underline"
-                style={{ color: replyRoleColor ?? "var(--accent)" }}
+                className={`shrink-0 text-xs font-medium hover:underline ${
+                  replyRoleColor ? "" : "text-[#dbdee1]"
+                }`}
+                style={replyRoleColor ? { color: replyRoleColor } : undefined}
               >
                 {replyAuthor}
               </span>

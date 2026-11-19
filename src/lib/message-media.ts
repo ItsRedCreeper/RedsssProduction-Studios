@@ -114,9 +114,15 @@ export function extractYoutubeId(text: string): string | null {
   return null;
 }
 
+/** Strip trailing punctuation / spoiler bars from a matched URL. */
+export function cleanMatchedUrl(url: string): string {
+  return url.replace(/[).,!?;:|]+$/g, "");
+}
+
 export function extractUrls(text: string): string[] {
-  const matches = text.match(/https?:\/\/[^\s<>"']+/gi) ?? [];
-  return [...new Set(matches.map((url) => url.replace(/[).,!?]+$/g, "")))];
+  // Exclude | so ||https://…|| spoilers don't glue bars onto the URL.
+  const matches = text.match(/https?:\/\/[^\s<>"'|]+/gi) ?? [];
+  return [...new Set(matches.map(cleanMatchedUrl))];
 }
 
 /**
@@ -133,8 +139,8 @@ export function extractEmbeddableUrlInfos(text: string): EmbeddableUrl[] {
 
   // Collect <url> suppressions.
   const suppressed = new Set(
-    [...withoutCode.matchAll(/<(https?:\/\/[^>\s]+)>/gi)].map((m) =>
-      m[1].replace(/[).,!?]+$/g, ""),
+    [...withoutCode.matchAll(/<(https?:\/\/[^>\s|]+)>/gi)].map((m) =>
+      cleanMatchedUrl(m[1]),
     ),
   );
 
@@ -160,20 +166,27 @@ export function extractEmbeddableUrlInfos(text: string): EmbeddableUrl[] {
   const seen = new Set<string>();
 
   function push(url: string, index: number) {
-    const cleaned = url.replace(/[).,!?]+$/g, "");
+    const cleaned = cleanMatchedUrl(url);
     if (!cleaned || suppressed.has(cleaned) || seen.has(cleaned)) return;
+    // Require a plausible absolute URL so broken spoiler matches don't unfurl.
+    try {
+      // eslint-disable-next-line no-new
+      new URL(cleaned);
+    } catch {
+      return;
+    }
     seen.add(cleaned);
     found.push({ url: cleaned, spoiler: inSpoiler(index) });
   }
 
-  // Bare URLs
-  for (const match of withoutCode.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
+  // Bare URLs — stop at | so trailing || spoilers stay off the href.
+  for (const match of withoutCode.matchAll(/https?:\/\/[^\s<>"'|]+/gi)) {
     push(match[0], match.index ?? 0);
   }
 
   // Masked links [label](url) — Discord still unfurls these.
   for (const match of withoutCode.matchAll(
-    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi,
+    /\[([^\]]+)\]\((https?:\/\/[^\s)|]+)\)/gi,
   )) {
     push(match[2], match.index ?? 0);
   }

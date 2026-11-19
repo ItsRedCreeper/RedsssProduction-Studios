@@ -39,7 +39,7 @@ export function LinkEmbeds({ content }: LinkEmbedsProps) {
     <div className="mt-1.5 flex flex-col gap-2">
       {urls.map((item) => (
         <LinkPreviewCard
-          key={item.url}
+          key={`${item.url}:${item.spoiler ? "s" : "n"}`}
           url={item.url}
           spoiler={item.spoiler}
         />
@@ -63,6 +63,7 @@ function LinkPreviewCard({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setMeta(null);
     void fetch(`/api/oembed?url=${encodeURIComponent(url)}`)
       .then(async (res) => {
         if (!res.ok) return null;
@@ -87,13 +88,16 @@ function LinkPreviewCard({
     meta?.provider_name ||
     safeHostname(url) ||
     "Link";
-  const title = meta?.title?.trim() || (loading ? "Loading preview…" : site);
+  const title =
+    meta?.title?.trim() ||
+    (loading ? "Loading preview…" : safeHostname(url) || site);
   const description = meta?.description?.trim();
   const image =
     meta?.thumbnail_url ||
     (youtubeId ? `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg` : null);
 
-  if (!loading && !meta && !youtubeId) return null;
+  // Still show a minimal card when OG fails so spoilered links aren't blank.
+  if (!loading && !meta && !youtubeId && !safeHostname(url)) return null;
 
   const card = youtubeId ? (
     <div className="max-w-md overflow-hidden rounded-[4px] bg-[#2b2d31]">
@@ -108,6 +112,7 @@ function LinkPreviewCard({
             target="_blank"
             rel="noreferrer"
             className="mt-0.5 line-clamp-2 text-base font-semibold text-[#00a8fc] hover:underline"
+            onClick={(event) => event.stopPropagation()}
           >
             {title}
           </a>
@@ -130,7 +135,10 @@ function LinkPreviewCard({
             ) : (
               <button
                 type="button"
-                onClick={() => setOpen(true)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setOpen(true);
+                }}
                 className="group relative block w-full text-left"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -156,6 +164,10 @@ function LinkPreviewCard({
       target="_blank"
       rel="noreferrer"
       className="block max-w-md overflow-hidden rounded-[4px] bg-[#2b2d31] transition hover:bg-[#2e3035]"
+      onClick={(event) => {
+        // While covered by SpoilerMedia, pointer-events are off; after reveal, navigate.
+        if (spoiler) event.stopPropagation();
+      }}
     >
       <div className="flex">
         <div className="w-1 shrink-0 bg-accent" aria-hidden />
