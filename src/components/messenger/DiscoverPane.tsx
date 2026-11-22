@@ -153,14 +153,18 @@ export function DiscoverPane({
     setJoiningId(serverId);
     setError(null);
     const supabase = createClient();
-    const { error: joinError } = await supabase.from("server_members").insert({
-      server_id: serverId,
-      user_id: user.id,
-    });
+    const { joinServerWithDefaultRole } = await import(
+      "@/lib/server-membership"
+    );
+    const { error: joinError } = await joinServerWithDefaultRole(
+      supabase,
+      serverId,
+      user.id,
+    );
     setJoiningId(null);
 
     if (joinError) {
-      setError(joinError.message);
+      setError(joinError);
       return;
     }
 

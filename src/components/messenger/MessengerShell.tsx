@@ -2416,13 +2416,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setJoiningPreview(true);
     setError(null);
     const supabase = createClient();
-    const { error: joinError } = await supabase.from("server_members").insert({
-      server_id: activeServerId,
-      user_id: user.id,
-    });
+    const { joinServerWithDefaultRole } = await import(
+      "@/lib/server-membership"
+    );
+    const { error: joinError } = await joinServerWithDefaultRole(
+      supabase,
+      activeServerId,
+      user.id,
+    );
     if (joinError) {
       setJoiningPreview(false);
-      setError(joinError.message);
+      setError(joinError);
       return;
     }
     const channelId = activeChannelId;
@@ -4080,6 +4084,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           canKickMembers={canKickMembers || !!myPerms.ADMINISTRATOR}
           canCreateInvites={canCreateInvites}
           canManageEmojis={canManageEmojis || !!myPerms.ADMINISTRATOR}
+          actorRoleIds={myRoleIds}
           onClose={() => setSettingsOpen(false)}
           onServerUpdated={(next) => {
             setServers((prev) => prev.map((server) => (server.id === next.id ? next : server)));

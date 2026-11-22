@@ -40,7 +40,13 @@ import {
   SERVER_NAME_MIN,
 } from "@/lib/field-limits";
 import { sanitizeEmojiName, type ServerEmoji } from "@/lib/emoji";
-import { PERMISSIONS, type Permission } from "@/lib/permissions";
+import {
+  DEFAULT_MEMBER_PERMISSIONS,
+  PERMISSIONS,
+  type Permission,
+  type PermissionMap,
+} from "@/lib/permissions";
+import { canManageRoleTarget, canModerateMember } from "@/lib/roles";
 import type {
   Category,
   Channel,
@@ -91,6 +97,8 @@ type ServerSettingsModalProps = {
   canKickMembers?: boolean;
   canCreateInvites?: boolean;
   canManageEmojis?: boolean;
+  /** Caller's role ids — used for Discord-style hierarchy checks. */
+  actorRoleIds?: string[];
   onClose: () => void;
   onServerUpdated: (server: Server) => void;
   onChannelsChanged: (channels: Channel[], categories: Category[]) => void;
@@ -114,6 +122,7 @@ export function ServerSettingsModal({
   canKickMembers = false,
   canCreateInvites = false,
   canManageEmojis = false,
+  actorRoleIds = [],
   onClose,
   onServerUpdated,
   onChannelsChanged,
@@ -330,19 +339,36 @@ export function ServerSettingsModal({
     setSaving(true);
     setError(null);
     const supabase = createClient();
-    const maxPosition = roles.reduce(
-      (max, role) => Math.max(max, role.position),
-      -1,
-    );
+    // Discord: new roles sit just above @everyone (the default role).
+    const defaultRole = roles.find((role) => role.is_default);
+    const newPosition = (defaultRole?.position ?? -1) + 1;
+    const toBump = roles.filter((role) => role.position >= newPosition);
+    for (const role of toBump) {
+      const { error: bumpError } = await supabase
+        .from("roles")
+        .update({ position: role.position + 1 })
+        .eq("id", role.id);
+      if (bumpError) {
+        setSaving(false);
+        setError(bumpError.message);
+        return;
+      }
+    }
+    const templatePerms =
+      defaultRole?.permissions &&
+      typeof defaultRole.permissions === "object" &&
+      !Array.isArray(defaultRole.permissions)
+        ? (defaultRole.permissions as PermissionMap)
+        : DEFAULT_MEMBER_PERMISSIONS;
     const { data, error: insertError } = await supabase
       .from("roles")
       .insert({
         server_id: server.id,
         name: trimmed,
         color: roleColor,
-        position: maxPosition + 1,
+        position: newPosition,
         hoist: false,
-        permissions: {},
+        permissions: templatePerms,
       })
       .select("*")
       .single();
@@ -351,7 +377,12 @@ export function ServerSettingsModal({
       setError(insertError?.message ?? "Could not create role.");
       return;
     }
-    const next = [...roles, data].sort(compareRolePositionDesc);
+    const bumped = roles.map((role) =>
+      role.position >= newPosition
+        ? { ...role, position: role.position + 1 }
+        : role,
+    );
+    const next = [...bumped, data].sort(compareRolePositionDesc);
     setRoles(next);
     onRolesChanged?.(next);
     setRoleName("");
@@ -363,6 +394,12 @@ export function ServerSettingsModal({
     nextColor: string,
     nextPermissions: Record<string, boolean>,
   ) {
+    if (
+      !canManageRoleTarget(roles, actorRoleIds, role, { isOwner })
+    ) {
+      setError("You can only edit roles below your highest role.");
+      return;
+    }
     const trimmed = nextName.trim();
     if (trimmed.length < ROLE_NAME_MIN) {
       setError(`Role name must be at least ${ROLE_NAME_MIN} characters.`);
@@ -372,6 +409,32 @@ export function ServerSettingsModal({
       setError(`Role name must be ${ROLE_NAME_MAX} characters or fewer.`);
       return;
     }
+    // Discord: you can only grant permissions you yourself have.
+    const actorPerms = isOwner
+      ? null
+      : roles
+          .filter((item) => actorRoleIds.includes(item.id))
+          .reduce<PermissionMap>((acc, item) => {
+            const raw = item.permissions;
+            if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+              for (const [key, value] of Object.entries(
+                raw as Record<string, boolean>,
+              )) {
+                if (value || key === PERMISSIONS.ADMINISTRATOR) {
+                  if (key === PERMISSIONS.ADMINISTRATOR && value) {
+                    for (const perm of Object.values(PERMISSIONS)) acc[perm] = true;
+                  } else if (value) acc[key as Permission] = true;
+                }
+              }
+            }
+            return acc;
+          }, {});
+    const sanitized: PermissionMap = { ...nextPermissions };
+    if (actorPerms && !actorPerms.ADMINISTRATOR) {
+      for (const key of Object.values(PERMISSIONS)) {
+        if (sanitized[key] && !actorPerms[key]) sanitized[key] = false;
+      }
+    }
     setError(null);
     const supabase = createClient();
     const { data, error: updateError } = await supabase
@@ -379,7 +442,7 @@ export function ServerSettingsModal({
       .update({
         name: trimmed,
         color: nextColor,
-        permissions: nextPermissions,
+        permissions: sanitized,
       })
       .eq("id", role.id)
       .select("*")
@@ -543,6 +606,14 @@ export function ServerSettingsModal({
 
   async function assignRole(memberId: string, roleId: string) {
     if (!roleId) return;
+    const targetRole = roles.find((role) => role.id === roleId);
+    if (
+      targetRole &&
+      !canManageRoleTarget(roles, actorRoleIds, targetRole, { isOwner })
+    ) {
+      setError("You can only assign roles below your highest role.");
+      return;
+    }
     setError(null);
     const supabase = createClient();
     const member = members.find((item) => item.user_id === memberId);
@@ -578,6 +649,13 @@ export function ServerSettingsModal({
       setError("The default Member role cannot be removed from members.");
       return;
     }
+    if (
+      target &&
+      !canManageRoleTarget(roles, actorRoleIds, target, { isOwner })
+    ) {
+      setError("You can only remove roles below your highest role.");
+      return;
+    }
     setError(null);
     const supabase = createClient();
     const { error: deleteError } = await supabase
@@ -610,6 +688,16 @@ export function ServerSettingsModal({
   async function kickMember(memberId: string) {
     if (!canKickMembers && !isOwner) return;
     if (memberId === server.owner_id || memberId === userId) return;
+    const target = members.find((member) => member.user_id === memberId);
+    if (
+      target &&
+      !canModerateMember(roles, actorRoleIds, target.roleIds, { isOwner })
+    ) {
+      setError(
+        "You can't kick someone with an equal or higher role than yours.",
+      );
+      return;
+    }
     setError(null);
     const supabase = createClient();
     await supabase
@@ -1030,22 +1118,32 @@ export function ServerSettingsModal({
                 <p className="text-xs text-muted">
                   Higher roles appear first in the member list and win for
                   username color. Every role (including the default) gets its
-                  own member-list section. The default role is always on every
-                  member and cannot be removed from them — same as Discord’s
-                  @everyone.
+                  own member-list section. Like Discord’s @everyone, every
+                  server always has one default role that every member keeps —
+                  you can’t remove it from people or leave a server with none.
                 </p>
                 <ul className="space-y-2">
                   {roles.length === 0 && (
                     <li className="text-sm text-muted">No roles yet.</li>
                   )}
-                  {roles.map((role, index) => (
+                  {roles.map((role, index) => {
+                    const canEdit = canManageRoleTarget(
+                      roles,
+                      actorRoleIds,
+                      role,
+                      { isOwner },
+                    );
+                    return (
                     <RoleRow
                       key={role.id}
                       role={role}
                       confirm={confirmRoleId === role.id}
-                      canDelete={!role.is_default}
-                      canMoveUp={index > 0}
-                      canMoveDown={index < roles.length - 1}
+                      canEdit={canEdit}
+                      canDelete={!role.is_default && canEdit}
+                      canMoveUp={index > 0 && (isOwner || canEdit)}
+                      canMoveDown={
+                        index < roles.length - 1 && (isOwner || canEdit)
+                      }
                       onMoveUp={() => void moveRole(role.id, -1)}
                       onMoveDown={() => void moveRole(role.id, 1)}
                       onSetDefault={() => void setDefaultRole(role.id)}
@@ -1054,7 +1152,8 @@ export function ServerSettingsModal({
                       onCancelDelete={() => setConfirmRoleId(null)}
                       onDelete={() => void deleteRole(role.id)}
                     />
-                  ))}
+                    );
+                  })}
                 </ul>
                 <form onSubmit={createRole} className="flex flex-wrap items-end gap-2 border-t border-black/30 pt-4">
                   <label className="space-y-1">
@@ -1122,7 +1221,13 @@ export function ServerSettingsModal({
                         </div>
                         {!memberIsOwner &&
                           member.user_id !== userId &&
-                          (canKickMembers || isOwner) && (
+                          (canKickMembers || isOwner) &&
+                          canModerateMember(
+                            roles,
+                            actorRoleIds,
+                            member.roleIds,
+                            { isOwner },
+                          ) && (
                           <button
                             type="button"
                             onClick={() => void kickMember(member.user_id)}
@@ -1193,7 +1298,15 @@ export function ServerSettingsModal({
                             </button>
                           );
                         })}
-                        {(canManageRoles || isOwner) && roles.some((role) => !member.roleIds.includes(role.id) && !role.is_default) && (
+                        {(canManageRoles || isOwner) &&
+                          roles.some(
+                            (role) =>
+                              !role.is_default &&
+                              !member.roleIds.includes(role.id) &&
+                              canManageRoleTarget(roles, actorRoleIds, role, {
+                                isOwner,
+                              }),
+                          ) && (
                           <select
                             value=""
                             onChange={(event) => {
@@ -1207,7 +1320,13 @@ export function ServerSettingsModal({
                               .filter(
                                 (role) =>
                                   !role.is_default &&
-                                  !member.roleIds.includes(role.id),
+                                  !member.roleIds.includes(role.id) &&
+                                  canManageRoleTarget(
+                                    roles,
+                                    actorRoleIds,
+                                    role,
+                                    { isOwner },
+                                  ),
                               )
                               .map((role) => (
                                 <option key={role.id} value={role.id}>
@@ -1576,6 +1695,7 @@ export function ServerSettingsModal({
 function RoleRow({
   role,
   confirm,
+  canEdit = true,
   canDelete = true,
   canMoveUp = false,
   canMoveDown = false,
@@ -1589,6 +1709,7 @@ function RoleRow({
 }: {
   role: Role;
   confirm: boolean;
+  canEdit?: boolean;
   canDelete?: boolean;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
@@ -1667,25 +1788,29 @@ function RoleRow({
           value={color}
           onChange={(event) => setColor(event.target.value)}
           aria-label={`${role.name} color`}
-          className="h-8 w-10 cursor-pointer rounded-md border border-border bg-transparent"
+          disabled={!canEdit}
+          className="h-8 w-10 cursor-pointer rounded-md border border-border bg-transparent disabled:opacity-50"
         />
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-white outline-none focus:border-accent/40"
+          disabled={!canEdit}
+          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-white outline-none focus:border-accent/40 disabled:opacity-50"
         />
-        <DirtySaveButton
-          size="sm"
-          dirty={dirty}
-          disabled={!name.trim()}
-          label="Save"
-          onClick={() => onSave(role, name, color, perms)}
-        />
+        {canEdit && (
+          <DirtySaveButton
+            size="sm"
+            dirty={dirty}
+            disabled={!name.trim()}
+            label="Save"
+            onClick={() => onSave(role, name, color, perms)}
+          />
+        )}
         {role.is_default ? (
           <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
             Default
           </span>
-        ) : (
+        ) : canEdit ? (
           <button
             type="button"
             onClick={onSetDefault}
@@ -1693,8 +1818,12 @@ function RoleRow({
           >
             Make default
           </button>
-        )}
-        {role.is_default ? null : confirm ? (
+        ) : null}
+        {!canEdit ? (
+          <span className="rounded-md px-2 py-1 text-[10px] font-medium text-[#949ba4]">
+            Above your role
+          </span>
+        ) : role.is_default ? null : confirm ? (
           <>
             <button
               type="button"
@@ -1725,11 +1854,14 @@ function RoleRow({
         {ROLE_PERM_OPTIONS.map((option) => (
           <label
             key={option.key}
-            className="flex items-center gap-1.5 text-[11px] text-[#dbdee1]"
+            className={`flex items-center gap-1.5 text-[11px] text-[#dbdee1] ${
+              canEdit ? "" : "opacity-50"
+            }`}
           >
             <input
               type="checkbox"
               checked={Boolean(perms[option.key])}
+              disabled={!canEdit}
               onChange={(event) =>
                 setPerms((current) => ({
                   ...current,

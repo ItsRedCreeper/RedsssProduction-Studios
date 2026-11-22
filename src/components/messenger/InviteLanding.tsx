@@ -119,19 +119,22 @@ export function InviteLanding({ code }: InviteLandingProps) {
     setJoining(true);
     setError(null);
     const supabase = createClient();
-    const { error: joinError } = await supabase.from("server_members").insert({
-      server_id: server.id,
-      user_id: user.id,
-    });
+    const { joinServerWithDefaultRole } = await import(
+      "@/lib/server-membership"
+    );
+    const { error: joinError, alreadyMember } = await joinServerWithDefaultRole(
+      supabase,
+      server.id,
+      user.id,
+    );
 
-    const duplicate = !!joinError && /duplicate|unique|already/i.test(joinError.message);
-    if (joinError && !duplicate) {
+    if (joinError) {
       setJoining(false);
-      setError(joinError.message);
+      setError(joinError);
       return;
     }
 
-    if (!duplicate) {
+    if (!alreadyMember) {
       await supabase
         .from("invites")
         .update({ uses: invite.uses + 1 })

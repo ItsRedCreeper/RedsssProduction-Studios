@@ -9,6 +9,7 @@ import {
   SERVER_NAME_MAX,
   SERVER_NAME_MIN,
 } from "@/lib/field-limits";
+import { DEFAULT_MEMBER_PERMISSIONS } from "@/lib/permissions";
 
 type CreateServerModalProps = {
   open: boolean;
@@ -72,6 +73,25 @@ export function CreateServerModal({
       return;
     }
 
+    // Discord always has @everyone — create the default Member role first.
+    const { error: roleError } = await supabase.from("roles").insert({
+      server_id: server.id,
+      name: "Member",
+      color: "#99aab5",
+      position: 0,
+      hoist: false,
+      is_default: true,
+      permissions: DEFAULT_MEMBER_PERMISSIONS,
+    });
+    if (roleError) {
+      setLoading(false);
+      setError(roleError.message);
+      onCreated(server.id);
+      setLocked(true);
+      return;
+    }
+
+    // Trigger also assigns the default role; client helper is belt-and-suspenders.
     const { error: memberError } = await supabase.from("server_members").insert({
       server_id: server.id,
       user_id: userId,

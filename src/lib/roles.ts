@@ -31,6 +31,45 @@ export function highestRole(
   return owned[0] ?? null;
 }
 
+/** Highest role position, or -1 when the member has no roles. */
+export function highestRolePosition(
+  roles: Role[],
+  roleIds: string[],
+): number {
+  return highestRole(roles, roleIds)?.position ?? -1;
+}
+
+/**
+ * Discord hierarchy: you can only kick/moderate members whose highest role
+ * sits below yours. Owners bypass this.
+ */
+export function canModerateMember(
+  roles: Role[],
+  actorRoleIds: string[],
+  targetRoleIds: string[],
+  opts?: { isOwner?: boolean },
+): boolean {
+  if (opts?.isOwner) return true;
+  return (
+    highestRolePosition(roles, actorRoleIds) >
+    highestRolePosition(roles, targetRoleIds)
+  );
+}
+
+/**
+ * Discord Manage Roles: only edit roles strictly below your highest role.
+ * Owners can edit any non-default constraints separately.
+ */
+export function canManageRoleTarget(
+  roles: Role[],
+  actorRoleIds: string[],
+  target: Role,
+  opts?: { isOwner?: boolean },
+): boolean {
+  if (opts?.isOwner) return true;
+  return highestRolePosition(roles, actorRoleIds) > target.position;
+}
+
 /** True when the role has a custom (non-stock) color. */
 export function hasCustomRoleColor(role: Pick<Role, "color">): boolean {
   const color = role.color?.trim();
