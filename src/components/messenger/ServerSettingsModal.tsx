@@ -176,6 +176,9 @@ export function ServerSettingsModal({
     }
   });
 
+  // Only reset the active settings tab when the modal opens — not when the
+  // server object refreshes (presence/realtime/focus), which was bouncing users
+  // back to Overview after switching browser tabs.
   useEffect(() => {
     if (!open) return;
     const allowed = visibleTabs.some((item) => item.id === initialTab)
@@ -190,9 +193,8 @@ export function ServerSettingsModal({
     setEditingChannelId(null);
     setEmojiName("");
     setEmojiFile(null);
-    // visibleTabs is derived from stable permission props for this open session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialTab, server]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
