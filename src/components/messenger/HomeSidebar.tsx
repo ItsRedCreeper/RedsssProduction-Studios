@@ -57,8 +57,8 @@ export function HomeSidebar({
 
   return (
     <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-black/30 px-4 shadow-sm shadow-black/20">
-        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-white">
+      <div className="messenger-header flex h-12 shrink-0 items-center gap-2 bg-[#2b2d31] px-4">
+        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight text-white">
           Direct Messages
         </span>
         {onCreateGroup ? (
@@ -109,9 +109,9 @@ export function HomeSidebar({
                   <button
                     type="button"
                     onClick={() => onSelectThread(thread.id)}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 pr-8 text-left ${
+                    className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pr-8 text-left ${
                       active
-                        ? "bg-[#404249] text-white"
+                        ? "messenger-row-active text-white"
                         : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
                     }`}
                   >

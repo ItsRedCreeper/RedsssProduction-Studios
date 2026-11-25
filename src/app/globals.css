@@ -143,3 +143,62 @@ body::before {
     animation: typing-dot-bounce 1s ease-in-out infinite;
   }
 }
+
+/* RedsssMessenger chrome tokens — Discord-adjacent grays, Redsss composition */
+.messenger-shell {
+  --ms-chat: #313338;
+  --ms-sidebar: #2b2d31;
+  --ms-rail: #1a1b1e;
+  --ms-elevated: #232428;
+  --ms-input: #383a40;
+  --ms-border: #1e1f22;
+  --ms-border-soft: rgba(255, 255, 255, 0.06);
+  --ms-text: #dbdee1;
+  --ms-text-muted: #949ba4;
+  --ms-text-faint: #6d6f78;
+  --ms-hover: rgba(255, 255, 255, 0.05);
+  --ms-active: #3a3c43;
+  --ms-connected: #23a559;
+  --ms-danger: #ed4245;
+  --ms-focus: #5c6bc0;
+  background: var(--ms-chat);
+}
+
+.messenger-header {
+  position: relative;
+  border-bottom: 1px solid var(--ms-border);
+  box-shadow: 0 1px 0 rgba(220, 38, 38, 0.12);
+}
+
+.messenger-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(220, 38, 38, 0.45) 0%,
+    rgba(220, 38, 38, 0.08) 28%,
+    transparent 55%
+  );
+  pointer-events: none;
+}
+
+.messenger-row-active {
+  background: var(--ms-active);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.messenger-account-dock {
+  margin: 0.5rem;
+  border: 1px solid var(--ms-border-soft);
+  border-radius: 0.75rem;
+  background: linear-gradient(
+    135deg,
+    rgba(220, 38, 38, 0.08) 0%,
+    var(--ms-elevated) 42%
+  );
+  box-shadow: inset 2px 0 0 var(--accent);
+}

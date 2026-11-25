@@ -71,7 +71,7 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
 
   return (
     <div
-      className={`relative flex items-center gap-2 border-t border-black/30 bg-[#232428] px-2 py-1.5 ${className}`}
+      className={`messenger-account-dock relative flex items-center gap-2 px-2 py-1.5 ${className}`}
     >
       <button
         type="button"

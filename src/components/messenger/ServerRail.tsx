@@ -23,8 +23,8 @@ type ServerRailProps = {
 
 function iconShell(active: boolean) {
   return active
-    ? "rounded-[16px] bg-accent text-white"
-    : "rounded-[50%] bg-[#313338] text-foreground ring-1 ring-white/5 group-hover/server:rounded-[16px] group-hover/server:bg-accent group-hover/server:text-white";
+    ? "rounded-2xl bg-[#3a3c43] text-white ring-2 ring-accent/70"
+    : "rounded-2xl bg-[#2b2d31] text-[#dbdee1] ring-1 ring-white/5 group-hover/server:bg-[#35373c] group-hover/server:text-white group-hover/server:ring-white/10";
 }
 
 export function ServerRail({
@@ -40,23 +40,24 @@ export function ServerRail({
   onDiscover,
 }: ServerRailProps) {
   return (
-    <aside className="flex w-[72px] shrink-0 flex-col items-stretch gap-2 overflow-x-hidden overflow-y-auto bg-[#1e1f22] py-3">
+    <aside className="flex w-[72px] shrink-0 flex-col items-stretch gap-1.5 overflow-x-hidden overflow-y-auto border-r border-[#1e1f22] bg-[var(--ms-rail,#1a1b1e)] py-3">
       <ServerRailButton label="Home" active={homeActive} onClick={onHome}>
         <span
-          className={`flex h-12 w-12 items-center justify-center transition-all duration-200 ${iconShell(homeActive)}`}
+          className={`flex h-11 w-11 items-center justify-center transition-all duration-200 ${iconShell(homeActive)}`}
         >
           <MessagesSquare className="h-5 w-5" strokeWidth={2} />
         </span>
       </ServerRailButton>
 
-      <div className="mx-auto h-[2px] w-8 rounded-full bg-[#35363c]" />
+      <div className="mx-auto my-1 h-px w-8 bg-white/10" />
 
       {loading && (
-        <div className="mx-auto h-12 w-12 animate-pulse rounded-[1.5rem] bg-[#313338]" />
+        <div className="mx-auto h-11 w-11 animate-pulse rounded-2xl bg-[#2b2d31]" />
       )}
 
       {servers.map((server) => {
-        const active = !homeActive && !discoverActive && server.id === activeServerId;
+        const active =
+          !homeActive && !discoverActive && server.id === activeServerId;
         const unread = unreadServerIds.has(server.id);
         return (
           <ServerRailButton
@@ -67,7 +68,7 @@ export function ServerRail({
             onClick={() => onSelectServer(server.id)}
           >
             <span
-              className={`flex h-12 w-12 items-center justify-center overflow-hidden text-sm font-bold transition-all duration-200 ${iconShell(active)}`}
+              className={`flex h-11 w-11 items-center justify-center overflow-hidden text-sm font-bold transition-all duration-200 ${iconShell(active)}`}
             >
               {server.icon_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -86,11 +87,11 @@ export function ServerRail({
         );
       })}
 
-      <div className="mx-auto h-[2px] w-8 rounded-full bg-[#35363c]" />
+      <div className="mx-auto my-1 h-px w-8 bg-white/10" />
 
       <ServerRailButton label="Add a Server" tone="action" onClick={onCreate}>
-        <span className="flex h-12 w-12 items-center justify-center rounded-[50%] bg-[#313338] text-accent transition-all duration-200 group-hover/server:rounded-[16px] group-hover/server:bg-accent group-hover/server:text-white">
-          <Plus className="h-6 w-6" strokeWidth={2.25} />
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#2b2d31] text-accent ring-1 ring-accent/30 transition-all duration-200 group-hover/server:bg-accent group-hover/server:text-white group-hover/server:ring-accent">
+          <Plus className="h-5 w-5" strokeWidth={2.25} />
         </span>
       </ServerRailButton>
 
@@ -101,10 +102,10 @@ export function ServerRail({
         onClick={onDiscover}
       >
         <span
-          className={`flex h-12 w-12 items-center justify-center transition-all duration-200 ${
+          className={`flex h-11 w-11 items-center justify-center transition-all duration-200 ${
             discoverActive
-              ? "rounded-[16px] bg-accent text-white"
-              : "rounded-[50%] bg-[#313338] text-accent group-hover/server:rounded-[16px] group-hover/server:bg-accent group-hover/server:text-white"
+              ? "rounded-2xl bg-[#3a3c43] text-white ring-2 ring-accent/70"
+              : "rounded-2xl bg-[#2b2d31] text-accent ring-1 ring-accent/30 group-hover/server:bg-accent group-hover/server:text-white group-hover/server:ring-accent"
           }`}
         >
           <Compass className="h-5 w-5" strokeWidth={2} />

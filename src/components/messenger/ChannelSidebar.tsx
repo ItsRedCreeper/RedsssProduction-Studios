@@ -96,9 +96,9 @@ function ChannelButton({
               }
             : undefined
         }
-        className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[15px] transition-colors ${
+        className={`flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[15px] transition-colors ${
           active
-            ? "bg-[#404249] text-white"
+            ? "messenger-row-active text-white"
             : unread
               ? "font-semibold text-white hover:bg-white/5"
               : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"

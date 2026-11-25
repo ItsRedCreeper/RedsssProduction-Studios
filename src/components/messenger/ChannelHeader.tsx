@@ -34,10 +34,10 @@ type ChannelHeaderProps = {
 };
 
 function toolClass(active: boolean) {
-  return `rounded-md p-1.5 transition-colors ${
+  return `rounded-lg p-1.5 transition-colors ${
     active
-      ? "bg-[#404249] text-white"
-      : "text-[#b5bac1] hover:bg-[#35373c] hover:text-white"
+      ? "bg-white/10 text-white shadow-[inset_0_-2px_0_0_var(--accent)]"
+      : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
   }`;
 }
 
@@ -69,12 +69,12 @@ export function ChannelHeader({
   onExpandCall,
 }: ChannelHeaderProps) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1f2023] px-2 sm:px-4">
+    <header className="messenger-header flex h-12 shrink-0 items-center gap-2 bg-[#313338]/80 px-2 backdrop-blur-sm sm:px-4">
       {onOpenList ? (
         <button
           type="button"
           onClick={onOpenList}
-          className="rounded-md p-1.5 text-[#b5bac1] hover:bg-[#404249] hover:text-white sm:hidden"
+          className="rounded-lg p-1.5 text-[#b5bac1] hover:bg-white/5 hover:text-white sm:hidden"
           aria-label="Open channel list"
         >
           <Menu className="h-5 w-5" strokeWidth={1.75} />
@@ -82,7 +82,9 @@ export function ChannelHeader({
       ) : null}
       <span className="shrink-0 text-[#949ba4]">{icon}</span>
       <HoverTip label={title} onlyIfTruncated delayMs={40} className="min-w-0 shrink">
-        <h1 className="truncate text-base font-semibold text-white">{title}</h1>
+        <h1 className="truncate text-base font-semibold tracking-tight text-white">
+          {title}
+        </h1>
       </HoverTip>
       {topic ? (
         <>
@@ -170,7 +172,7 @@ export function ChannelHeader({
             >
               <Pin className="h-5 w-5" strokeWidth={1.75} />
               {pinCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#4e5058] px-0.5 text-[9px] font-bold text-white">
+                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-bold text-white">
                   {pinCount > 9 ? "9+" : pinCount}
                 </span>
               )}

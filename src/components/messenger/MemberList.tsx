@@ -251,7 +251,7 @@ export function MemberList({
 
   return (
     <aside className={`flex w-60 shrink-0 flex-col bg-[#2b2d31] ${className}`}>
-      <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
+      <div className="messenger-header flex h-12 shrink-0 items-center bg-[#2b2d31] px-4 text-sm font-semibold text-white">
         Members
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">

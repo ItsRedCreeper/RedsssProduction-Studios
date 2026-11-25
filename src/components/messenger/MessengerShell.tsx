@@ -4130,7 +4130,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   );
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="messenger-shell flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <CallOverlay />
       <ServerRail
@@ -4305,7 +4305,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           !!user &&
           (loadingServers || channelPending) ? (
           <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
-            <div className="flex h-12 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
+            <div className="messenger-header flex h-12 items-center bg-[#2b2d31] px-4 text-sm font-semibold text-white">
               Loading…
             </div>
             <div className="flex-1" />
@@ -4313,7 +4313,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           </aside>
         ) : (
           <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
-            <div className="flex h-12 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
+            <div className="messenger-header flex h-12 items-center bg-[#2b2d31] px-4 text-sm font-semibold text-white">
               No server
             </div>
             <p className="flex-1 px-4 py-4 text-sm text-[#949ba4]">
@@ -4711,7 +4711,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           {textMode && !channelPending && !needsSignIn && (
             <>
               {activeThreadId ? (
-                <div className="flex shrink-0 items-center gap-2 border-b border-black/30 bg-[#2b2d31] px-4 py-2">
+                <div className="messenger-header flex shrink-0 items-center gap-2 bg-[#2b2d31] px-4 py-2">
                   <MessagesSquare className="h-4 w-4 text-[#949ba4]" strokeWidth={1.75} />
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
                     {channelThreads.find((thread) => thread.id === activeThreadId)?.name ??
@@ -5013,7 +5013,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             >
               <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
             </div>
-            <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
+            <div className="messenger-header flex h-12 shrink-0 items-center bg-[#2b2d31] px-4 text-sm font-semibold text-white">
               Voice Chat
             </div>
             <div className="flex min-h-0 flex-1 flex-col">
