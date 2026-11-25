@@ -116,6 +116,10 @@ export function InviteLanding({ code }: InviteLandingProps) {
 
   async function join() {
     if (!user || !invite || !server || expired) return;
+    if (server.invites_paused) {
+      setError("Invites are paused for this server.");
+      return;
+    }
     setJoining(true);
     setError(null);
     const supabase = createClient();

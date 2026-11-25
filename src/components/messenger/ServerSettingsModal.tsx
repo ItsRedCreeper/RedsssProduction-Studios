@@ -44,6 +44,7 @@ import { sanitizeEmojiName, type ServerEmoji } from "@/lib/emoji";
 import {
   DEFAULT_MEMBER_PERMISSIONS,
   PERMISSIONS,
+  ROLE_PERMISSION_OPTIONS,
   isPrivateChannel,
   roleCanViewChannel,
   setChannelPrivate,
@@ -62,21 +63,10 @@ import type {
   SettingsTab,
 } from "@/components/messenger/types";
 
-const ROLE_PERM_OPTIONS: { key: Permission; label: string }[] = [
-  { key: PERMISSIONS.ADMINISTRATOR, label: "Administrator" },
-  { key: PERMISSIONS.MANAGE_SERVER, label: "Manage server" },
-  { key: PERMISSIONS.MANAGE_CHANNELS, label: "Manage channels" },
-  { key: PERMISSIONS.MANAGE_ROLES, label: "Manage roles" },
-  { key: PERMISSIONS.MANAGE_EMOJIS, label: "Manage emojis" },
-  { key: PERMISSIONS.MANAGE_MESSAGES, label: "Manage messages" },
-  { key: PERMISSIONS.KICK_MEMBERS, label: "Kick members" },
-  { key: PERMISSIONS.BAN_MEMBERS, label: "Ban members" },
-  { key: PERMISSIONS.CREATE_INVITES, label: "Create invites" },
-  { key: PERMISSIONS.SEND_MESSAGES, label: "Send messages" },
-  { key: PERMISSIONS.CONNECT, label: "Connect to voice" },
-  { key: PERMISSIONS.SPEAK, label: "Speak in voice" },
-  { key: PERMISSIONS.VIEW_CHANNEL, label: "View channels" },
-];
+const ROLE_PERM_OPTIONS = ROLE_PERMISSION_OPTIONS.map((option) => ({
+  key: option.key,
+  label: option.label,
+}));
 
 const TABS: { id: SettingsTab; label: string; icon: typeof Shield }[] = [
   { id: "overview", label: "Overview", icon: Shield },
@@ -100,6 +90,7 @@ type ServerSettingsModalProps = {
   canManageChannels?: boolean;
   canManageRoles?: boolean;
   canKickMembers?: boolean;
+  canBanMembers?: boolean;
   canCreateInvites?: boolean;
   canManageEmojis?: boolean;
   /** Caller's role ids — used for Discord-style hierarchy checks. */
@@ -125,6 +116,7 @@ export function ServerSettingsModal({
   canManageChannels = false,
   canManageRoles = false,
   canKickMembers = false,
+  canBanMembers = false,
   canCreateInvites = false,
   canManageEmojis = false,
   actorRoleIds = [],
@@ -156,6 +148,22 @@ export function ServerSettingsModal({
   const [editChannelName, setEditChannelName] = useState("");
   const [newChannelPrivate, setNewChannelPrivate] = useState(false);
   const [permsChannelId, setPermsChannelId] = useState<string | null>(null);
+  const [banMemberId, setBanMemberId] = useState<string | null>(null);
+  const [banReason, setBanReason] = useState("");
+  const [banDeleteDays, setBanDeleteDays] = useState(0);
+  const [bans, setBans] = useState<
+    {
+      user_id: string;
+      reason: string | null;
+      expires_at: string | null;
+      created_at: string;
+      username?: string;
+    }[]
+  >([]);
+  const [inviteExpiryHours, setInviteExpiryHours] = useState<number | "never">(
+    168,
+  );
+  const [inviteMaxUses, setInviteMaxUses] = useState<number | "">("");
   const [serverEmojis, setServerEmojis] = useState<ServerEmoji[]>([]);
   const [emojiName, setEmojiName] = useState("");
   const [emojiFile, setEmojiFile] = useState<File | null>(null);
@@ -171,7 +179,7 @@ export function ServerSettingsModal({
       case "roles":
         return canManageRoles || isOwner;
       case "members":
-        return canManageRoles || canKickMembers || isOwner;
+        return canManageRoles || canKickMembers || canBanMembers || isOwner;
       case "invites":
         return canCreateInvites || isOwner;
       case "channels":
@@ -209,23 +217,29 @@ export function ServerSettingsModal({
     let cancelled = false;
 
     async function load() {
-      const [rolesResult, invitesResult, emojiResult] = await Promise.all([
-        supabase
-          .from("roles")
-          .select("*")
-          .eq("server_id", server.id)
-          .order("position", { ascending: true }),
-        supabase
-          .from("invites")
-          .select("*")
-          .eq("server_id", server.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("server_emojis")
-          .select("*")
-          .eq("server_id", server.id)
-          .order("name", { ascending: true }),
-      ]);
+      const [rolesResult, invitesResult, emojiResult, bansResult] =
+        await Promise.all([
+          supabase
+            .from("roles")
+            .select("*")
+            .eq("server_id", server.id)
+            .order("position", { ascending: true }),
+          supabase
+            .from("invites")
+            .select("*")
+            .eq("server_id", server.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("server_emojis")
+            .select("*")
+            .eq("server_id", server.id)
+            .order("name", { ascending: true }),
+          supabase
+            .from("server_bans")
+            .select("user_id, reason, expires_at, created_at")
+            .eq("server_id", server.id)
+            .order("created_at", { ascending: false }),
+        ]);
       if (cancelled) return;
       if (rolesResult.error) setError(rolesResult.error.message);
       else {
@@ -236,6 +250,26 @@ export function ServerSettingsModal({
       if (invitesResult.error) setError(invitesResult.error.message);
       if (emojiResult.error) setError(emojiResult.error.message);
       else setServerEmojis((emojiResult.data as ServerEmoji[]) ?? []);
+      if (!bansResult.error) {
+        const rows = bansResult.data ?? [];
+        const ids = rows.map((row) => row.user_id);
+        let names: Record<string, string> = {};
+        if (ids.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, username")
+            .in("id", ids);
+          for (const profile of profiles ?? []) {
+            names[profile.id] = profile.username;
+          }
+        }
+        setBans(
+          rows.map((row) => ({
+            ...row,
+            username: names[row.user_id],
+          })),
+        );
+      }
       let loadedInvites = invitesResult.data ?? [];
       if (!invitesResult.error) setInvites(loadedInvites);
 
@@ -680,6 +714,183 @@ export function ServerSettingsModal({
       return;
     }
     onMembersChanged(members.filter((member) => member.user_id !== memberId));
+  }
+
+  async function banMember(memberId: string) {
+    if (!canBanMembers && !isOwner) return;
+    if (memberId === server.owner_id || memberId === userId) return;
+    const target = members.find((member) => member.user_id === memberId);
+    if (
+      target &&
+      !canModerateMember(roles, actorRoleIds, target.roleIds, { isOwner })
+    ) {
+      setError(
+        "You can't ban someone with an equal or higher role than yours.",
+      );
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const supabase = createClient();
+    const deleteSeconds = Math.max(0, banDeleteDays) * 24 * 60 * 60;
+    const { error: banError } = await supabase.from("server_bans").upsert({
+      server_id: server.id,
+      user_id: memberId,
+      banned_by: userId,
+      reason: banReason.trim() || null,
+      delete_message_seconds: deleteSeconds,
+      expires_at: null,
+    });
+    if (banError) {
+      setSaving(false);
+      setError(banError.message);
+      return;
+    }
+    if (deleteSeconds > 0) {
+      const since = new Date(Date.now() - deleteSeconds * 1000).toISOString();
+      const channelIds = channels.map((channel) => channel.id);
+      if (channelIds.length > 0) {
+        await supabase
+          .from("messages")
+          .delete()
+          .eq("user_id", memberId)
+          .in("channel_id", channelIds)
+          .gte("created_at", since);
+      }
+    }
+    await supabase
+      .from("member_roles")
+      .delete()
+      .eq("server_id", server.id)
+      .eq("user_id", memberId);
+    await supabase
+      .from("server_members")
+      .delete()
+      .eq("server_id", server.id)
+      .eq("user_id", memberId);
+    setSaving(false);
+    onMembersChanged(members.filter((member) => member.user_id !== memberId));
+    setBans((prev) => [
+      {
+        user_id: memberId,
+        reason: banReason.trim() || null,
+        expires_at: null,
+        created_at: new Date().toISOString(),
+        username: target?.username,
+      },
+      ...prev.filter((ban) => ban.user_id !== memberId),
+    ]);
+    setBanMemberId(null);
+    setBanReason("");
+    setBanDeleteDays(0);
+  }
+
+  async function unbanMember(memberId: string) {
+    if (!canBanMembers && !isOwner) return;
+    setError(null);
+    const supabase = createClient();
+    const { error: deleteError } = await supabase
+      .from("server_bans")
+      .delete()
+      .eq("server_id", server.id)
+      .eq("user_id", memberId);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    setBans((prev) => prev.filter((ban) => ban.user_id !== memberId));
+  }
+
+  async function createTimedInvite(event: FormEvent) {
+    event.preventDefault();
+    if (!canCreateInvites && !isOwner) return;
+    setSaving(true);
+    setError(null);
+    const supabase = createClient();
+    const code = makeInviteCode();
+    const expiresAt =
+      inviteExpiryHours === "never"
+        ? null
+        : new Date(Date.now() + inviteExpiryHours * 60 * 60 * 1000).toISOString();
+    const { data, error: insertError } = await supabase
+      .from("invites")
+      .insert({
+        code,
+        server_id: server.id,
+        creator_id: userId,
+        max_uses: inviteMaxUses === "" ? null : Number(inviteMaxUses),
+        expires_at: expiresAt,
+        is_permanent: inviteExpiryHours === "never" && inviteMaxUses === "",
+        uses: 0,
+      })
+      .select("*")
+      .single();
+    setSaving(false);
+    if (insertError || !data) {
+      setError(insertError?.message ?? "Could not create invite.");
+      return;
+    }
+    setInvites((prev) => [data, ...prev]);
+    setInviteMaxUses("");
+  }
+
+  async function deleteInvite(inviteId: string) {
+    setError(null);
+    const supabase = createClient();
+    const { error: deleteError } = await supabase
+      .from("invites")
+      .delete()
+      .eq("id", inviteId);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    setInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
+  }
+
+  async function toggleInvitesPaused() {
+    if (!canManageServer && !isOwner) return;
+    const next = !server.invites_paused;
+    setError(null);
+    const supabase = createClient();
+    const { data, error: updateError } = await supabase
+      .from("servers")
+      .update({ invites_paused: next })
+      .eq("id", server.id)
+      .select("*")
+      .single();
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not update invite pause.");
+      return;
+    }
+    onServerUpdated(data);
+  }
+
+  async function syncChannelToCategory(channel: Channel) {
+    if (!channel.category_id) return;
+    const category = categories.find((item) => item.id === channel.category_id);
+    if (!category) return;
+    setSaving(true);
+    setError(null);
+    const supabase = createClient();
+    const { data, error: updateError } = await supabase
+      .from("channels")
+      .update({
+        permission_overrides: category.permission_overrides ?? {},
+        permissions_synced: true,
+      })
+      .eq("id", channel.id)
+      .select("*")
+      .single();
+    setSaving(false);
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not sync permissions.");
+      return;
+    }
+    onChannelsChanged(
+      channels.map((item) => (item.id === channel.id ? data : item)),
+      categories,
+    );
   }
 
   async function copyInvite(code: string) {
@@ -1182,8 +1393,40 @@ export function ServerSettingsModal({
             )}
 
             {tab === "members" &&
-              (canManageRoles || canKickMembers || isOwner) && (
+              (canManageRoles || canKickMembers || canBanMembers || isOwner) && (
               <ul className="space-y-2">
+                {(canBanMembers || isOwner) && bans.length > 0 && (
+                  <li className="mb-1 space-y-2 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                      Bans
+                    </p>
+                    <ul className="space-y-1">
+                      {bans.map((ban) => (
+                        <li
+                          key={ban.user_id}
+                          className="flex items-center justify-between gap-2 text-sm text-[#dbdee1]"
+                        >
+                          <span className="min-w-0 truncate">
+                            {ban.username ?? ban.user_id}
+                            {ban.reason ? (
+                              <span className="text-[#949ba4]">
+                                {" "}
+                                — {ban.reason}
+                              </span>
+                            ) : null}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void unbanMember(ban.user_id)}
+                            className="shrink-0 rounded-md px-2 py-1 text-xs hover:bg-white/10"
+                          >
+                            Unban
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                )}
                 {members.length === 0 && (
                   <li className="text-sm text-muted">No members loaded.</li>
                 )}
@@ -1216,22 +1459,79 @@ export function ServerSettingsModal({
                         </div>
                         {!memberIsOwner &&
                           member.user_id !== userId &&
-                          (canKickMembers || isOwner) &&
                           canModerateMember(
                             roles,
                             actorRoleIds,
                             member.roleIds,
                             { isOwner },
                           ) && (
-                          <button
-                            type="button"
-                            onClick={() => void kickMember(member.user_id)}
-                            className="rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent-muted"
-                          >
-                            Kick
-                          </button>
+                          <div className="flex items-center gap-1">
+                            {(canKickMembers || isOwner) && (
+                              <button
+                                type="button"
+                                onClick={() => void kickMember(member.user_id)}
+                                className="rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent-muted"
+                              >
+                                Kick
+                              </button>
+                            )}
+                            {(canBanMembers || isOwner) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBanMemberId(member.user_id);
+                                  setBanReason("");
+                                  setBanDeleteDays(0);
+                                }}
+                                className="rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent-muted"
+                              >
+                                Ban
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
+                      {banMemberId === member.user_id ? (
+                        <div className="mt-2 space-y-2 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                          <input
+                            value={banReason}
+                            onChange={(event) => setBanReason(event.target.value)}
+                            placeholder="Reason (optional)"
+                            className="w-full rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm outline-none focus:border-accent/50"
+                          />
+                          <label className="block text-xs text-[#949ba4]">
+                            Delete message history
+                            <select
+                              value={banDeleteDays}
+                              onChange={(event) =>
+                                setBanDeleteDays(Number(event.target.value))
+                              }
+                              className="mt-1 block w-full rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
+                            >
+                              <option value={0}>Don&apos;t delete any</option>
+                              <option value={1}>Previous 24 hours</option>
+                              <option value={7}>Previous 7 days</option>
+                            </select>
+                          </label>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => void banMember(member.user_id)}
+                              className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white"
+                            >
+                              Confirm Ban
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBanMemberId(null)}
+                              className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-white"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {member.roleIds.map((roleId) => {
                           const role = roleById.get(roleId);
@@ -1339,44 +1639,124 @@ export function ServerSettingsModal({
 
             {tab === "invites" && (canCreateInvites || isOwner) && (
               <div className="space-y-4">
-                <p className="text-sm text-[#b5bac1]">
-                  This server has one permanent invite link. Use Invite People from the
-                  server header to share it with friends.
-                </p>
-                {(() => {
-                  const permanent =
-                    invites.find((invite) => invite.is_permanent) ?? invites[0] ?? null;
-                  if (!permanent) {
-                    return <p className="text-sm text-muted">No permanent invite yet.</p>;
-                  }
-                  return (
-                    <div className="rounded-md bg-[#2b2d31] px-3 py-3">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-                        Permanent invite link
-                      </p>
+                {(canManageServer || isOwner) && (
+                  <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[#2b2d31] px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(server.invites_paused)}
+                      onChange={() => void toggleInvitesPaused()}
+                      className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-white">
+                        Pause Invites
+                      </span>
+                      <span className="mt-0.5 block text-xs text-[#949ba4]">
+                        Temporarily stop new members from joining with invite links.
+                      </span>
+                    </span>
+                  </label>
+                )}
+                <form
+                  onSubmit={(event) => void createTimedInvite(event)}
+                  className="flex flex-wrap items-end gap-2 rounded-md bg-[#2b2d31] p-3"
+                >
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Expire after
+                    </span>
+                    <select
+                      value={String(inviteExpiryHours)}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setInviteExpiryHours(
+                          value === "never" ? "never" : Number(value),
+                        );
+                      }}
+                      className="block rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm"
+                    >
+                      <option value="0.5">30 minutes</option>
+                      <option value="1">1 hour</option>
+                      <option value="6">6 hours</option>
+                      <option value="12">12 hours</option>
+                      <option value="24">1 day</option>
+                      <option value="168">7 days</option>
+                      <option value="never">Never</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Max uses
+                    </span>
+                    <select
+                      value={inviteMaxUses === "" ? "" : String(inviteMaxUses)}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setInviteMaxUses(value === "" ? "" : Number(value));
+                      }}
+                      className="block rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm"
+                    >
+                      <option value="">No limit</option>
+                      <option value="1">1 use</option>
+                      <option value="5">5 uses</option>
+                      <option value="10">10 uses</option>
+                      <option value="25">25 uses</option>
+                      <option value="50">50 uses</option>
+                      <option value="100">100 uses</option>
+                    </select>
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={saving || Boolean(server.invites_paused)}
+                    className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                  >
+                    Create Invite
+                  </button>
+                </form>
+                <ul className="space-y-2">
+                  {invites.length === 0 && (
+                    <li className="text-sm text-muted">No invites yet.</li>
+                  )}
+                  {invites.map((invite) => (
+                    <li
+                      key={invite.id}
+                      className="rounded-md bg-[#2b2d31] px-3 py-3"
+                    >
                       <div className="flex flex-wrap items-center gap-2">
                         <code className="min-w-0 flex-1 truncate text-sm text-[#dbdee1]">
-                          {inviteUrl(permanent.code)}
+                          {inviteUrl(invite.code)}
                         </code>
                         <button
                           type="button"
-                          onClick={() => void copyInvite(permanent.code)}
+                          onClick={() => void copyInvite(invite.code)}
                           className="inline-flex items-center gap-1 rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058]"
                         >
-                          {copiedCode === permanent.code ? (
+                          {copiedCode === invite.code ? (
                             <Check className="h-3.5 w-3.5" strokeWidth={2} />
                           ) : (
                             <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
                           )}
-                          {copiedCode === permanent.code ? "Copied" : "Copy"}
+                          {copiedCode === invite.code ? "Copied" : "Copy"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteInvite(invite.id)}
+                          className="rounded-md p-1 text-accent hover:bg-accent-muted"
+                          aria-label="Delete invite"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
                         </button>
                       </div>
                       <p className="mt-2 text-xs text-[#6d6f78]">
-                        {permanent.uses} join{permanent.uses === 1 ? "" : "s"} so far
+                        {invite.uses}
+                        {invite.max_uses != null ? `/${invite.max_uses}` : ""} uses
+                        {invite.expires_at
+                          ? ` · expires ${new Date(invite.expires_at).toLocaleString()}`
+                          : " · never expires"}
                       </p>
-                    </div>
-                  );
-                })()}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
@@ -1580,6 +1960,19 @@ export function ServerSettingsModal({
                               >
                                 Permissions
                               </button>
+                              {channel.category_id &&
+                              !channel.permissions_synced ? (
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() =>
+                                    void syncChannelToCategory(channel)
+                                  }
+                                  className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10 disabled:opacity-50"
+                                >
+                                  Sync Now
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={() => {

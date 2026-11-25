@@ -20,6 +20,7 @@ import {
 } from "@/lib/messenger-routes";
 import { CreateServerModal } from "@/components/messenger/CreateServerModal";
 import { CreateChannelModal } from "@/components/messenger/CreateChannelModal";
+import { EditChannelModal } from "@/components/messenger/EditChannelModal";
 import { CreateCategoryModal } from "@/components/messenger/CreateCategoryModal";
 import { InvitePeopleModal } from "@/components/messenger/InvitePeopleModal";
 import { ServerRail } from "@/components/messenger/ServerRail";
@@ -267,6 +268,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [createChannelType, setCreateChannelType] = useState<"text" | "voice">("text");
   const [createChannelCategoryId, setCreateChannelCategoryId] = useState<string | null>(null);
+  const [editChannelId, setEditChannelId] = useState<string | null>(null);
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(true);
   /** Discord-style voice channel chat; closed by default. */
@@ -2036,6 +2038,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const canKickMembers = can(myPerms, PERMISSIONS.KICK_MEMBERS, {
     isOwner: isServerOwner,
   });
+  const canBanMembers = can(myPerms, PERMISSIONS.BAN_MEMBERS, {
+    isOwner: isServerOwner,
+  });
   const canManageServer = can(myPerms, PERMISSIONS.MANAGE_SERVER, {
     isOwner: isServerOwner,
   });
@@ -2762,6 +2767,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       created_at: new Date().toISOString(),
       reply_to_id: replySnapshot?.id ?? null,
       pinned: false,
+      is_system: false,
       edited_at: null,
       attachment_url: null,
       attachment_type: filesSnapshot[0]?.file.type || null,
@@ -2923,6 +2929,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       created_at: new Date().toISOString(),
       reply_to_id: replySnapshot?.id ?? null,
       pinned: false,
+      is_system: false,
       edited_at: null,
       attachment_url: null,
       attachment_type: filesSnapshot[0]?.file.type || null,
@@ -3226,7 +3233,21 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   async function togglePin(message: ChatMessage) {
     if (message.id.startsWith("temp-")) return;
+    if (message.is_system) return;
     const next = !message.pinned;
+    if (next && pane === "server" && activeChannelId) {
+      const pinnedCount = [
+        ...messages.filter((item) => item.pinned && item.channel_id === activeChannelId),
+        ...pinnedExtra.filter((item) => item.pinned),
+      ].filter(
+        (item, index, list) =>
+          list.findIndex((other) => other.id === item.id) === index,
+      ).length;
+      if (pinnedCount >= 250) {
+        setError("This channel already has 250 pinned messages.");
+        return;
+      }
+    }
     setMessages((prev) =>
       prev.map((item) => (item.id === message.id ? { ...item, pinned: next } : item)),
     );
@@ -3251,6 +3272,35 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         ),
       );
       setError(updateError.message);
+      return;
+    }
+    // Discord: system notice when pinning (not itself pinnable).
+    if (next && pane === "server" && activeChannelId && user) {
+      const notice = `${profile?.username ?? "Someone"} pinned a message to this channel.`;
+      const { data: systemRow } = await supabase
+        .from("messages")
+        .insert({
+          channel_id: activeChannelId,
+          user_id: user.id,
+          content: notice,
+          is_system: true,
+          pinned: false,
+        })
+        .select("*")
+        .single();
+      if (systemRow) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            ...systemRow,
+            profiles: {
+              username: profile?.username ?? "System",
+              avatar_url: profile?.avatar_url ?? null,
+            },
+            reply_to: null,
+          },
+        ]);
+      }
     }
   }
 
@@ -3567,6 +3617,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             }
             onRenameCategory={
               !previewMode && canManageChannels ? renameCategory : undefined
+            }
+            onEditChannel={
+              !previewMode && canManageChannels
+                ? (channelId) => setEditChannelId(channelId)
+                : undefined
             }
             onLeave={() => setLeaveOpen(true)}
             footer={sidebarFooter}
@@ -4191,6 +4246,30 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       )}
 
       {user && activeServer && (
+        <EditChannelModal
+          open={!!editChannelId}
+          channel={
+            channels.find((channel) => channel.id === editChannelId) ?? null
+          }
+          roles={serverRoles}
+          onClose={() => setEditChannelId(null)}
+          onSaved={(next) => {
+            setChannels((prev) =>
+              prev.map((channel) => (channel.id === next.id ? next : channel)),
+            );
+          }}
+          onDuplicated={(next) => {
+            setChannels((prev) => [...prev, next].sort((a, b) => a.position - b.position));
+            setChannelServerMap((prev) => ({
+              ...prev,
+              [next.id]: activeServer.id,
+            }));
+            setEditChannelId(next.id);
+          }}
+        />
+      )}
+
+      {user && activeServer && (
         <InvitePeopleModal
           open={inviteOpen}
           server={activeServer}
@@ -4214,6 +4293,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           canManageChannels={canManageChannels}
           canManageRoles={canManageRoles || !!myPerms.ADMINISTRATOR}
           canKickMembers={canKickMembers || !!myPerms.ADMINISTRATOR}
+          canBanMembers={canBanMembers || !!myPerms.ADMINISTRATOR}
           canCreateInvites={canCreateInvites}
           canManageEmojis={canManageEmojis || !!myPerms.ADMINISTRATOR}
           actorRoleIds={myRoleIds}

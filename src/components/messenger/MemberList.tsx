@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Crown } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { isPresenceOnline } from "@/components/messenger/data";
 import { StatusPresenceBadge } from "@/components/messenger/StatusPresenceBadge";
@@ -88,9 +89,12 @@ function MemberButton({
             {displayName}
           </span>
           {owner && (
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-accent">
-              Owner
-            </span>
+            <Crown
+              className="h-3.5 w-3.5 shrink-0 text-[#f0b232]"
+              strokeWidth={2}
+              fill="currentColor"
+              aria-label="Server owner"
+            />
           )}
         </span>
         <PresenceCaption

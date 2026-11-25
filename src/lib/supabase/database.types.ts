@@ -10,15 +10,77 @@ export type Database = {
   public: {
     Tables: {
       channel_categories: {
-        Row: { id: string; server_id: string; name: string; position: number; created_at: string }
-        Insert: { id?: string; server_id: string; name: string; position?: number; created_at?: string }
-        Update: { id?: string; server_id?: string; name?: string; position?: number; created_at?: string }
+        Row: {
+          id: string
+          server_id: string
+          name: string
+          position: number
+          permission_overrides: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          server_id: string
+          name: string
+          position?: number
+          permission_overrides?: Json
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["channel_categories"]["Insert"]>
         Relationships: []
       }
       channels: {
-        Row: { id: string; server_id: string; name: string; type: string; category_id: string | null; topic: string | null; position: number; permission_overrides: Json; created_at: string }
-        Insert: { id?: string; server_id: string; name: string; type: string; category_id?: string | null; topic?: string | null; position?: number; permission_overrides?: Json; created_at?: string }
+        Row: {
+          id: string
+          server_id: string
+          name: string
+          type: string
+          category_id: string | null
+          topic: string | null
+          position: number
+          permission_overrides: Json
+          slowmode_seconds: number
+          nsfw: boolean
+          permissions_synced: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          server_id: string
+          name: string
+          type: string
+          category_id?: string | null
+          topic?: string | null
+          position?: number
+          permission_overrides?: Json
+          slowmode_seconds?: number
+          nsfw?: boolean
+          permissions_synced?: boolean
+          created_at?: string
+        }
         Update: Partial<Database["public"]["Tables"]["channels"]["Insert"]>
+        Relationships: []
+      }
+      server_bans: {
+        Row: {
+          server_id: string
+          user_id: string
+          banned_by: string | null
+          reason: string | null
+          delete_message_seconds: number
+          expires_at: string | null
+          created_at: string
+        }
+        Insert: {
+          server_id: string
+          user_id: string
+          banned_by?: string | null
+          reason?: string | null
+          delete_message_seconds?: number
+          expires_at?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["server_bans"]["Insert"]>
         Relationships: []
       }
       dm_conversations: {
@@ -34,6 +96,8 @@ export type Database = {
           user_id: string
           content: string
           reply_to_id: string | null
+          pinned: boolean
+          is_system: boolean
           created_at: string
           edited_at: string | null
           attachment_url: string | null
@@ -46,6 +110,8 @@ export type Database = {
           user_id: string
           content: string
           reply_to_id?: string | null
+          pinned?: boolean
+          is_system?: boolean
           created_at?: string
           edited_at?: string | null
           attachment_url?: string | null
@@ -180,8 +246,32 @@ export type Database = {
         Relationships: []
       }
       invites: {
-        Row: { id: string; code: string; server_id: string; creator_id: string; max_uses: number | null; uses: number; expires_at: string | null; is_permanent: boolean; created_at: string }
-        Insert: { id?: string; code: string; server_id: string; creator_id: string; max_uses?: number | null; uses?: number; expires_at?: string | null; is_permanent?: boolean; created_at?: string }
+        Row: {
+          id: string
+          code: string
+          server_id: string
+          creator_id: string
+          max_uses: number | null
+          uses: number
+          expires_at: string | null
+          is_permanent: boolean
+          channel_id: string | null
+          temporary_membership: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          server_id: string
+          creator_id: string
+          max_uses?: number | null
+          uses?: number
+          expires_at?: string | null
+          is_permanent?: boolean
+          channel_id?: string | null
+          temporary_membership?: boolean
+          created_at?: string
+        }
         Update: Partial<Database["public"]["Tables"]["invites"]["Insert"]>
         Relationships: []
       }
@@ -233,6 +323,7 @@ export type Database = {
           content: string
           reply_to_id: string | null
           pinned: boolean
+          is_system: boolean
           edited_at: string | null
           attachment_url: string | null
           attachment_type: string | null
@@ -246,6 +337,7 @@ export type Database = {
           content: string
           reply_to_id?: string | null
           pinned?: boolean
+          is_system?: boolean
           edited_at?: string | null
           attachment_url?: string | null
           attachment_type?: string | null
@@ -302,8 +394,26 @@ export type Database = {
         Relationships: []
       }
       servers: {
-        Row: { id: string; name: string; description: string | null; icon_url: string | null; owner_id: string; is_public: boolean; created_at: string }
-        Insert: { id?: string; name: string; description?: string | null; icon_url?: string | null; owner_id: string; is_public?: boolean; created_at?: string }
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          icon_url: string | null
+          owner_id: string
+          is_public: boolean
+          invites_paused: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          icon_url?: string | null
+          owner_id: string
+          is_public?: boolean
+          invites_paused?: boolean
+          created_at?: string
+        }
         Update: Partial<Database["public"]["Tables"]["servers"]["Insert"]>
         Relationships: []
       }

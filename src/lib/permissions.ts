@@ -11,19 +11,88 @@ export const PERMISSIONS = {
   KICK_MEMBERS: "KICK_MEMBERS",
   BAN_MEMBERS: "BAN_MEMBERS",
   CREATE_INVITES: "CREATE_INVITES",
+  ADD_REACTIONS: "ADD_REACTIONS",
+  ATTACH_FILES: "ATTACH_FILES",
+  EMBED_LINKS: "EMBED_LINKS",
+  MENTION_EVERYONE: "MENTION_EVERYONE",
+  CHANGE_NICKNAME: "CHANGE_NICKNAME",
+  MANAGE_NICKNAMES: "MANAGE_NICKNAMES",
+  READ_MESSAGE_HISTORY: "READ_MESSAGE_HISTORY",
   CONNECT: "CONNECT",
   SPEAK: "SPEAK",
+  MUTE_MEMBERS: "MUTE_MEMBERS",
+  DEAFEN_MEMBERS: "DEAFEN_MEMBERS",
+  MOVE_MEMBERS: "MOVE_MEMBERS",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 export type PermissionMap = Partial<Record<Permission, boolean>>;
 
-/** Channel overrides: target → permission → allow/deny. Targets: `@everyone`, role id, `user:<uuid>`. */
+/**
+ * Channel override value: true = Allow, false = Deny, absent/null = Inherit.
+ * Targets: `@everyone`, role id, `user:<uuid>`.
+ */
 export type ChannelOverrides = Record<string, PermissionMap>;
 
 /** Discord @everyone override key (our default Member role). */
 export const EVERYONE_OVERRIDE_KEY = "@everyone";
+
+/** Tri-state for Advanced Permissions UI. */
+export type OverrideState = "allow" | "deny" | "inherit";
+
+export const CHANNEL_PERMISSION_OPTIONS: {
+  key: Permission;
+  label: string;
+  group: "general" | "text" | "voice";
+}[] = [
+  { key: PERMISSIONS.VIEW_CHANNEL, label: "View Channel", group: "general" },
+  { key: PERMISSIONS.MANAGE_CHANNELS, label: "Manage Channel", group: "general" },
+  { key: PERMISSIONS.MANAGE_ROLES, label: "Manage Permissions", group: "general" },
+  { key: PERMISSIONS.CREATE_INVITES, label: "Create Invite", group: "general" },
+  { key: PERMISSIONS.SEND_MESSAGES, label: "Send Messages", group: "text" },
+  { key: PERMISSIONS.EMBED_LINKS, label: "Embed Links", group: "text" },
+  { key: PERMISSIONS.ATTACH_FILES, label: "Attach Files", group: "text" },
+  { key: PERMISSIONS.ADD_REACTIONS, label: "Add Reactions", group: "text" },
+  { key: PERMISSIONS.MENTION_EVERYONE, label: "Mention @everyone", group: "text" },
+  { key: PERMISSIONS.MANAGE_MESSAGES, label: "Manage Messages", group: "text" },
+  { key: PERMISSIONS.READ_MESSAGE_HISTORY, label: "Read Message History", group: "text" },
+  { key: PERMISSIONS.CONNECT, label: "Connect", group: "voice" },
+  { key: PERMISSIONS.SPEAK, label: "Speak", group: "voice" },
+  { key: PERMISSIONS.MUTE_MEMBERS, label: "Mute Members", group: "voice" },
+  { key: PERMISSIONS.DEAFEN_MEMBERS, label: "Deafen Members", group: "voice" },
+  { key: PERMISSIONS.MOVE_MEMBERS, label: "Move Members", group: "voice" },
+];
+
+export const ROLE_PERMISSION_OPTIONS: {
+  key: Permission;
+  label: string;
+  group: string;
+}[] = [
+  { key: PERMISSIONS.ADMINISTRATOR, label: "Administrator", group: "General" },
+  { key: PERMISSIONS.VIEW_CHANNEL, label: "View Channels", group: "General" },
+  { key: PERMISSIONS.MANAGE_SERVER, label: "Manage Server", group: "General" },
+  { key: PERMISSIONS.MANAGE_ROLES, label: "Manage Roles", group: "General" },
+  { key: PERMISSIONS.MANAGE_CHANNELS, label: "Manage Channels", group: "General" },
+  { key: PERMISSIONS.MANAGE_EMOJIS, label: "Manage Emojis", group: "General" },
+  { key: PERMISSIONS.KICK_MEMBERS, label: "Kick Members", group: "General" },
+  { key: PERMISSIONS.BAN_MEMBERS, label: "Ban Members", group: "General" },
+  { key: PERMISSIONS.CREATE_INVITES, label: "Create Invite", group: "General" },
+  { key: PERMISSIONS.CHANGE_NICKNAME, label: "Change Nickname", group: "General" },
+  { key: PERMISSIONS.MANAGE_NICKNAMES, label: "Manage Nicknames", group: "General" },
+  { key: PERMISSIONS.SEND_MESSAGES, label: "Send Messages", group: "Text" },
+  { key: PERMISSIONS.EMBED_LINKS, label: "Embed Links", group: "Text" },
+  { key: PERMISSIONS.ATTACH_FILES, label: "Attach Files", group: "Text" },
+  { key: PERMISSIONS.ADD_REACTIONS, label: "Add Reactions", group: "Text" },
+  { key: PERMISSIONS.MENTION_EVERYONE, label: "Mention @everyone", group: "Text" },
+  { key: PERMISSIONS.MANAGE_MESSAGES, label: "Manage Messages", group: "Text" },
+  { key: PERMISSIONS.READ_MESSAGE_HISTORY, label: "Read Message History", group: "Text" },
+  { key: PERMISSIONS.CONNECT, label: "Connect", group: "Voice" },
+  { key: PERMISSIONS.SPEAK, label: "Speak", group: "Voice" },
+  { key: PERMISSIONS.MUTE_MEMBERS, label: "Mute Members", group: "Voice" },
+  { key: PERMISSIONS.DEAFEN_MEMBERS, label: "Deafen Members", group: "Voice" },
+  { key: PERMISSIONS.MOVE_MEMBERS, label: "Move Members", group: "Voice" },
+];
 
 export function asChannelOverrides(value: unknown): ChannelOverrides {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -35,6 +104,35 @@ export function asChannelOverrides(value: unknown): ChannelOverrides {
   return out;
 }
 
+export function getOverrideState(
+  overrides: unknown,
+  target: string,
+  permission: Permission,
+): OverrideState {
+  const value = asChannelOverrides(overrides)[target]?.[permission];
+  if (value === true) return "allow";
+  if (value === false) return "deny";
+  return "inherit";
+}
+
+export function setOverrideState(
+  overrides: unknown,
+  target: string,
+  permission: Permission,
+  state: OverrideState,
+): ChannelOverrides {
+  const next = asChannelOverrides(overrides);
+  const map = { ...(next[target] ?? {}) };
+  if (state === "inherit") {
+    delete map[permission];
+  } else {
+    map[permission] = state === "allow";
+  }
+  if (Object.keys(map).length === 0) delete next[target];
+  else next[target] = map;
+  return next;
+}
+
 /** Discord “Private Channel”: @everyone cannot View Channel. */
 export function isPrivateChannel(overrides: unknown): boolean {
   return asChannelOverrides(overrides)[EVERYONE_OVERRIDE_KEY]?.VIEW_CHANNEL === false;
@@ -44,17 +142,12 @@ export function setChannelPrivate(
   overrides: unknown,
   privateChannel: boolean,
 ): ChannelOverrides {
-  const next = asChannelOverrides(overrides);
-  const everyone = { ...(next[EVERYONE_OVERRIDE_KEY] ?? {}) };
-  if (privateChannel) {
-    everyone.VIEW_CHANNEL = false;
-    next[EVERYONE_OVERRIDE_KEY] = everyone;
-  } else if (EVERYONE_OVERRIDE_KEY in next) {
-    delete everyone.VIEW_CHANNEL;
-    if (Object.keys(everyone).length === 0) delete next[EVERYONE_OVERRIDE_KEY];
-    else next[EVERYONE_OVERRIDE_KEY] = everyone;
-  }
-  return next;
+  return setOverrideState(
+    overrides,
+    EVERYONE_OVERRIDE_KEY,
+    PERMISSIONS.VIEW_CHANNEL,
+    privateChannel ? "deny" : "inherit",
+  );
 }
 
 export function setRoleChannelView(
@@ -62,17 +155,12 @@ export function setRoleChannelView(
   roleId: string,
   canView: boolean,
 ): ChannelOverrides {
-  const next = asChannelOverrides(overrides);
-  const role = { ...(next[roleId] ?? {}) };
-  if (canView) {
-    role.VIEW_CHANNEL = true;
-    next[roleId] = role;
-  } else {
-    delete role.VIEW_CHANNEL;
-    if (Object.keys(role).length === 0) delete next[roleId];
-    else next[roleId] = role;
-  }
-  return next;
+  return setOverrideState(
+    overrides,
+    roleId,
+    PERMISSIONS.VIEW_CHANNEL,
+    canView ? "allow" : "inherit",
+  );
 }
 
 export function roleCanViewChannel(
@@ -86,9 +174,14 @@ export function roleCanViewChannel(
 export const DEFAULT_MEMBER_PERMISSIONS: PermissionMap = {
   [PERMISSIONS.VIEW_CHANNEL]: true,
   [PERMISSIONS.SEND_MESSAGES]: true,
+  [PERMISSIONS.EMBED_LINKS]: true,
+  [PERMISSIONS.ATTACH_FILES]: true,
+  [PERMISSIONS.ADD_REACTIONS]: true,
+  [PERMISSIONS.READ_MESSAGE_HISTORY]: true,
   [PERMISSIONS.CONNECT]: true,
   [PERMISSIONS.SPEAK]: true,
   [PERMISSIONS.CREATE_INVITES]: true,
+  [PERMISSIONS.CHANGE_NICKNAME]: true,
 };
 
 const DEFAULT_MEMBER_PERMS = Object.keys(
@@ -105,9 +198,9 @@ function asPermMap(value: unknown): PermissionMap {
 }
 
 /**
- * Merge role permission maps (OR). Administrator grants everything.
+ * Merge role permission maps (OR / additive allows). Administrator grants everything.
  * When the member has no roles yet (legacy), fill safe Member defaults.
- * Once roles are assigned, permissions come only from those roles.
+ * Once roles are assigned, permissions come only from those roles (incl. default Member).
  */
 export function mergeRolePermissions(rolePermissionList: unknown[]): PermissionMap {
   const merged: PermissionMap = {};
@@ -129,6 +222,15 @@ export function mergeRolePermissions(rolePermissionList: unknown[]): PermissionM
   return merged;
 }
 
+/**
+ * Discord channel permission resolution:
+ * start from server (role) perms, then
+ * 1) @everyone deny  2) @everyone allow
+ * 3) any of member's role denies  4) any of member's role allows
+ * 5) member deny  6) member allow
+ * Owner / Administrator bypass all channel overrides.
+ * @see https://support.discord.com/hc/en-us/articles/206141927
+ */
 export function resolveChannelPermission(
   base: PermissionMap,
   overrides: unknown,
@@ -142,21 +244,28 @@ export function resolveChannelPermission(
   if (opts.isOwner || base.ADMINISTRATOR) return true;
 
   let result = Boolean(base[opts.permission]);
-  const map = (overrides && typeof overrides === "object" && !Array.isArray(overrides)
-    ? (overrides as ChannelOverrides)
-    : {}) as ChannelOverrides;
+  const map = asChannelOverrides(overrides);
+  const permission = opts.permission;
 
-  const everyone = map["@everyone"]?.[opts.permission];
-  if (typeof everyone === "boolean") result = everyone;
+  const everyone = map[EVERYONE_OVERRIDE_KEY]?.[permission];
+  if (everyone === false) result = false;
+  if (everyone === true) result = true;
 
-  for (const roleId of opts.roleIds ?? []) {
-    const value = map[roleId]?.[opts.permission];
-    if (typeof value === "boolean") result = value;
+  const roleIds = opts.roleIds ?? [];
+  let anyRoleDeny = false;
+  let anyRoleAllow = false;
+  for (const roleId of roleIds) {
+    const value = map[roleId]?.[permission];
+    if (value === false) anyRoleDeny = true;
+    if (value === true) anyRoleAllow = true;
   }
+  if (anyRoleDeny) result = false;
+  if (anyRoleAllow) result = true;
 
   if (opts.userId) {
-    const value = map[`user:${opts.userId}`]?.[opts.permission];
-    if (typeof value === "boolean") result = value;
+    const member = map[`user:${opts.userId}`]?.[permission];
+    if (member === false) result = false;
+    if (member === true) result = true;
   }
 
   return result;

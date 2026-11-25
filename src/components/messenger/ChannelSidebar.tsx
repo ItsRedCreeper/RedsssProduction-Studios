@@ -52,6 +52,8 @@ type ChannelSidebarProps = {
   }) => void;
   onCreateCategory?: () => void;
   onRenameCategory?: (categoryId: string, name: string) => Promise<boolean>;
+  /** Discord: Edit Channel (Manage Channels). */
+  onEditChannel?: (channelId: string) => void;
   onLeave?: () => void;
   footer?: ReactNode;
 };
@@ -61,11 +63,13 @@ function ChannelButton({
   active,
   unread,
   onClick,
+  onEdit,
 }: {
   channel: Channel;
   active: boolean;
   unread: boolean;
   onClick: () => void;
+  onEdit?: () => void;
 }) {
   const voice = channel.type === "voice";
   const privateChannel = isPrivateChannel(channel.permission_overrides);
@@ -81,6 +85,14 @@ function ChannelButton({
       <button
         type="button"
         onClick={onClick}
+        onContextMenu={
+          onEdit
+            ? (event) => {
+                event.preventDefault();
+                onEdit();
+              }
+            : undefined
+        }
         className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[15px] transition-colors ${
           active
             ? "bg-[#404249] text-white"
@@ -134,6 +146,7 @@ export function ChannelSidebar({
   onCreateChannel,
   onCreateCategory,
   onRenameCategory,
+  onEditChannel,
   onLeave,
   footer,
 }: ChannelSidebarProps) {
@@ -235,6 +248,9 @@ export function ChannelSidebar({
           active={channel.id === activeChannelId || connectedHere}
           unread={channel.type === "text" && unreadChannelIds.has(channel.id)}
           onClick={() => onSelectChannel(channel.id)}
+          onEdit={
+            onEditChannel ? () => onEditChannel(channel.id) : undefined
+          }
         />
         {people.length > 0 && (
           <ul className="mb-1 ml-4 space-y-0.5">
