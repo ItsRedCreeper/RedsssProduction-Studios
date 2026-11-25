@@ -22,6 +22,66 @@ export type PermissionMap = Partial<Record<Permission, boolean>>;
 /** Channel overrides: target → permission → allow/deny. Targets: `@everyone`, role id, `user:<uuid>`. */
 export type ChannelOverrides = Record<string, PermissionMap>;
 
+/** Discord @everyone override key (our default Member role). */
+export const EVERYONE_OVERRIDE_KEY = "@everyone";
+
+export function asChannelOverrides(value: unknown): ChannelOverrides {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: ChannelOverrides = {};
+  for (const [target, raw] of Object.entries(value as Record<string, unknown>)) {
+    const map = asPermMap(raw);
+    if (Object.keys(map).length > 0) out[target] = map;
+  }
+  return out;
+}
+
+/** Discord “Private Channel”: @everyone cannot View Channel. */
+export function isPrivateChannel(overrides: unknown): boolean {
+  return asChannelOverrides(overrides)[EVERYONE_OVERRIDE_KEY]?.VIEW_CHANNEL === false;
+}
+
+export function setChannelPrivate(
+  overrides: unknown,
+  privateChannel: boolean,
+): ChannelOverrides {
+  const next = asChannelOverrides(overrides);
+  const everyone = { ...(next[EVERYONE_OVERRIDE_KEY] ?? {}) };
+  if (privateChannel) {
+    everyone.VIEW_CHANNEL = false;
+    next[EVERYONE_OVERRIDE_KEY] = everyone;
+  } else if (EVERYONE_OVERRIDE_KEY in next) {
+    delete everyone.VIEW_CHANNEL;
+    if (Object.keys(everyone).length === 0) delete next[EVERYONE_OVERRIDE_KEY];
+    else next[EVERYONE_OVERRIDE_KEY] = everyone;
+  }
+  return next;
+}
+
+export function setRoleChannelView(
+  overrides: unknown,
+  roleId: string,
+  canView: boolean,
+): ChannelOverrides {
+  const next = asChannelOverrides(overrides);
+  const role = { ...(next[roleId] ?? {}) };
+  if (canView) {
+    role.VIEW_CHANNEL = true;
+    next[roleId] = role;
+  } else {
+    delete role.VIEW_CHANNEL;
+    if (Object.keys(role).length === 0) delete next[roleId];
+    else next[roleId] = role;
+  }
+  return next;
+}
+
+export function roleCanViewChannel(
+  overrides: unknown,
+  roleId: string,
+): boolean {
+  return asChannelOverrides(overrides)[roleId]?.VIEW_CHANNEL === true;
+}
+
 /** Safe baseline for the default Member role (no management powers). */
 export const DEFAULT_MEMBER_PERMISSIONS: PermissionMap = {
   [PERMISSIONS.VIEW_CHANNEL]: true,

@@ -2043,6 +2043,61 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     isOwner: isServerOwner,
   });
 
+  /** Discord: hide channels where View Channel is denied (private / role-gated). */
+  const visibleChannels = useMemo(() => {
+    if (previewMode || isServerOwner || myPerms.ADMINISTRATOR) return channels;
+    return channels.filter((channel) =>
+      can(myPerms, PERMISSIONS.VIEW_CHANNEL, {
+        isOwner: isServerOwner,
+        overrides: channel.permission_overrides,
+        roleIds: myRoleIds,
+        userId: user?.id,
+      }),
+    );
+  }, [
+    channels,
+    previewMode,
+    isServerOwner,
+    myPerms,
+    myRoleIds,
+    user?.id,
+  ]);
+
+  const canViewActiveChannel =
+    !activeChannel ||
+    previewMode ||
+    isServerOwner ||
+    !!myPerms.ADMINISTRATOR ||
+    can(myPerms, PERMISSIONS.VIEW_CHANNEL, {
+      isOwner: isServerOwner,
+      overrides: activeChannel.permission_overrides,
+      roleIds: myRoleIds,
+      userId: user?.id,
+    });
+
+  useEffect(() => {
+    if (pane !== "server" || !routeServerId || previewMode) return;
+    if (loadingChannels || loadedServerId !== routeServerId) return;
+    if (!activeChannelId || canViewActiveChannel) return;
+    const target = pickFallbackChannel(visibleChannels, routeServerId);
+    if (!target) {
+      router.replace(messengerServerPath(routeServerId));
+      return;
+    }
+    if (target.id === activeChannelId) return;
+    router.replace(messengerChannelPath(routeServerId, target.id));
+  }, [
+    pane,
+    routeServerId,
+    activeChannelId,
+    canViewActiveChannel,
+    visibleChannels,
+    loadingChannels,
+    loadedServerId,
+    previewMode,
+    router,
+  ]);
+
   const emojiCatalog = useMemo(() => {
     const map = new Map<string, ServerEmoji>();
     for (const emoji of customEmojis) map.set(emoji.id, emoji);
@@ -2387,7 +2442,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const unreadChannelIds = useMemo(() => {
     const unread = new Set<string>();
-    for (const channel of channels) {
+    for (const channel of visibleChannels) {
       if (channel.type !== "text") continue;
       if (pane === "server" && channel.id === activeChannelId) continue;
       const last = lastMessageAt[channel.id];
@@ -2396,7 +2451,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (!read || Date.parse(last) > Date.parse(read)) unread.add(channel.id);
     }
     return unread;
-  }, [channels, pane, activeChannelId, lastMessageAt, readAt]);
+  }, [visibleChannels, pane, activeChannelId, lastMessageAt, readAt]);
 
   const unreadServerIds = useMemo(() => {
     const unread = new Set<string>();
@@ -3482,7 +3537,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             serverId={activeServer.id}
             serverName={activeServer.name}
             categories={categories}
-            channels={channels}
+            channels={visibleChannels}
             activeChannelId={activeChannelId}
             unreadChannelIds={previewMode ? new Set() : unreadChannelIds}
             voiceStates={displayVoiceStates}

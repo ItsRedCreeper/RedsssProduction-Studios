@@ -7,6 +7,7 @@ import {
   CHANNEL_NAME_MAX,
   CHANNEL_NAME_MIN,
 } from "@/lib/field-limits";
+import { setChannelPrivate } from "@/lib/permissions";
 import type { Category, Channel } from "@/components/messenger/types";
 
 type CreateChannelModalProps = {
@@ -33,6 +34,7 @@ export function CreateChannelModal({
   const [name, setName] = useState("");
   const [type, setType] = useState<"text" | "voice">(initialType);
   const [categoryId, setCategoryId] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +42,7 @@ export function CreateChannelModal({
     if (!open) return;
     setName("");
     setType(initialType);
+    setIsPrivate(false);
     setError(null);
     const preferred =
       initialCategoryId && categories.some((category) => category.id === initialCategoryId)
@@ -103,6 +106,7 @@ export function CreateChannelModal({
       nextCategoryId = category.id;
     }
 
+    const overrides = isPrivate ? setChannelPrivate({}, true) : undefined;
     const { data, error: insertError } = await supabase
       .from("channels")
       .insert({
@@ -111,6 +115,7 @@ export function CreateChannelModal({
         type,
         category_id: nextCategoryId,
         position: channelCount,
+        ...(overrides ? { permission_overrides: overrides } : {}),
       })
       .select("*")
       .single();
@@ -221,6 +226,23 @@ export function CreateChannelModal({
               </select>
             </label>
           )}
+
+          <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[#2b2d31] px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={isPrivate}
+              onChange={(event) => setIsPrivate(event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+            />
+            <span>
+              <span className="block text-sm font-medium text-white">
+                Private Channel
+              </span>
+              <span className="mt-0.5 block text-xs text-[#949ba4]">
+                Only you and roles you choose can see this channel.
+              </span>
+            </span>
+          </label>
 
           {error && (
             <p className="rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">

@@ -8,6 +8,7 @@ import {
   Copy,
   Hash,
   Link2,
+  Lock,
   Plus,
   Shield,
   Smile,
@@ -43,6 +44,10 @@ import { sanitizeEmojiName, type ServerEmoji } from "@/lib/emoji";
 import {
   DEFAULT_MEMBER_PERMISSIONS,
   PERMISSIONS,
+  isPrivateChannel,
+  roleCanViewChannel,
+  setChannelPrivate,
+  setRoleChannelView,
   type Permission,
   type PermissionMap,
 } from "@/lib/permissions";
@@ -149,6 +154,8 @@ export function ServerSettingsModal({
   const [confirmChannelId, setConfirmChannelId] = useState<string | null>(null);
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [editChannelName, setEditChannelName] = useState("");
+  const [newChannelPrivate, setNewChannelPrivate] = useState(false);
+  const [permsChannelId, setPermsChannelId] = useState<string | null>(null);
   const [serverEmojis, setServerEmojis] = useState<ServerEmoji[]>([]);
   const [emojiName, setEmojiName] = useState("");
   const [emojiFile, setEmojiFile] = useState<File | null>(null);
@@ -784,6 +791,9 @@ export function ServerSettingsModal({
     setSaving(true);
     setError(null);
     const supabase = createClient();
+    const overrides = newChannelPrivate
+      ? setChannelPrivate({}, true)
+      : undefined;
     const { data, error: insertError } = await supabase
       .from("channels")
       .insert({
@@ -792,6 +802,7 @@ export function ServerSettingsModal({
         type: channelType,
         category_id: channelCategoryId || null,
         position: channels.length,
+        ...(overrides ? { permission_overrides: overrides } : {}),
       })
       .select("*")
       .single();
@@ -802,6 +813,32 @@ export function ServerSettingsModal({
     }
     onChannelsChanged([...channels, data].sort(byPosition), categories);
     setChannelName("");
+    setNewChannelPrivate(false);
+    if (newChannelPrivate) setPermsChannelId(data.id);
+  }
+
+  async function saveChannelOverrides(
+    channel: Channel,
+    nextOverrides: ReturnType<typeof setChannelPrivate>,
+  ) {
+    setSaving(true);
+    setError(null);
+    const supabase = createClient();
+    const { data, error: updateError } = await supabase
+      .from("channels")
+      .update({ permission_overrides: nextOverrides })
+      .eq("id", channel.id)
+      .select("*")
+      .single();
+    setSaving(false);
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not update channel permissions.");
+      return;
+    }
+    onChannelsChanged(
+      channels.map((item) => (item.id === channel.id ? data : item)),
+      categories,
+    );
   }
 
   async function renameChannel(channelId: string) {
@@ -1387,153 +1424,294 @@ export function ServerSettingsModal({
 
                 <form
                   onSubmit={createChannel}
-                  className="flex flex-wrap items-end gap-2 border-t border-black/30 pt-4"
+                  className="space-y-3 border-t border-black/30 pt-4"
                 >
-                  <label className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      New channel
-                    </span>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="space-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        New channel
+                      </span>
+                      <input
+                        value={channelName}
+                        onChange={(event) => setChannelName(event.target.value)}
+                        placeholder="channel-name"
+                        maxLength={ROLE_NAME_MAX}
+                        className="block w-52 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        Type
+                      </span>
+                      <select
+                        value={channelType}
+                        onChange={(event) =>
+                          setChannelType(event.target.value as "text" | "voice")
+                        }
+                        className="block rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+                      >
+                        <option value="text">Text</option>
+                        <option value="voice">Voice</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        Category
+                      </span>
+                      <select
+                        value={channelCategoryId}
+                        onChange={(event) => setChannelCategoryId(event.target.value)}
+                        className="block min-w-[10rem] rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+                      >
+                        {sortedCategories.length === 0 && (
+                          <option value="">No category</option>
+                        )}
+                        {sortedCategories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="submit"
+                      disabled={saving || !channelName.trim()}
+                      className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                    >
+                      Create channel
+                    </button>
+                  </div>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-[#dbdee1]">
                     <input
-                      value={channelName}
-                      onChange={(event) => setChannelName(event.target.value)}
-                      placeholder="channel-name"
-                      maxLength={ROLE_NAME_MAX}
-                      className="block w-52 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Type
-                    </span>
-                    <select
-                      value={channelType}
+                      type="checkbox"
+                      checked={newChannelPrivate}
                       onChange={(event) =>
-                        setChannelType(event.target.value as "text" | "voice")
+                        setNewChannelPrivate(event.target.checked)
                       }
-                      className="block rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
-                    >
-                      <option value="text">Text</option>
-                      <option value="voice">Voice</option>
-                    </select>
+                      className="h-4 w-4 rounded border-border accent-accent"
+                    />
+                    Private Channel
                   </label>
-                  <label className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Category
-                    </span>
-                    <select
-                      value={channelCategoryId}
-                      onChange={(event) => setChannelCategoryId(event.target.value)}
-                      className="block min-w-[10rem] rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
-                    >
-                      {sortedCategories.length === 0 && (
-                        <option value="">No category</option>
-                      )}
-                      {sortedCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="submit"
-                    disabled={saving || !channelName.trim()}
-                    className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
-                  >
-                    Create channel
-                  </button>
                 </form>
 
-                <ul className="space-y-1 border-t border-black/30 pt-4">
+                <ul className="space-y-2 border-t border-black/30 pt-4">
                   {sortedChannels.length === 0 && (
                     <li className="text-sm text-muted">No channels yet.</li>
                   )}
-                  {sortedChannels.map((channel) => (
-                    <li
-                      key={channel.id}
-                      className="flex flex-wrap items-center gap-2 rounded-md px-2 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
-                    >
-                      {channel.type === "voice" ? (
-                        <Volume2 className="h-4 w-4 text-accent" strokeWidth={1.75} />
-                      ) : (
-                        <Hash className="h-4 w-4 text-[#949ba4]" strokeWidth={2} />
-                      )}
-                      {editingChannelId === channel.id ? (
-                        <>
-                          <input
-                            value={editChannelName}
-                            onChange={(event) => setEditChannelName(event.target.value)}
-                            className="min-w-0 flex-1 rounded-md border border-border bg-[#1e1f22] px-2 py-1 text-sm outline-none focus:border-accent/50"
-                            autoFocus
-                          />
-                          <DirtySaveButton
-                            size="sm"
-                            dirty={
-                              editChannelName.trim() !== channel.name &&
-                              editChannelName.trim().length > 0
-                            }
-                            saving={saving}
-                            label="Save"
-                            onClick={() => void renameChannel(channel.id)}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setEditingChannelId(null)}
-                            className="rounded-md px-2 py-1 text-xs text-muted hover:text-white"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <span className="min-w-0 flex-1 truncate">{channel.name}</span>
-                          <span className="truncate text-xs text-muted">
-                            {channel.category_id
-                              ? categoryNameMap.get(channel.category_id) ?? "Category"
-                              : "No category"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingChannelId(channel.id);
-                              setEditChannelName(channel.name);
-                              setConfirmChannelId(null);
-                            }}
-                            className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10"
-                          >
-                            Rename
-                          </button>
-                          {confirmChannelId === channel.id ? (
+                  {sortedChannels.map((channel) => {
+                    const privateChannel = isPrivateChannel(
+                      channel.permission_overrides,
+                    );
+                    const permsOpen = permsChannelId === channel.id;
+                    const grantableRoles = roles
+                      .filter((role) => !role.is_default)
+                      .sort(compareRolePositionDesc);
+                    return (
+                      <li
+                        key={channel.id}
+                        className="rounded-md px-2 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          {channel.type === "voice" ? (
+                            <Volume2
+                              className="h-4 w-4 text-accent"
+                              strokeWidth={1.75}
+                            />
+                          ) : (
+                            <Hash
+                              className="h-4 w-4 text-[#949ba4]"
+                              strokeWidth={2}
+                            />
+                          )}
+                          {privateChannel ? (
+                            <Lock
+                              className="h-3.5 w-3.5 text-[#949ba4]"
+                              strokeWidth={2}
+                              aria-label="Private"
+                            />
+                          ) : null}
+                          {editingChannelId === channel.id ? (
                             <>
+                              <input
+                                value={editChannelName}
+                                onChange={(event) =>
+                                  setEditChannelName(event.target.value)
+                                }
+                                className="min-w-0 flex-1 rounded-md border border-border bg-[#1e1f22] px-2 py-1 text-sm outline-none focus:border-accent/50"
+                                autoFocus
+                              />
+                              <DirtySaveButton
+                                size="sm"
+                                dirty={
+                                  editChannelName.trim() !== channel.name &&
+                                  editChannelName.trim().length > 0
+                                }
+                                saving={saving}
+                                label="Save"
+                                onClick={() => void renameChannel(channel.id)}
+                              />
                               <button
                                 type="button"
-                                onClick={() => void deleteChannel(channel.id)}
-                                className="rounded-md bg-accent px-2 py-1 text-xs font-semibold text-white"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmChannelId(null)}
+                                onClick={() => setEditingChannelId(null)}
                                 className="rounded-md px-2 py-1 text-xs text-muted hover:text-white"
                               >
                                 Cancel
                               </button>
                             </>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmChannelId(channel.id)}
-                              className="rounded-md p-1 text-accent hover:bg-accent-muted"
-                              aria-label={`Delete ${channel.name}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            </button>
+                            <>
+                              <span className="min-w-0 flex-1 truncate">
+                                {channel.name}
+                              </span>
+                              <span className="truncate text-xs text-muted">
+                                {channel.category_id
+                                  ? categoryNameMap.get(channel.category_id) ??
+                                    "Category"
+                                  : "No category"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPermsChannelId(
+                                    permsOpen ? null : channel.id,
+                                  );
+                                  setConfirmChannelId(null);
+                                  setEditingChannelId(null);
+                                }}
+                                className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10"
+                              >
+                                Permissions
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingChannelId(channel.id);
+                                  setEditChannelName(channel.name);
+                                  setConfirmChannelId(null);
+                                  setPermsChannelId(null);
+                                }}
+                                className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10"
+                              >
+                                Rename
+                              </button>
+                              {confirmChannelId === channel.id ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteChannel(channel.id)}
+                                    className="rounded-md bg-accent px-2 py-1 text-xs font-semibold text-white"
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmChannelId(null)}
+                                    className="rounded-md px-2 py-1 text-xs text-muted hover:text-white"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmChannelId(channel.id)}
+                                  className="rounded-md p-1 text-accent hover:bg-accent-muted"
+                                  aria-label={`Delete ${channel.name}`}
+                                >
+                                  <Trash2
+                                    className="h-3.5 w-3.5"
+                                    strokeWidth={1.75}
+                                  />
+                                </button>
+                              )}
+                            </>
                           )}
-                        </>
-                      )}
-                    </li>
-                  ))}
+                        </div>
+                        {permsOpen ? (
+                          <div className="mt-3 space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                            <label className="flex cursor-pointer items-start gap-2">
+                              <input
+                                type="checkbox"
+                                checked={privateChannel}
+                                disabled={saving}
+                                onChange={(event) =>
+                                  void saveChannelOverrides(
+                                    channel,
+                                    setChannelPrivate(
+                                      channel.permission_overrides,
+                                      event.target.checked,
+                                    ),
+                                  )
+                                }
+                                className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                              />
+                              <span>
+                                <span className="block text-sm font-medium text-white">
+                                  Private Channel
+                                </span>
+                                <span className="mt-0.5 block text-xs text-[#949ba4]">
+                                  Only selected roles can view this channel.
+                                </span>
+                              </span>
+                            </label>
+                            {privateChannel ? (
+                              <div className="space-y-2 border-t border-[#3f4147] pt-3">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                                  Who can access
+                                </p>
+                                {grantableRoles.length === 0 ? (
+                                  <p className="text-xs text-[#949ba4]">
+                                    Create a role first, then grant it access here.
+                                  </p>
+                                ) : (
+                                  <ul className="space-y-1">
+                                    {grantableRoles.map((role) => {
+                                      const allowed = roleCanViewChannel(
+                                        channel.permission_overrides,
+                                        role.id,
+                                      );
+                                      return (
+                                        <li key={role.id}>
+                                          <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/5">
+                                            <input
+                                              type="checkbox"
+                                              checked={allowed}
+                                              disabled={saving}
+                                              onChange={(event) =>
+                                                void saveChannelOverrides(
+                                                  channel,
+                                                  setRoleChannelView(
+                                                    channel.permission_overrides,
+                                                    role.id,
+                                                    event.target.checked,
+                                                  ),
+                                                )
+                                              }
+                                              className="h-4 w-4 rounded border-border accent-accent"
+                                            />
+                                            <span
+                                              className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                              style={{
+                                                backgroundColor:
+                                                  role.color || "#99aab5",
+                                              }}
+                                            />
+                                            <span className="text-sm text-[#dbdee1]">
+                                              {role.name}
+                                            </span>
+                                          </label>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -1541,8 +1719,9 @@ export function ServerSettingsModal({
             {tab === "emojis" && (canManageEmojis || isOwner) && (
               <div className="space-y-5">
                 <p className="text-sm text-[#b5bac1]">
-                  Upload custom emojis for this server. Members can use them here,
-                  in other servers, and in DMs while they stay in this server.
+                  Upload custom emojis for this server. Members can use them in
+                  chat with{" "}
+                  <span className="font-mono text-[#dbdee1]">:name:</span>.
                 </p>
                 {canManageEmojis || isOwner ? (
                   <form
@@ -1755,7 +1934,7 @@ function RoleRow({
         />
         {role.is_default ? (
           <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
-            @everyone
+            Default
           </span>
         ) : null}
         {!canEdit ? (

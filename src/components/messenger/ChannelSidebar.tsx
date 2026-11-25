@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   Hash,
+  Lock,
   MicOff,
   Pencil,
   Plus,
@@ -20,6 +21,7 @@ import type {
 } from "@/components/messenger/types";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { HoverTip } from "@/components/ui/HoverTip";
+import { isPrivateChannel } from "@/lib/permissions";
 
 type ChannelSidebarProps = {
   serverId: string;
@@ -66,6 +68,7 @@ function ChannelButton({
   onClick: () => void;
 }) {
   const voice = channel.type === "voice";
+  const privateChannel = isPrivateChannel(channel.permission_overrides);
   const tip = channel.topic?.trim() || channel.name;
   return (
     <HoverTip
@@ -95,6 +98,13 @@ function ChannelButton({
           <Hash className="h-4 w-4 shrink-0 opacity-70" strokeWidth={2.25} />
         )}
         <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+        {privateChannel ? (
+          <Lock
+            className="h-3.5 w-3.5 shrink-0 opacity-60"
+            strokeWidth={2}
+            aria-label="Private"
+          />
+        ) : null}
         {unread && !active && (
           <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
         )}
