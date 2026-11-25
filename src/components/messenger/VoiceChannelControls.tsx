@@ -350,7 +350,9 @@ export function VoiceChannelControls({
   return (
     <div
       className={`flex items-center gap-0.5 ${
-        compact ? "mt-1 mb-2 ml-2 rounded-md bg-[#1e1f22]/80 px-1.5 py-1.5" : ""
+        compact
+          ? "mt-1 mb-2 ml-2 rounded-xl border border-white/[0.04] bg-[#1e1f22]/80 px-1.5 py-1.5"
+          : ""
       }`}
     >
       <HoverTip label={quality.tip} delayMs={40}>

@@ -38,12 +38,12 @@ function VideoTile({
 
   return (
     <div
-      className={`relative min-h-[9rem] overflow-hidden rounded-md bg-[#1e1f22] ${
+      className={`relative min-h-[9rem] overflow-hidden rounded-2xl bg-[#1e1f22] ${
         watching
-          ? "ring-2 ring-[#00a8fc]"
+          ? "ring-2 ring-accent/70"
           : speaking
             ? "ring-2 ring-[#23a559]"
-            : "ring-1 ring-black/40"
+            : "ring-1 ring-white/10"
       }`}
     >
       {stream ? (
@@ -155,7 +155,7 @@ export function CallOverlay() {
 
   if (!call.stageExpanded) {
     return (
-      <div className="absolute bottom-24 left-[4.25rem] z-40 w-[min(100%-5.5rem,18rem)] overflow-hidden rounded-md border border-[#1e1f22] bg-[#232428] shadow-xl shadow-black/50 sm:bottom-3 sm:left-3 sm:w-[min(100%-1.5rem,18rem)]">
+      <div className="absolute bottom-24 left-[4.25rem] z-40 w-[min(100%-5.5rem,18rem)] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a1b1e]/95 shadow-xl shadow-black/50 ring-1 ring-accent/15 backdrop-blur-sm sm:bottom-3 sm:left-3 sm:w-[min(100%-1.5rem,18rem)]">
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold text-[#23a559]">
@@ -218,7 +218,7 @@ export function CallOverlay() {
 
   const stage = (
     <div className="fixed inset-x-0 bottom-0 top-14 z-[45] flex flex-col bg-[#111214]">
-      <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-black/40 px-4">
+      <div className="messenger-header flex h-12 shrink-0 items-center justify-between gap-3 bg-[#1a1b1e] px-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#23a559]">
             {statusLabel}

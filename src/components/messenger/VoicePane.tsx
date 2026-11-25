@@ -127,11 +127,11 @@ function VoiceTile({
           ? `Exit focus on ${name}`
           : `Focus ${name} in the voice grid`
       }
-      className={`relative aspect-video w-full overflow-hidden rounded-md bg-[#1e1f22] text-left ring-2 transition-[box-shadow,filter] duration-200 hover:brightness-110 ${
+      className={`relative aspect-video w-full overflow-hidden rounded-2xl bg-[#1e1f22] text-left ring-2 transition-[box-shadow,filter] duration-200 hover:brightness-110 ${
         speaking
           ? "ring-[#23a559]"
           : isSelf
-            ? "ring-accent/40"
+            ? "ring-accent/50"
             : "ring-transparent hover:ring-white/10"
       }`}
     >
@@ -306,12 +306,14 @@ export function VoicePane({
     const preview = ordered.slice(0, 5);
     const count = ordered.length;
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-[#1e1f22]/40 px-6 py-10">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-[radial-gradient(ellipse_at_center,_rgba(220,38,38,0.08),_transparent_55%),#1e1f22]/40] px-6 py-10">
         <div className="flex max-w-sm flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-[#b5bac1]">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2b2d31] text-[#b5bac1] ring-2 ring-accent/30">
             <Volume2 className="h-7 w-7" strokeWidth={1.75} />
           </div>
-          <h2 className="text-xl font-semibold text-white">{channelName}</h2>
+          <h2 className="text-xl font-semibold tracking-tight text-white">
+            {channelName}
+          </h2>
 
           {count > 0 ? (
             <div className="mt-4 flex flex-col items-center gap-2">
@@ -352,7 +354,7 @@ export function VoicePane({
           <button
             type="button"
             onClick={onRejoin}
-            className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#23a559] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#23a559] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
           >
             <Volume2 className="h-4 w-4" strokeWidth={2} />
             Join Voice
