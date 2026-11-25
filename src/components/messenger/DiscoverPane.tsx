@@ -274,7 +274,7 @@ export function DiscoverPane({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Explore public servers"
-                className="w-full rounded-md border border-transparent bg-[#1e1f22]/90 py-3 pl-10 pr-4 text-sm text-foreground outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-accent"
+                className="w-full rounded-md border border-transparent bg-[#1e1f22]/90 py-3 pl-10 pr-4 text-sm text-foreground outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-2 focus:ring-[#00a8fc]"
               />
             </label>
           </div>

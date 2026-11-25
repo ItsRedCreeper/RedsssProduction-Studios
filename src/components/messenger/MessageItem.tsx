@@ -440,7 +440,7 @@ export function MessageItem({
                 setEditDraft(value);
               }}
               rows={2}
-              className="w-full resize-y rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm text-foreground outline-none [overflow-wrap:anywhere] whitespace-pre-wrap focus:border-accent/50 focus:ring-1 focus:ring-accent-ring"
+              className="w-full resize-y rounded-md border border-[#1e1f22] bg-[#1e1f22] px-3 py-2 text-sm text-foreground outline-none [overflow-wrap:anywhere] whitespace-pre-wrap focus:border-[#00a8fc] focus:ring-1 focus:ring-[#00a8fc]"
               autoFocus
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -705,7 +705,7 @@ export function MessageItem({
               anchorRef={moreBtnRef}
               menuRef={moreMenuRef}
               estimatedHeight={260}
-              className="min-w-[11rem] overflow-hidden rounded-md border border-border bg-[#111214] py-1.5 shadow-xl shadow-black/50"
+              className="min-w-[11rem] overflow-hidden rounded-md border border-[#1e1f22] bg-[#111214] py-1.5 shadow-xl shadow-black/50"
             >
               <button
                 type="button"
@@ -814,7 +814,7 @@ export function MessageItem({
               )}
               {(isOwn || canDeleteOthers) && (
                 <>
-                  <div className="my-1 border-t border-border" />
+                  <div className="my-1 border-t border-[#1e1f22]" />
                   <button
                     type="button"
                     onClick={() => {

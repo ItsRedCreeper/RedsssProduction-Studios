@@ -1730,7 +1730,7 @@ export function ServerSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="server-settings-title"
-        className="relative z-10 flex max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-md border border-[#1e1f22] bg-[#313338] shadow-2xl shadow-black/50"
+        className="relative z-10 flex max-h-[min(90dvh,52rem)] w-full max-w-3xl overflow-hidden rounded-md border border-[#1e1f22] bg-[#313338] shadow-2xl shadow-black/50"
       >
         <aside className="flex w-44 shrink-0 flex-col bg-[#2b2d31] p-3 sm:w-52">
           <p
@@ -1834,7 +1834,7 @@ export function ServerSettingsModal({
                     onChange={(event) => setName(event.target.value)}
                     minLength={SERVER_NAME_MIN}
                     maxLength={SERVER_NAME_MAX}
-                    className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50"
+                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-[#00a8fc]"
                   />
                 </label>
                 <label className="block space-y-1.5">
@@ -1846,7 +1846,7 @@ export function ServerSettingsModal({
                     onChange={(event) => setDescription(event.target.value)}
                     rows={4}
                     maxLength={SERVER_DESCRIPTION_MAX}
-                    className="w-full resize-none rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50"
+                    className="w-full resize-none rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-[#00a8fc]"
                   />
                 </label>
                 <label className="block space-y-1.5">
@@ -1858,7 +1858,7 @@ export function ServerSettingsModal({
                     onChange={(event) =>
                       setVerificationLevel(Number(event.target.value))
                     }
-                    className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/50"
+                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-[#00a8fc]"
                   >
                     <option value={0}>None</option>
                     <option value={1}>Low — verified account age</option>
@@ -1871,7 +1871,7 @@ export function ServerSettingsModal({
                     </option>
                   </select>
                 </label>
-                <label className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-[#1e1f22] px-3 py-3">
+                <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-3">
                   <input
                     type="checkbox"
                     checked={isPublic}
@@ -1898,7 +1898,7 @@ export function ServerSettingsModal({
                       <select
                         value={transferTo}
                         onChange={(event) => setTransferTo(event.target.value)}
-                        className="min-w-[12rem] flex-1 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm"
+                        className="min-w-[12rem] flex-1 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm"
                       >
                         <option value="">Select a member…</option>
                         {members
@@ -1964,14 +1964,14 @@ export function ServerSettingsModal({
                       onChange={(event) => setRoleName(event.target.value)}
                       placeholder="Role name"
                       maxLength={ROLE_NAME_MAX}
-                      className="w-full rounded-md border border-border bg-[#1e1f22] px-2 py-1.5 text-sm outline-none focus:border-accent/50"
+                      className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-2 py-1.5 text-sm outline-none focus:border-[#00a8fc]"
                     />
                     <input
                       type="color"
                       value={roleColor}
                       onChange={(event) => setRoleColor(event.target.value)}
                       aria-label="New role color"
-                      className="h-9 w-full cursor-pointer rounded-md border border-border bg-[#1e1f22]"
+                      className="h-9 w-full cursor-pointer rounded-md border border-[#3f4147] bg-[#1e1f22]"
                     />
                     <button
                       type="submit"
@@ -2178,7 +2178,7 @@ export function ServerSettingsModal({
                             onChange={(event) => setNickDraft(event.target.value)}
                             maxLength={32}
                             placeholder="Nickname"
-                            className="min-w-[8rem] flex-1 rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm outline-none focus:border-accent/50"
+                            className="min-w-[8rem] flex-1 rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm outline-none focus:border-[#00a8fc]"
                           />
                           <button
                             type="button"
@@ -2205,7 +2205,7 @@ export function ServerSettingsModal({
                               onChange={(event) =>
                                 setTimeoutMinutes(Number(event.target.value))
                               }
-                              className="mt-1 block rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
+                              className="mt-1 block rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
                             >
                               <option value={1}>60 seconds</option>
                               <option value={5}>5 minutes</option>
@@ -2237,7 +2237,7 @@ export function ServerSettingsModal({
                             value={banReason}
                             onChange={(event) => setBanReason(event.target.value)}
                             placeholder="Reason (optional)"
-                            className="w-full rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm outline-none focus:border-accent/50"
+                            className="w-full rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm outline-none focus:border-[#00a8fc]"
                           />
                           <label className="block text-xs text-[#949ba4]">
                             Delete message history
@@ -2246,7 +2246,7 @@ export function ServerSettingsModal({
                               onChange={(event) =>
                                 setBanDeleteDays(Number(event.target.value))
                               }
-                              className="mt-1 block w-full rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
+                              className="mt-1 block w-full rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
                             >
                               <option value={0}>Don&apos;t delete any</option>
                               <option value={1}>Previous 24 hours</option>
@@ -2263,7 +2263,7 @@ export function ServerSettingsModal({
                                   value === "perm" ? "perm" : Number(value),
                                 );
                               }}
-                              className="mt-1 block w-full rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
+                              className="mt-1 block w-full rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
                             >
                               <option value="perm">Permanent</option>
                               <option value="1">1 hour</option>
@@ -2367,7 +2367,7 @@ export function ServerSettingsModal({
                               const value = event.target.value;
                               if (value) void assignRole(member.user_id, value);
                             }}
-                            className="rounded-md border border-border bg-[#1e1f22] px-2 py-1 text-xs text-[#dbdee1] outline-none focus:border-accent/50"
+                            className="rounded-md border border-[#3f4147] bg-[#1e1f22] px-2 py-1 text-xs text-[#dbdee1] outline-none focus:border-[#00a8fc]"
                           >
                             <option value="">Add role…</option>
                             {roles
@@ -2404,7 +2404,7 @@ export function ServerSettingsModal({
                       type="checkbox"
                       checked={Boolean(server.invites_paused)}
                       onChange={() => void toggleInvitesPaused()}
-                      className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                      className="mt-0.5 h-4 w-4 rounded border-[#3f4147] accent-accent"
                     />
                     <span>
                       <span className="block text-sm font-medium text-white">
@@ -2432,7 +2432,7 @@ export function ServerSettingsModal({
                           value === "never" ? "never" : Number(value),
                         );
                       }}
-                      className="block rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm"
+                      className="block rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm"
                     >
                       <option value="0.5">30 minutes</option>
                       <option value="1">1 hour</option>
@@ -2453,7 +2453,7 @@ export function ServerSettingsModal({
                         const value = event.target.value;
                         setInviteMaxUses(value === "" ? "" : Number(value));
                       }}
-                      className="block rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm"
+                      className="block rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm"
                     >
                       <option value="">No limit</option>
                       <option value="1">1 use</option>
@@ -2471,7 +2471,7 @@ export function ServerSettingsModal({
                     <select
                       value={inviteChannelId}
                       onChange={(event) => setInviteChannelId(event.target.value)}
-                      className="block min-w-[10rem] rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm"
+                      className="block min-w-[10rem] rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm"
                     >
                       <option value="">Default</option>
                       {channels
@@ -2550,7 +2550,7 @@ export function ServerSettingsModal({
                       onChange={(event) => setCategoryName(event.target.value)}
                       placeholder="Category name"
                       maxLength={ROLE_NAME_MAX}
-                      className="block w-52 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+                      className="block w-52 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
                     />
                   </label>
                   <button
@@ -2607,7 +2607,7 @@ export function ServerSettingsModal({
                                       ),
                                     )
                                   }
-                                  className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                                  className="mt-0.5 h-4 w-4 rounded border-[#3f4147] accent-accent"
                                 />
                                 <span>
                                   <span className="block text-sm font-medium text-white">
@@ -2652,7 +2652,7 @@ export function ServerSettingsModal({
                                                     ),
                                                   )
                                                 }
-                                                className="h-4 w-4 rounded border-border accent-accent"
+                                                className="h-4 w-4 rounded border-[#3f4147] accent-accent"
                                               />
                                               <span
                                                 className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -2694,7 +2694,7 @@ export function ServerSettingsModal({
                         onChange={(event) => setChannelName(event.target.value)}
                         placeholder="channel-name"
                         maxLength={ROLE_NAME_MAX}
-                        className="block w-52 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+                        className="block w-52 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
                       />
                     </label>
                     <label className="space-y-1">
@@ -2706,7 +2706,7 @@ export function ServerSettingsModal({
                         onChange={(event) =>
                           setChannelType(event.target.value as "text" | "voice")
                         }
-                        className="block rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+                        className="block rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
                       >
                         <option value="text">Text</option>
                         <option value="voice">Voice</option>
@@ -2719,7 +2719,7 @@ export function ServerSettingsModal({
                       <select
                         value={channelCategoryId}
                         onChange={(event) => setChannelCategoryId(event.target.value)}
-                        className="block min-w-[10rem] rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+                        className="block min-w-[10rem] rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
                       >
                         {sortedCategories.length === 0 && (
                           <option value="">No category</option>
@@ -2746,7 +2746,7 @@ export function ServerSettingsModal({
                       onChange={(event) =>
                         setNewChannelPrivate(event.target.checked)
                       }
-                      className="h-4 w-4 rounded border-border accent-accent"
+                      className="h-4 w-4 rounded border-[#3f4147] accent-accent"
                     />
                     Private Channel
                   </label>
@@ -2795,7 +2795,7 @@ export function ServerSettingsModal({
                                 onChange={(event) =>
                                   setEditChannelName(event.target.value)
                                 }
-                                className="min-w-0 flex-1 rounded-md border border-border bg-[#1e1f22] px-2 py-1 text-sm outline-none focus:border-accent/50"
+                                className="min-w-0 flex-1 rounded-md border border-[#3f4147] bg-[#1e1f22] px-2 py-1 text-sm outline-none focus:border-[#00a8fc]"
                                 autoFocus
                               />
                               <DirtySaveButton
@@ -2914,7 +2914,7 @@ export function ServerSettingsModal({
                                     ),
                                   )
                                 }
-                                className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                                className="mt-0.5 h-4 w-4 rounded border-[#3f4147] accent-accent"
                               />
                               <span>
                                 <span className="block text-sm font-medium text-white">
@@ -2958,7 +2958,7 @@ export function ServerSettingsModal({
                                                   ),
                                                 )
                                               }
-                                              className="h-4 w-4 rounded border-border accent-accent"
+                                              className="h-4 w-4 rounded border-[#3f4147] accent-accent"
                                             />
                                             <span
                                               className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -3009,7 +3009,7 @@ export function ServerSettingsModal({
                           }
                           placeholder="wave_hello"
                           maxLength={32}
-                          className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
+                          className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-[#00a8fc]"
                         />
                       </label>
                       <div className="space-y-1">
@@ -3118,7 +3118,7 @@ export function ServerSettingsModal({
                         }
                         placeholder="celebrate"
                         maxLength={32}
-                        className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
+                        className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-[#00a8fc]"
                       />
                     </label>
                     <div className="space-y-1">
@@ -3218,7 +3218,7 @@ export function ServerSettingsModal({
                         }
                         placeholder="No spam links"
                         maxLength={64}
-                        className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
+                        className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-[#00a8fc]"
                       />
                     </label>
                     <label className="min-w-[12rem] flex-[2] space-y-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
@@ -3229,7 +3229,7 @@ export function ServerSettingsModal({
                           setAutomodKeywords(event.target.value)
                         }
                         placeholder="spam-link.example, click here"
-                        className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
+                        className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-[#00a8fc]"
                       />
                     </label>
                     <button
@@ -3315,7 +3315,7 @@ export function ServerSettingsModal({
                       onChange={(event) =>
                         setVerificationLevel(Number(event.target.value))
                       }
-                      className="w-full rounded-md border border-border bg-[#111214] px-3 py-2.5 text-sm text-[#dbdee1] outline-none focus:border-accent/50"
+                      className="w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2.5 text-sm text-[#dbdee1] outline-none focus:border-[#00a8fc]"
                     >
                       <option value={0}>None</option>
                       <option value={1}>Low — verified account age</option>
@@ -3340,7 +3340,7 @@ export function ServerSettingsModal({
                       type="checkbox"
                       checked={Boolean(server.invites_paused)}
                       onChange={() => void toggleInvitesPaused()}
-                      className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                      className="mt-0.5 h-4 w-4 rounded border-[#3f4147] accent-accent"
                     />
                     <span>
                       <span className="block text-sm font-medium text-white">
@@ -3465,7 +3465,7 @@ function RoleRow({
           value={name}
           onChange={(event) => setName(event.target.value)}
           disabled={!canEdit || role.is_default}
-          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none focus:border-accent/40 disabled:opacity-50"
+          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none focus:border-[#00a8fc] disabled:opacity-50"
         />
         {role.is_default ? (
           <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
@@ -3526,7 +3526,7 @@ function RoleRow({
               onChange={(event) => setColor(event.target.value)}
               aria-label={`${role.name} color`}
               disabled={!canEdit}
-              className="h-8 w-10 cursor-pointer rounded-md border border-border bg-transparent disabled:opacity-50"
+              className="h-8 w-10 cursor-pointer rounded-md border border-[#3f4147] bg-transparent disabled:opacity-50"
             />
           </label>
         </div>
@@ -3621,7 +3621,7 @@ function CategoryRow({
         value={name}
         onChange={(event) => setName(event.target.value)}
         maxLength={ROLE_NAME_MAX}
-        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm uppercase tracking-wide text-white outline-none focus:border-accent/40"
+        className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm uppercase tracking-wide text-white outline-none focus:border-[#00a8fc]"
       />
       <DirtySaveButton
         size="sm"

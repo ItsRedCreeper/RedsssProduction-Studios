@@ -98,7 +98,7 @@ function ChannelStartHeader({
         )}
       </div>
       <p className="text-3xl font-bold text-white">{emptyTitle}</p>
-      <p className="mt-2 max-w-lg text-sm text-muted">{emptyBody}</p>
+      <p className="mt-2 max-w-lg text-sm text-[#949ba4]">{emptyBody}</p>
     </div>
   );
 }
@@ -345,7 +345,7 @@ export function ChatTimeline({
             {(hasMore || loadingOlder) && (
               <div className="flex justify-center px-4 py-2">
                 {loadingOlder ? (
-                  <p className="text-xs text-muted">Loading older messages…</p>
+                  <p className="text-xs text-[#949ba4]">Loading older messages…</p>
                 ) : (
                   <button
                     type="button"
@@ -370,7 +370,7 @@ export function ChatTimeline({
             {!showStartHeader && messages.length === 0 && (
               <div className="flex h-full min-h-[12rem] flex-col items-start justify-center px-4">
                 <p className="text-lg font-semibold text-white">{emptyTitle}</p>
-                <p className="mt-1 max-w-lg text-sm text-muted">{emptyBody}</p>
+                <p className="mt-1 max-w-lg text-sm text-[#949ba4]">{emptyBody}</p>
               </div>
             )}
 

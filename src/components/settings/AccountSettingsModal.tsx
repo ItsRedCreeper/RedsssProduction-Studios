@@ -171,7 +171,7 @@ export function AccountSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="account-settings-title"
-        className="relative z-10 flex max-h-[min(90vh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-[#2b2d31] shadow-2xl shadow-black/60"
+        className="relative z-10 flex max-h-[min(90dvh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[#1e1f22] bg-[#2b2d31] shadow-2xl shadow-black/60"
       >
         <div className="flex items-center justify-between border-b border-black/30 px-5 py-4">
           <h2

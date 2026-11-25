@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Hash, MessagesSquare, Volume2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
@@ -334,6 +335,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [authTimedOut, setAuthTimedOut] = useState(false);
   const [mobileListOpen, setMobileListOpen] = useState(false);
+  const pinsButtonRef = useRef<HTMLButtonElement>(null);
+  const pinsPanelRef = useRef<HTMLDivElement>(null);
+  const [pinsAnchor, setPinsAnchor] = useState<{ top: number; right: number } | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -522,6 +528,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     });
     setSearchQuery("");
     setPinsOpen(false);
+    setPinnedExtra([]);
   }, [scope]);
 
   const loadServers = useCallback(async () => {
@@ -2156,6 +2163,87 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     };
   }, [pinsOpen, activeChannelId, activeChannel?.type]);
 
+  useEffect(() => {
+    if (!pinsOpen || !dmMode || !activeConversationId) return;
+    const conversationId = activeConversationId;
+    const supabase = createClient();
+    let cancelled = false;
+    void (async () => {
+      const { data, error: pinError } = await supabase
+        .from("dm_messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .eq("pinned", true)
+        .order("created_at", { ascending: false });
+      if (cancelled || pinError || !data) return;
+      const profiles = await loadProfiles(data.map((row) => row.user_id));
+      if (!cancelled) {
+        setPinnedExtra(hydrateMessages(dmRowsToMessages(data), profiles));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pinsOpen, dmMode, activeConversationId]);
+
+  useLayoutEffect(() => {
+    if (!pinsOpen) {
+      setPinsAnchor(null);
+      return;
+    }
+    function place() {
+      const rect = pinsButtonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPinsAnchor({
+        top: rect.bottom + 8,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    }
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [pinsOpen]);
+
+  useEffect(() => {
+    if (!pinsOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setPinsOpen(false);
+        pinsButtonRef.current?.focus();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const panel = pinsPanelRef.current;
+      if (!panel) return;
+      const nodes = [...panel.querySelectorAll<HTMLElement>("button, a, input")];
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    function onPointer(event: MouseEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (pinsPanelRef.current?.contains(target)) return;
+      if (pinsButtonRef.current?.contains(target)) return;
+      setPinsOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    const first = pinsPanelRef.current?.querySelector<HTMLElement>("button");
+    first?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+    };
+  }, [pinsOpen]);
+
   const membersById = useMemo(
     () => new Map(members.map((member) => [member.user_id, member])),
     [members],
@@ -2691,18 +2779,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const pinList = useMemo(() => {
     const map = new Map<string, ChatMessage>();
+    const source = dmMode ? unblockedDmMessages : unblockedMessages;
     for (const message of pinnedExtra) {
       if (message.pinned && !isMessageHidden(message.user_id)) {
         map.set(message.id, message);
       }
     }
-    for (const message of unblockedMessages) {
+    for (const message of source) {
       if (message.pinned) map.set(message.id, message);
     }
     return [...map.values()].sort(
       (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
     );
-  }, [unblockedMessages, pinnedExtra, isMessageHidden]);
+  }, [dmMode, unblockedDmMessages, unblockedMessages, pinnedExtra, isMessageHidden]);
 
   const searchNeedle = searchQuery.trim().toLowerCase();
   const threadScopedMessages = activeThreadId
@@ -4015,8 +4104,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     />
   ) : call.connection ? (
     <VoiceConnectionBar
+      direct
       channelName={call.connection.label}
-      serverName="Direct call"
+      serverName={null}
       muted={call.muted}
       deafened={call.deafened}
       quality={call.quality}
@@ -4040,7 +4130,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   );
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <CallOverlay />
       <ServerRail
         servers={servers}
@@ -4285,7 +4376,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           )}
 
           {previewMode && activeServer && (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-accent/30 bg-accent/10 px-4 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e1f22] bg-[#2b2d31] px-4 py-2">
               <p className="text-xs font-medium text-[#f2b8b5] sm:text-sm">
                 Previewing <span className="text-white">{activeServer.name}</span>
               </p>
@@ -4301,7 +4392,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   type="button"
                   disabled={joiningPreview}
                   onClick={() => void joinPreviewServer()}
-                  className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+                  className="rounded-md bg-[#23a559] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-60"
                 >
                   {joiningPreview ? "Joining…" : "Join Server"}
                 </button>
@@ -4333,6 +4424,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               call.connection?.conversationId !== activeConversationId
             }
             pinCount={pinList.length}
+            pinsButtonRef={pinsButtonRef}
+            showInCall={!!call.connection && !call.stageExpanded}
+            onExpandCall={() => call.setStageExpanded(true)}
             onToggleSearch={() => setSearchOpen((open) => !open)}
             onTogglePins={() => setPinsOpen((open) => !open)}
             onToggleMembers={() => setMembersOpen((open) => !open)}
@@ -4416,7 +4510,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search messages"
-                className="w-full rounded-md bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-accent"
+                className="w-full rounded-md bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-2 focus:ring-[#00a8fc]"
               />
             </div>
           )}
@@ -4475,37 +4569,49 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           )}
 
           {error && (
-            <div className="border-b border-accent/30 bg-accent-muted px-4 py-2 text-xs text-accent">
+            <div className="border-b border-[#ed4245]/40 bg-[#ed4245]/10 px-4 py-2 text-xs text-[#ed4245]">
               {error}
             </div>
           )}
 
-          {pinsOpen && textMode && (
-            <div className="absolute right-3 top-14 z-30 max-h-96 w-80 overflow-y-auto rounded-md border border-[#1e1f22] bg-[#2b2d31] p-2 shadow-xl shadow-black/50">
-              <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
-                Pinned messages
-              </p>
-              {pinList.length === 0 ? (
-                <p className="px-2 py-3 text-sm text-muted">No pinned messages.</p>
-              ) : (
-                pinList.map((message) => (
-                  <button
-                    key={message.id}
-                    type="button"
-                    onClick={() => jumpToMessage(message.id)}
-                    className="block w-full rounded-md px-2 py-2 text-left hover:bg-white/5"
-                  >
-                    <p className="text-xs font-semibold text-accent">
-                      {message.profiles?.username ?? "Unknown"}
-                    </p>
-                    <p className="truncate text-sm text-[#dbdee1]">
-                      {message.content || "Attachment"}
-                    </p>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
+          {pinsOpen && (textMode || dmMode) && pinsAnchor && typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  ref={pinsPanelRef}
+                  role="dialog"
+                  aria-label="Pinned messages"
+                  style={{ top: pinsAnchor.top, right: pinsAnchor.right }}
+                  className="fixed z-[70] max-h-96 w-[min(20rem,calc(100vw-1rem))] overflow-y-auto rounded-md border border-[#1e1f22] bg-[#2b2d31] p-2 shadow-xl shadow-black/50"
+                >
+                  <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                    Pinned messages
+                  </p>
+                  {pinList.length === 0 ? (
+                    <p className="px-2 py-3 text-sm text-[#949ba4]">No pinned messages.</p>
+                  ) : (
+                    pinList.map((message) => (
+                      <button
+                        key={message.id}
+                        type="button"
+                        onClick={() => {
+                          jumpToMessage(message.id);
+                          setPinsOpen(false);
+                        }}
+                        className="block w-full rounded-md px-2 py-2 text-left hover:bg-[#404249]"
+                      >
+                        <p className="text-xs font-semibold text-[#dbdee1]">
+                          {message.profiles?.username ?? "Unknown"}
+                        </p>
+                        <p className="truncate text-sm text-[#dbdee1]">
+                          {message.content || "Attachment"}
+                        </p>
+                      </button>
+                    ))
+                  )}
+                </div>,
+                document.body,
+              )
+            : null}
 
           {homeEmpty && !needsSignIn && (
             <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
@@ -4675,7 +4781,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   type="button"
                   disabled={joiningPreview}
                   onClick={() => void joinPreviewServer()}
-                  className="mt-1 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+                  className="mt-1 rounded-md bg-[#23a559] px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
                 >
                   {joiningPreview ? "Joining…" : "Join Server"}
                 </button>
@@ -4720,13 +4826,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             !activeChannel &&
             !channelPending &&
             channels.length === 0 && (
-            <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted">
+            <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[#949ba4]">
               This server has no channels yet.
             </div>
           )}
 
           {previewMode && textMode && !channelPending && !needsSignIn && (
-            <div className="flex items-center justify-between gap-3 border-t border-border bg-[#2b2d31] px-4 py-3">
+            <div className="flex items-center justify-between gap-3 border-t border-[#1e1f22] bg-[#2b2d31] px-4 py-3">
               <p className="min-w-0 text-sm text-[#b5bac1]">
                 You&apos;re previewing this server. Join to chat in #
                 {activeChannel?.name ?? "channel"}.
@@ -4735,7 +4841,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 type="button"
                 disabled={joiningPreview}
                 onClick={() => void joinPreviewServer()}
-                className="shrink-0 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+                className="shrink-0 rounded-md bg-[#23a559] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
               >
                 {joiningPreview ? "Joining…" : "Join Server"}
               </button>
@@ -4747,12 +4853,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             !channelPending &&
             !previewMode &&
             (dmMode && dmBlocked ? (
-              <div className="border-t border-border bg-[#2b2d31] px-4 py-3 text-sm text-[#f2b8b5]">
+              <div className="border-t border-[#1e1f22] bg-[#2b2d31] px-4 py-3 text-sm text-[#f2b8b5]">
                 You blocked this user. Unblock them from Friends → Blocked to
                 message again.
               </div>
             ) : dmMode && dmBlockedByThem ? (
-              <div className="border-t border-border bg-[#2b2d31] px-4 py-3 text-sm text-[#b5bac1]">
+              <div className="border-t border-[#1e1f22] bg-[#2b2d31] px-4 py-3 text-sm text-[#b5bac1]">
                 This user has blocked you. You can&apos;t send them messages.
               </div>
             ) : (
@@ -5189,12 +5295,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
       {toast && (
         <div
-          className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-md border border-border bg-surface-raised px-4 py-2.5 text-sm text-foreground shadow-lg shadow-black/40"
+          className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-md border border-[#1e1f22] bg-[#111214] px-4 py-2.5 text-sm text-white shadow-lg shadow-black/40"
           role="status"
         >
           {toast}
         </div>
       )}
+    </div>
+    <div className="shrink-0 sm:hidden">{sidebarFooter}</div>
     </div>
   );
 }

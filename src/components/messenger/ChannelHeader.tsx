@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { Menu, MessageSquare, Phone, Pin, Search, Users, Video } from "lucide-react";
 import { HoverTip } from "@/components/ui/HoverTip";
 
@@ -28,13 +28,16 @@ type ChannelHeaderProps = {
   onStartVideoCall?: () => void;
   onJoinCall?: () => void;
   onOpenList?: () => void;
+  pinsButtonRef?: Ref<HTMLButtonElement>;
+  showInCall?: boolean;
+  onExpandCall?: () => void;
 };
 
 function toolClass(active: boolean) {
   return `rounded-md p-1.5 transition-colors ${
     active
-      ? "bg-accent-muted text-accent"
-      : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
+      ? "bg-[#404249] text-white"
+      : "text-[#b5bac1] hover:bg-[#35373c] hover:text-white"
   }`;
 }
 
@@ -61,6 +64,9 @@ export function ChannelHeader({
   onStartVideoCall,
   onJoinCall,
   onOpenList,
+  pinsButtonRef,
+  showInCall = false,
+  onExpandCall,
 }: ChannelHeaderProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1f2023] px-2 sm:px-4">
@@ -94,6 +100,15 @@ export function ChannelHeader({
         <span className="flex-1" />
       )}
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        {showInCall && onExpandCall ? (
+          <button
+            type="button"
+            onClick={onExpandCall}
+            className="mr-1 rounded-md bg-[#23a559]/15 px-2 py-1 text-xs font-semibold text-[#23a559] hover:bg-[#23a559]/25"
+          >
+            In call
+          </button>
+        ) : null}
         {showCall && joinCallAvailable && onJoinCall ? (
           <HoverTip label="Join Call" delayMs={40}>
             <button
@@ -147,6 +162,7 @@ export function ChannelHeader({
           <HoverTip label="Pinned Messages" delayMs={40}>
             <button
               type="button"
+              ref={pinsButtonRef}
               className={`relative ${toolClass(pinsOpen)}`}
               aria-label="Pinned messages"
               aria-pressed={pinsOpen}

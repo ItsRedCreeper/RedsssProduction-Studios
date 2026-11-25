@@ -48,15 +48,23 @@ function buildActivity(opts: {
     isPublic = false;
   } else if (opts.pane === "home") {
     type = "other";
-    contextName = "In Messenger";
-    isPublic = true;
+    contextName = "Direct Messages";
+    isPublic = false;
   } else if (opts.pane === "server" && opts.activeServer) {
     type = "server";
     contextId = opts.activeServer.id;
-    contextName = opts.activeServer.name;
+    const channelLabel = opts.activeChannel
+      ? `#${opts.activeChannel.name}`
+      : null;
+    contextName = channelLabel
+      ? `${opts.activeServer.name} · ${channelLabel}`
+      : opts.activeServer.name;
     isPublic = !!opts.activeServer.is_public;
     if (opts.activeChannel?.type === "voice") {
       type = "voice";
+      contextName = channelLabel
+        ? `${opts.activeServer.name} · ${opts.activeChannel.name}`
+        : opts.activeServer.name;
     }
   } else {
     // Server still loading / unknown pane — never leave a stale Games/Home row.

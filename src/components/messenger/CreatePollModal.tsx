@@ -75,7 +75,7 @@ export function CreatePollModal({
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               maxLength={300}
-              className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+              className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
               autoFocus
             />
           </label>
@@ -94,7 +94,7 @@ export function CreatePollModal({
                   }}
                   maxLength={100}
                   placeholder={`Option ${index + 1}`}
-                  className="min-w-0 flex-1 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+                  className="min-w-0 flex-1 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
                 />
                 {options.length > 2 && (
                   <button

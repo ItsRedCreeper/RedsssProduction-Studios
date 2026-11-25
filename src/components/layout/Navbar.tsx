@@ -20,6 +20,8 @@ import { statusLabel } from "@/components/messenger/data";
 import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import { resolveDisplayStatus } from "@/lib/presence";
 import { NAV_LINKS } from "@/lib/nav";
+import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
+import { ensureDmConversation } from "@/lib/friends";
 import { HoverTip } from "@/components/ui/HoverTip";
 
 function isActive(pathname: string, href: string) {
@@ -52,9 +54,14 @@ export function Navbar() {
   }, [toast]);
 
   const handleMessage = useCallback(
-    (_friend: FriendListItem) => {
+    (friend: FriendListItem) => {
       profileUi.closeFriends();
-      router.push("/messenger/channels/@me");
+      void (async () => {
+        const { conversationId } = await ensureDmConversation(friend.id);
+        router.push(
+          conversationId ? messengerDmPath(conversationId) : messengerHomePath(),
+        );
+      })();
     },
     [profileUi, router],
   );

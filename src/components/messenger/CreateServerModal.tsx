@@ -168,9 +168,9 @@ export function CreateServerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-server-title"
-        className="relative z-10 w-full max-w-md overflow-hidden rounded-md border border-border bg-surface shadow-2xl shadow-black/50"
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-md border border-[#3f4147] bg-surface shadow-2xl shadow-black/50"
       >
-        <div className="flex items-start justify-between border-b border-border px-5 py-4">
+        <div className="flex items-start justify-between border-b border-[#3f4147] px-5 py-4">
           <div>
             <h2
               id="create-server-title"
@@ -204,7 +204,7 @@ export function CreateServerModal({
               minLength={SERVER_NAME_MIN}
               maxLength={SERVER_NAME_MAX}
               disabled={loading}
-              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent-ring disabled:opacity-60"
+              className="w-full rounded-md border border-[#3f4147] bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-[#00a8fc] focus:ring-1 focus:ring-[#00a8fc] disabled:opacity-60"
               placeholder="My Cool Server"
               autoFocus
             />
@@ -220,12 +220,12 @@ export function CreateServerModal({
               rows={3}
               maxLength={SERVER_DESCRIPTION_MAX}
               disabled={loading}
-              className="w-full resize-none rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent-ring disabled:opacity-60"
+              className="w-full resize-none rounded-md border border-[#3f4147] bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-[#00a8fc] focus:ring-1 focus:ring-[#00a8fc] disabled:opacity-60"
               placeholder="What is this server about?"
             />
           </label>
 
-          <label className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-background px-3 py-3">
+          <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[#3f4147] bg-background px-3 py-3">
             <input
               type="checkbox"
               checked={isPublic}

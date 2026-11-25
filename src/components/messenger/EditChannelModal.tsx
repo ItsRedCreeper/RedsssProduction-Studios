@@ -267,7 +267,7 @@ export function EditChannelModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-channel-title"
-        className="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-md border border-[#1e1f22] bg-[#313338] shadow-2xl shadow-black/50"
+        className="relative z-10 flex max-h-[min(90dvh,42rem)] w-full max-w-2xl flex-col overflow-hidden rounded-md border border-[#1e1f22] bg-[#313338] shadow-2xl shadow-black/50"
       >
         <div className="flex items-start justify-between border-b border-black/30 px-5 py-4">
           <div className="flex items-center gap-2">
@@ -335,7 +335,7 @@ export function EditChannelModal({
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   maxLength={CHANNEL_NAME_MAX}
-                  className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/50"
+                  className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-[#00a8fc]"
                 />
               </label>
               {channel.type === "text" && (
@@ -349,7 +349,7 @@ export function EditChannelModal({
                     rows={3}
                     maxLength={1024}
                     placeholder="Let everyone know how to use this channel"
-                    className="w-full resize-none rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/50"
+                    className="w-full resize-none rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-[#00a8fc]"
                   />
                 </label>
               )}
@@ -361,7 +361,7 @@ export function EditChannelModal({
                   <select
                     value={slowmode}
                     onChange={(event) => setSlowmode(Number(event.target.value))}
-                    className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/50"
+                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-[#00a8fc]"
                   >
                     {SLOWMODE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -376,7 +376,7 @@ export function EditChannelModal({
                   type="checkbox"
                   checked={nsfw}
                   onChange={(event) => setNsfw(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                  className="mt-0.5 h-4 w-4 rounded border-[#3f4147] accent-accent"
                 />
                 <span>
                   <span className="block text-sm font-medium text-white">
@@ -421,7 +421,7 @@ export function EditChannelModal({
                       setChannelPrivate(current, event.target.checked),
                     )
                   }
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                  className="mt-0.5 h-4 w-4 rounded border-[#3f4147] accent-accent"
                 />
                 <span>
                   <span className="block text-sm font-medium text-white">
@@ -495,7 +495,7 @@ export function EditChannelModal({
                             ),
                           )
                         }
-                        className="h-4 w-4 rounded border-border accent-accent"
+                        className="h-4 w-4 rounded border-[#3f4147] accent-accent"
                       />
                       Can view this channel
                     </label>

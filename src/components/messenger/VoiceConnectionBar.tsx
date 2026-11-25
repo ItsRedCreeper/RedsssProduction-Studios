@@ -36,6 +36,8 @@ type VoiceConnectionBarProps = {
   screenSharing?: boolean;
   onToggleCamera?: () => void;
   onToggleScreenShare?: () => void;
+  /** DM call: one line, `Direct call · {label}`. */
+  direct?: boolean;
 };
 
 export function VoiceConnectionBar({
@@ -65,23 +67,25 @@ export function VoiceConnectionBar({
   screenSharing,
   onToggleCamera,
   onToggleScreenShare,
+  direct = false,
 }: VoiceConnectionBarProps) {
+  const directLabel = `Direct call · ${channelName}`;
   return (
     <div className="shrink-0 border-t border-[#1f2023] bg-[#232428] px-2 py-2">
       <div className="mb-1 px-1">
         <HoverTip
-          label={micError || "Voice Connected"}
+          label={micError || (direct ? directLabel : "Voice Connected")}
           delayMs={40}
           className="block max-w-full"
         >
           <p className={`truncate text-xs font-semibold ${quality.colorClass}`}>
-            Voice Connected
+            {direct ? directLabel : "Voice Connected"}
             {micError ? (
               <span className="font-normal text-[#f0b232]"> · Mic issue</span>
             ) : null}
           </p>
         </HoverTip>
-        {onOpenChannel ? (
+        {direct ? null : onOpenChannel ? (
           <HoverTip
             label={serverName ? `${channelName} / ${serverName}` : channelName}
             onlyIfTruncated
