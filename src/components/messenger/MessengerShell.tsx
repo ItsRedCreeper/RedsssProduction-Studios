@@ -2997,8 +2997,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
     element.scrollIntoView({ behavior: "smooth", block: "center" });
-    element.classList.add("bg-[#404249]");
-    window.setTimeout(() => element.classList.remove("bg-[#404249]"), 1200);
+    element.classList.add("bg-accent/15");
+    window.setTimeout(() => element.classList.remove("bg-accent/15"), 1200);
     setPinsOpen(false);
   }
 
@@ -4549,7 +4549,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search messages"
-                className="w-full rounded-md bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-2 focus:ring-accent/40"
+                className="w-full rounded-xl bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-2 focus:ring-accent/40"
               />
             </div>
           )}
@@ -4563,9 +4563,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     key={channel.id}
                     type="button"
                     onClick={() => selectChannel(channel.id)}
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium ${
                       active
-                        ? "bg-[#404249] text-white"
+                        ? "bg-accent/20 text-white ring-1 ring-accent/40"
                         : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]"
                     }`}
                   >
@@ -4594,9 +4594,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   key={thread.id}
                   type="button"
                   onClick={() => selectThread(thread.id)}
-                  className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
+                  className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium ${
                     thread.id === activeConversationId
-                      ? "bg-[#404249] text-white"
+                      ? "bg-accent/20 text-white ring-1 ring-accent/40"
                       : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]"
                   }`}
                 >

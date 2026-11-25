@@ -408,11 +408,11 @@ export function ChatTimeline({
                       role="separator"
                       aria-label={dayLabel}
                     >
-                      <div className="h-px flex-1 bg-[#3f4147]" />
-                      <span className="px-2 text-[12px] font-semibold text-[#949ba4]">
+                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#3f4147] to-[#3f4147]" />
+                      <span className="rounded-full bg-[#2b2d31] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[#949ba4] ring-1 ring-white/[0.04]">
                         {dayLabel}
                       </span>
-                      <div className="h-px flex-1 bg-[#3f4147]" />
+                      <div className="h-px flex-1 bg-gradient-to-l from-transparent via-[#3f4147] to-[#3f4147]" />
                     </div>
                   ) : null}
                   <MessageItem

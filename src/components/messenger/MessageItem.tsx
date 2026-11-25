@@ -532,7 +532,7 @@ export function MessageItem({
             {reactions.map((reaction) => {
               const pillClass = `inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition ${
                 reaction.reacted
-                  ? "border-accent/70 bg-accent-muted text-white"
+                  ? "border-accent/60 bg-accent/15 text-white shadow-[0_0_0_1px_rgba(220,38,38,0.12)]"
                   : "border-transparent bg-[#2b2d31] text-[#dbdee1] hover:border-[#4e5058]"
               }`;
               const body = (

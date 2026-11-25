@@ -113,7 +113,7 @@ export function ServerHeaderMenu({
       {open && interactive && (
         <div
           role="menu"
-          className="absolute left-2 right-2 top-[calc(100%-4px)] z-30 overflow-hidden rounded-md border border-[#1e1f22] bg-[#111214] py-1.5 shadow-xl shadow-black/50"
+          className="absolute left-2 right-2 top-[calc(100%-4px)] z-30 overflow-hidden rounded-xl border border-white/[0.08] bg-[#111214] py-1.5 shadow-xl shadow-black/50 ring-1 ring-accent/10"
         >
           {onCreateChannel && (
             <button
