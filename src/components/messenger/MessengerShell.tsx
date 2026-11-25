@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { createPortal } from "react-dom";
 import { Hash, MessagesSquare, Volume2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -4318,7 +4326,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         )}
       </ResizableSidebar>
 
-      <div className="relative flex min-h-0 min-w-0 flex-1">
+      <div
+        className="relative flex min-h-0 min-w-0 flex-1"
+        data-voice-chat-row={voiceMode ? "" : undefined}
+      >
         <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--ms-chat)]">
           {pane === "server" && activeServer && (
             <div className="sm:hidden">
@@ -4992,8 +5003,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         ) : null}
         {voiceMode && !channelPending && voiceChatOpen && (
           <aside
-            className="absolute inset-y-0 right-0 z-20 flex min-w-0 flex-col overflow-hidden border-l border-black/30 bg-[var(--ms-sidebar)] shadow-2xl shadow-black/40 sm:relative sm:z-auto sm:shadow-none"
-            style={{ width: `min(100%, ${voiceChatWidth}px)` }}
+            className="absolute inset-y-0 right-0 z-20 flex w-full max-w-full flex-col overflow-hidden border-l border-black/30 bg-[var(--ms-sidebar)] shadow-2xl shadow-black/40 sm:relative sm:z-auto sm:w-[var(--voice-chat-w)] sm:min-w-[340px] sm:max-w-[520px] sm:shrink-0 sm:shadow-none"
+            style={
+              {
+                ["--voice-chat-w"]: `${Math.max(VOICE_CHAT_MIN, Math.min(VOICE_CHAT_MAX, voiceChatWidth))}px`,
+              } as CSSProperties
+            }
           >
             <div
               role="separator"
