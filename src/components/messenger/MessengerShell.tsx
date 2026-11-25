@@ -262,6 +262,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [pinnedExtra, setPinnedExtra] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [replyPing, setReplyPing] = useState(true);
+  const lastChannelSendAt = useRef<Record<string, number>>({});
   const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
   const [customEmojis, setCustomEmojis] = useState<ServerEmoji[]>([]);
   const [sending, setSending] = useState(false);
@@ -998,6 +1000,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           user_id: row.user_id,
           nickname: row.nickname,
           joined_at: row.joined_at,
+          timed_out_until: row.timed_out_until ?? null,
           username: "Unknown",
           avatar_url: null as string | null,
           status: "offline",
@@ -2727,6 +2730,65 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError("You don't have permission to send messages.");
       return;
     }
+    const me = members.find((member) => member.user_id === user.id);
+    if (
+      me?.timed_out_until &&
+      Date.parse(me.timed_out_until) > Date.now() &&
+      !isServerOwner &&
+      !myPerms.ADMINISTRATOR
+    ) {
+      setError(
+        `You are timed out until ${new Date(me.timed_out_until).toLocaleString()}.`,
+      );
+      return;
+    }
+    if (
+      activeServer &&
+      !isServerOwner &&
+      !myPerms.ADMINISTRATOR &&
+      (activeServer.verification_level ?? 0) > 0
+    ) {
+      const level = activeServer.verification_level ?? 0;
+      const accountAgeMs = profile?.created_at
+        ? Date.now() - Date.parse(profile.created_at)
+        : 0;
+      const memberAgeMs = me?.joined_at
+        ? Date.now() - Date.parse(me.joined_at)
+        : 0;
+      if (level >= 1 && accountAgeMs < 60_000) {
+        setError("This server requires a verified account age to chat.");
+        return;
+      }
+      if (level >= 2 && accountAgeMs < 5 * 60_000) {
+        setError(
+          "This server requires your account to be at least 5 minutes old.",
+        );
+        return;
+      }
+      if (level >= 3 && memberAgeMs < 10 * 60_000) {
+        setError(
+          "This server requires you to be a member for at least 10 minutes.",
+        );
+        return;
+      }
+    }
+    const slowmode = activeChannel.slowmode_seconds ?? 0;
+    if (
+      slowmode > 0 &&
+      !isServerOwner &&
+      !myPerms.ADMINISTRATOR &&
+      !myPerms.MANAGE_CHANNELS &&
+      !myPerms.MANAGE_MESSAGES
+    ) {
+      const last = lastChannelSendAt.current[activeChannelId] ?? 0;
+      const waitMs = slowmode * 1000 - (Date.now() - last);
+      if (waitMs > 0) {
+        setError(
+          `Slowmode is on — wait ${Math.ceil(waitMs / 1000)}s before sending again.`,
+        );
+        return;
+      }
+    }
     const channelId = activeChannelId;
     const content = (contentOverride ?? draft).trim();
     const filesSnapshot = pendingFiles;
@@ -2787,8 +2849,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       optimistic: true,
     };
 
+    const pingReply = replyPing;
     setDraft("");
     setReplyTo(null);
+    setReplyPing(true);
     setPendingFiles([]);
     setError(null);
     publishTypingStop();
@@ -2808,6 +2872,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setDraft(content);
         setPendingFiles(filesSnapshot);
         if (replySnapshot) setReplyTo(replySnapshot);
+        setReplyPing(pingReply);
         setSending(false);
         return;
       }
@@ -2819,6 +2884,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     const first = uploadedAttachments[0] ?? null;
     const supabase = createClient();
+    const notifyContent =
+      pingReply && replySnapshot && !text.includes(`<@${replySnapshot.user_id}>`)
+        ? `${text} <@${replySnapshot.user_id}>`.trim()
+        : text;
     const { data, error: insertError } = await supabase
       .from("messages")
       .insert({
@@ -2875,12 +2944,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return [...withoutTemp, saved];
     });
     setLastMessageAt((prev) => ({ ...prev, [channelId]: saved.created_at }));
-    if (text.includes("<@") || content.includes("@")) {
+    lastChannelSendAt.current[channelId] = Date.now();
+    if (
+      notifyContent.includes("<@") ||
+      content.includes("@") ||
+      (pingReply && replySnapshot)
+    ) {
       void supabase.rpc("notify_message_mentions", {
         p_message_id: saved.id,
         p_channel_id: channelId,
         p_author_id: user.id,
-        p_content: text,
+        p_content: pingReply ? notifyContent : text,
       });
     }
     setSending(false);
@@ -4031,6 +4105,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                       : displayMentionText(replyTo.content, mentionMaps)
                     : null
                 }
+                replyPing={replyPing}
+                onReplyPingChange={setReplyPing}
                 pendingFiles={pendingFiles}
                 sending={sending}
                 allowAttach={
@@ -4043,7 +4119,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 serverNamesById={serverNamesById}
                 preferredServerId={dmMode ? null : (activeServer?.id ?? null)}
                 onDraft={setDraft}
-                onCancelReply={() => setReplyTo(null)}
+                onCancelReply={() => {
+                  setReplyTo(null);
+                  setReplyPing(true);
+                }}
                 onFiles={(files) => void chooseFiles(files)}
                 onRemoveFile={removePendingFile}
                 onToggleFileSpoiler={togglePendingFileSpoiler}
@@ -4168,6 +4247,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                       : displayMentionText(replyTo.content, mentionMaps)
                     : null
                 }
+                replyPing={replyPing}
+                onReplyPingChange={setReplyPing}
                 pendingFiles={pendingFiles}
                 sending={sending}
                 allowAttach={canSendMessages}
@@ -4178,7 +4259,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 serverNamesById={serverNamesById}
                 preferredServerId={activeServer?.id ?? null}
                 onDraft={setDraft}
-                onCancelReply={() => setReplyTo(null)}
+                onCancelReply={() => {
+                  setReplyTo(null);
+                  setReplyPing(true);
+                }}
                 onFiles={(files) => void chooseFiles(files)}
                 onRemoveFile={removePendingFile}
                 onToggleFileSpoiler={togglePendingFileSpoiler}

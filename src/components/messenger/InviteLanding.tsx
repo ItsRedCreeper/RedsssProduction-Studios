@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
-import { messengerServerPath } from "@/lib/messenger-routes";
+import {
+  messengerChannelPath,
+  messengerServerPath,
+} from "@/lib/messenger-routes";
 import {
   serverInitials,
   serverInitialsClass,
@@ -146,7 +149,11 @@ export function InviteLanding({ code }: InviteLandingProps) {
     }
 
     setJoining(false);
-    router.push(messengerServerPath(server.id));
+    if (invite.channel_id) {
+      router.push(messengerChannelPath(server.id, invite.channel_id));
+    } else {
+      router.push(messengerServerPath(server.id));
+    }
   }
 
   return (

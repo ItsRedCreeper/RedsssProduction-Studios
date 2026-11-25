@@ -72,6 +72,9 @@ type MessageComposerProps = {
   draft: string;
   replyAuthor: string | null;
   replyContent: string | null;
+  /** Discord: whether the reply should ping the original author. */
+  replyPing?: boolean;
+  onReplyPingChange?: (ping: boolean) => void;
   pendingFiles: PendingAttachment[];
   sending: boolean;
   allowAttach: boolean;
@@ -106,6 +109,8 @@ export function MessageComposer({
   draft,
   replyAuthor,
   replyContent,
+  replyPing = true,
+  onReplyPingChange,
   pendingFiles,
   sending,
   allowAttach,
@@ -611,6 +616,29 @@ export function MessageComposer({
               <p className="truncate text-xs text-muted">{replyContent}</p>
             </HoverTip>
           </div>
+          {onReplyPingChange ? (
+            <HoverTip
+              label={
+                replyPing
+                  ? "Ping will notify the author"
+                  : "Author will not be notified"
+              }
+              delayMs={40}
+            >
+              <button
+                type="button"
+                onClick={() => onReplyPingChange(!replyPing)}
+                className={`rounded-md px-2 py-1 text-[11px] font-semibold ${
+                  replyPing
+                    ? "bg-accent/20 text-accent"
+                    : "bg-white/5 text-[#949ba4]"
+                }`}
+                aria-pressed={replyPing}
+              >
+                @
+              </button>
+            </HoverTip>
+          ) : null}
           <HoverTip label="Cancel Reply" delayMs={40}>
             <button
               type="button"

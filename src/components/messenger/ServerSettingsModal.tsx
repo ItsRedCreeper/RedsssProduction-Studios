@@ -131,6 +131,20 @@ export function ServerSettingsModal({
   const [name, setName] = useState(server.name);
   const [description, setDescription] = useState(server.description ?? "");
   const [isPublic, setIsPublic] = useState(server.is_public);
+  const [verificationLevel, setVerificationLevel] = useState(
+    server.verification_level ?? 0,
+  );
+  const [iconBusy, setIconBusy] = useState(false);
+  const [transferTo, setTransferTo] = useState("");
+  const [nickEditId, setNickEditId] = useState<string | null>(null);
+  const [nickDraft, setNickDraft] = useState("");
+  const [timeoutMemberId, setTimeoutMemberId] = useState<string | null>(null);
+  const [timeoutMinutes, setTimeoutMinutes] = useState(60);
+  const [banDurationHours, setBanDurationHours] = useState<number | "perm">(
+    "perm",
+  );
+  const [inviteChannelId, setInviteChannelId] = useState<string>("");
+  const iconFileRef = useRef<HTMLInputElement | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [roleName, setRoleName] = useState("");
@@ -203,6 +217,8 @@ export function ServerSettingsModal({
     setName(server.name);
     setDescription(server.description ?? "");
     setIsPublic(server.is_public);
+    setVerificationLevel(server.verification_level ?? 0);
+    setTransferTo("");
     setError(null);
     setConfirmChannelId(null);
     setEditingChannelId(null);
@@ -334,7 +350,8 @@ export function ServerSettingsModal({
   const overviewDirty =
     name.trim() !== server.name ||
     (description.trim() || "") !== (server.description?.trim() || "") ||
-    isPublic !== server.is_public;
+    isPublic !== server.is_public ||
+    verificationLevel !== (server.verification_level ?? 0);
 
   async function saveOverview(event: FormEvent) {
     event.preventDefault();
@@ -356,6 +373,7 @@ export function ServerSettingsModal({
         name: trimmed,
         description: description.trim() || null,
         is_public: isPublic,
+        verification_level: verificationLevel,
       })
       .eq("id", server.id)
       .select("*")
@@ -366,6 +384,178 @@ export function ServerSettingsModal({
       return;
     }
     onServerUpdated(data);
+  }
+
+  async function uploadServerIcon(file: File) {
+    if (!canEditOverview) return;
+    if (file.size > 512 * 1024) {
+      setError("Server icon must be 512 KB or smaller.");
+      return;
+    }
+    setIconBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const ext =
+      file.type === "image/gif"
+        ? "gif"
+        : file.type === "image/webp"
+          ? "webp"
+          : file.type === "image/png"
+            ? "png"
+            : "jpg";
+    const path = `${server.id}/icon.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("server-icons")
+      .upload(path, file, {
+        contentType: file.type || "image/png",
+        upsert: true,
+      });
+    if (uploadError) {
+      setIconBusy(false);
+      setError(uploadError.message);
+      return;
+    }
+    const { data: publicUrl } = supabase.storage
+      .from("server-icons")
+      .getPublicUrl(path);
+    const iconUrl = `${publicUrl.publicUrl}?v=${Date.now()}`;
+    const { data, error: updateError } = await supabase
+      .from("servers")
+      .update({ icon_url: iconUrl })
+      .eq("id", server.id)
+      .select("*")
+      .single();
+    setIconBusy(false);
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not save server icon.");
+      return;
+    }
+    onServerUpdated(data);
+  }
+
+  async function transferOwnership() {
+    if (!isOwner || !transferTo) return;
+    if (transferTo === userId) return;
+    if (!members.some((member) => member.user_id === transferTo)) {
+      setError("Pick a member of this server.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const supabase = createClient();
+    const { data, error: updateError } = await supabase
+      .from("servers")
+      .update({ owner_id: transferTo })
+      .eq("id", server.id)
+      .eq("owner_id", userId)
+      .select("*")
+      .single();
+    setSaving(false);
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not transfer ownership.");
+      return;
+    }
+    void supabase.from("server_audit_log").insert({
+      server_id: server.id,
+      actor_id: userId,
+      action: "TRANSFER_OWNERSHIP",
+      target_id: transferTo,
+      target_type: "user",
+    });
+    onServerUpdated(data);
+    setTransferTo("");
+  }
+
+  async function saveNickname(memberId: string) {
+    const trimmed = nickDraft.trim();
+    if (trimmed.length > 32) {
+      setError("Nickname must be 32 characters or fewer.");
+      return;
+    }
+    setError(null);
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("server_members")
+      .update({ nickname: trimmed || null })
+      .eq("server_id", server.id)
+      .eq("user_id", memberId);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    onMembersChanged(
+      members.map((member) =>
+        member.user_id === memberId
+          ? { ...member, nickname: trimmed || null }
+          : member,
+      ),
+    );
+    setNickEditId(null);
+  }
+
+  async function timeoutMember(memberId: string) {
+    if (memberId === server.owner_id || memberId === userId) return;
+    const target = members.find((member) => member.user_id === memberId);
+    if (
+      target &&
+      !canModerateMember(roles, actorRoleIds, target.roleIds, { isOwner })
+    ) {
+      setError(
+        "You can't timeout someone with an equal or higher role than yours.",
+      );
+      return;
+    }
+    const until = new Date(
+      Date.now() + Math.max(1, timeoutMinutes) * 60 * 1000,
+    ).toISOString();
+    setError(null);
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("server_members")
+      .update({ timed_out_until: until })
+      .eq("server_id", server.id)
+      .eq("user_id", memberId);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    onMembersChanged(
+      members.map((member) =>
+        member.user_id === memberId
+          ? { ...member, timed_out_until: until }
+          : member,
+      ),
+    );
+    void supabase.from("server_audit_log").insert({
+      server_id: server.id,
+      actor_id: userId,
+      action: "TIMEOUT",
+      target_id: memberId,
+      target_type: "user",
+      details: { until, minutes: timeoutMinutes },
+    });
+    setTimeoutMemberId(null);
+  }
+
+  async function clearTimeout(memberId: string) {
+    setError(null);
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("server_members")
+      .update({ timed_out_until: null })
+      .eq("server_id", server.id)
+      .eq("user_id", memberId);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    onMembersChanged(
+      members.map((member) =>
+        member.user_id === memberId
+          ? { ...member, timed_out_until: null }
+          : member,
+      ),
+    );
   }
 
   async function createRole(event: FormEvent) {
@@ -733,13 +923,19 @@ export function ServerSettingsModal({
     setError(null);
     const supabase = createClient();
     const deleteSeconds = Math.max(0, banDeleteDays) * 24 * 60 * 60;
+    const expiresAt =
+      banDurationHours === "perm"
+        ? null
+        : new Date(
+            Date.now() + Number(banDurationHours) * 60 * 60 * 1000,
+          ).toISOString();
     const { error: banError } = await supabase.from("server_bans").upsert({
       server_id: server.id,
       user_id: memberId,
       banned_by: userId,
       reason: banReason.trim() || null,
       delete_message_seconds: deleteSeconds,
-      expires_at: null,
+      expires_at: expiresAt,
     });
     if (banError) {
       setSaving(false);
@@ -774,7 +970,7 @@ export function ServerSettingsModal({
       {
         user_id: memberId,
         reason: banReason.trim() || null,
-        expires_at: null,
+        expires_at: expiresAt,
         created_at: new Date().toISOString(),
         username: target?.username,
       },
@@ -783,6 +979,7 @@ export function ServerSettingsModal({
     setBanMemberId(null);
     setBanReason("");
     setBanDeleteDays(0);
+    setBanDurationHours("perm");
   }
 
   async function unbanMember(memberId: string) {
@@ -821,10 +1018,12 @@ export function ServerSettingsModal({
         max_uses: inviteMaxUses === "" ? null : Number(inviteMaxUses),
         expires_at: expiresAt,
         is_permanent: inviteExpiryHours === "never" && inviteMaxUses === "",
+        channel_id: inviteChannelId || null,
         uses: 0,
       })
       .select("*")
       .single();
+    setInviteChannelId("");
     setSaving(false);
     if (insertError || !data) {
       setError(insertError?.message ?? "Could not create invite.");
@@ -1274,6 +1473,44 @@ export function ServerSettingsModal({
 
             {tab === "overview" && canEditOverview && (
               <form onSubmit={saveOverview} className="space-y-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[#1e1f22] text-xl font-bold text-white">
+                    {server.icon_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={server.icon_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      server.name.slice(0, 1).toUpperCase()
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <input
+                      ref={iconFileRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/gif,image/webp"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void uploadServerIcon(file);
+                        event.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={iconBusy}
+                      onClick={() => iconFileRef.current?.click()}
+                      className="rounded-md bg-[#3f4147] px-3 py-2 text-sm text-[#dbdee1] hover:bg-[#4e5058] disabled:opacity-50"
+                    >
+                      {iconBusy ? "Uploading…" : "Change Icon"}
+                    </button>
+                    <p className="text-[11px] text-[#949ba4]">
+                      PNG, JPG, GIF, or WebP · max 512 KB
+                    </p>
+                  </div>
+                </div>
                 <label className="block space-y-1.5">
                   <span className="text-xs font-semibold uppercase tracking-wide text-muted">
                     Server name
@@ -1298,6 +1535,28 @@ export function ServerSettingsModal({
                     className="w-full resize-none rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50"
                   />
                 </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Verification level
+                  </span>
+                  <select
+                    value={verificationLevel}
+                    onChange={(event) =>
+                      setVerificationLevel(Number(event.target.value))
+                    }
+                    className="w-full rounded-md border border-border bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/50"
+                  >
+                    <option value={0}>None</option>
+                    <option value={1}>Low — verified account age</option>
+                    <option value={2}>Medium — account older than 5 minutes</option>
+                    <option value={3}>
+                      High — member of server for 10+ minutes
+                    </option>
+                    <option value={4}>
+                      Highest — member of server for 10+ minutes
+                    </option>
+                  </select>
+                </label>
                 <label className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-[#1e1f22] px-3 py-3">
                   <input
                     type="checkbox"
@@ -1316,6 +1575,37 @@ export function ServerSettingsModal({
                   disabled={name.trim().length < 2}
                   label="Save changes"
                 />
+                {isOwner ? (
+                  <div className="space-y-2 border-t border-black/30 pt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                      Transfer ownership
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={transferTo}
+                        onChange={(event) => setTransferTo(event.target.value)}
+                        className="min-w-[12rem] flex-1 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm"
+                      >
+                        <option value="">Select a member…</option>
+                        {members
+                          .filter((member) => member.user_id !== userId)
+                          .map((member) => (
+                            <option key={member.user_id} value={member.user_id}>
+                              {member.nickname || member.username}
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={saving || !transferTo}
+                        onClick={() => void transferOwnership()}
+                        className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        Transfer
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </form>
             )}
 
@@ -1482,15 +1772,118 @@ export function ServerSettingsModal({
                                   setBanMemberId(member.user_id);
                                   setBanReason("");
                                   setBanDeleteDays(0);
+                                  setBanDurationHours("perm");
                                 }}
                                 className="rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent-muted"
                               >
                                 Ban
                               </button>
                             )}
+                            {(canKickMembers || canBanMembers || isOwner) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTimeoutMemberId(member.user_id);
+                                  setTimeoutMinutes(60);
+                                }}
+                                className="rounded-md px-2 py-1 text-xs font-medium text-[#dbdee1] hover:bg-white/10"
+                              >
+                                Timeout
+                              </button>
+                            )}
+                            {(canManageRoles || isOwner || member.user_id === userId) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNickEditId(member.user_id);
+                                  setNickDraft(member.nickname ?? "");
+                                }}
+                                className="rounded-md px-2 py-1 text-xs font-medium text-[#dbdee1] hover:bg-white/10"
+                              >
+                                Nick
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
+                      {member.timed_out_until &&
+                      Date.parse(member.timed_out_until) > Date.now() ? (
+                        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-[#f0b232]">
+                          <span>
+                            Timed out until{" "}
+                            {new Date(member.timed_out_until).toLocaleString()}
+                          </span>
+                          {(canKickMembers || canBanMembers || isOwner) && (
+                            <button
+                              type="button"
+                              onClick={() => void clearTimeout(member.user_id)}
+                              className="rounded-md px-2 py-1 hover:bg-white/10"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      ) : null}
+                      {nickEditId === member.user_id ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <input
+                            value={nickDraft}
+                            onChange={(event) => setNickDraft(event.target.value)}
+                            maxLength={32}
+                            placeholder="Nickname"
+                            className="min-w-[8rem] flex-1 rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm outline-none focus:border-accent/50"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void saveNickname(member.user_id)}
+                            className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNickEditId(null)}
+                            className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : null}
+                      {timeoutMemberId === member.user_id ? (
+                        <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                          <label className="text-xs text-[#949ba4]">
+                            Duration
+                            <select
+                              value={timeoutMinutes}
+                              onChange={(event) =>
+                                setTimeoutMinutes(Number(event.target.value))
+                              }
+                              className="mt-1 block rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
+                            >
+                              <option value={1}>60 seconds</option>
+                              <option value={5}>5 minutes</option>
+                              <option value={10}>10 minutes</option>
+                              <option value={60}>1 hour</option>
+                              <option value={1440}>1 day</option>
+                              <option value={10080}>1 week</option>
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => void timeoutMember(member.user_id)}
+                            className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white"
+                          >
+                            Confirm Timeout
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTimeoutMemberId(null)}
+                            className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : null}
                       {banMemberId === member.user_id ? (
                         <div className="mt-2 space-y-2 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
                           <input
@@ -1511,6 +1904,25 @@ export function ServerSettingsModal({
                               <option value={0}>Don&apos;t delete any</option>
                               <option value={1}>Previous 24 hours</option>
                               <option value={7}>Previous 7 days</option>
+                            </select>
+                          </label>
+                          <label className="block text-xs text-[#949ba4]">
+                            Ban duration
+                            <select
+                              value={String(banDurationHours)}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setBanDurationHours(
+                                  value === "perm" ? "perm" : Number(value),
+                                );
+                              }}
+                              className="mt-1 block w-full rounded-md border border-border bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
+                            >
+                              <option value="perm">Permanent</option>
+                              <option value="1">1 hour</option>
+                              <option value="24">1 day</option>
+                              <option value="168">7 days</option>
+                              <option value="720">30 days</option>
                             </select>
                           </label>
                           <div className="flex gap-2">
@@ -1703,6 +2115,25 @@ export function ServerSettingsModal({
                       <option value="25">25 uses</option>
                       <option value="50">50 uses</option>
                       <option value="100">100 uses</option>
+                    </select>
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Landing channel
+                    </span>
+                    <select
+                      value={inviteChannelId}
+                      onChange={(event) => setInviteChannelId(event.target.value)}
+                      className="block min-w-[10rem] rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm"
+                    >
+                      <option value="">Default</option>
+                      {channels
+                        .filter((channel) => channel.type === "text")
+                        .map((channel) => (
+                          <option key={channel.id} value={channel.id}>
+                            #{channel.name}
+                          </option>
+                        ))}
                     </select>
                   </label>
                   <button

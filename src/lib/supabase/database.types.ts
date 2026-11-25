@@ -388,8 +388,22 @@ export type Database = {
         Relationships: []
       }
       server_members: {
-        Row: { server_id: string; user_id: string; role_id: string | null; nickname: string | null; joined_at: string }
-        Insert: { server_id: string; user_id: string; role_id?: string | null; nickname?: string | null; joined_at?: string }
+        Row: {
+          server_id: string
+          user_id: string
+          role_id: string | null
+          nickname: string | null
+          joined_at: string
+          timed_out_until: string | null
+        }
+        Insert: {
+          server_id: string
+          user_id: string
+          role_id?: string | null
+          nickname?: string | null
+          joined_at?: string
+          timed_out_until?: string | null
+        }
         Update: Partial<Database["public"]["Tables"]["server_members"]["Insert"]>
         Relationships: []
       }
@@ -402,6 +416,7 @@ export type Database = {
           owner_id: string
           is_public: boolean
           invites_paused: boolean
+          verification_level: number
           created_at: string
         }
         Insert: {
@@ -412,9 +427,34 @@ export type Database = {
           owner_id: string
           is_public?: boolean
           invites_paused?: boolean
+          verification_level?: number
           created_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["servers"]["Insert"]>
+        Relationships: []
+      }
+      server_audit_log: {
+        Row: {
+          id: string
+          server_id: string
+          actor_id: string | null
+          action: string
+          target_id: string | null
+          target_type: string | null
+          details: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          server_id: string
+          actor_id?: string | null
+          action: string
+          target_id?: string | null
+          target_type?: string | null
+          details?: Json
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["server_audit_log"]["Insert"]>
         Relationships: []
       }
       user_channel_reads: {

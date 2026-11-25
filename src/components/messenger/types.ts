@@ -48,6 +48,7 @@ export type MemberView = {
   user_id: string;
   nickname: string | null;
   joined_at: string;
+  timed_out_until?: string | null;
   username: string;
   avatar_url: string | null;
   status: string;
