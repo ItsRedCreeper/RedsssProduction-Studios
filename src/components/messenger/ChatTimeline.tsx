@@ -86,8 +86,8 @@ function ChannelStartHeader({
     <div
       className={
         spacious
-          ? "flex h-full min-h-[12rem] flex-col items-start justify-end px-4 pb-6"
-          : "px-4 pb-4 pt-2"
+          ? "flex h-full min-h-[12rem] flex-col items-start justify-end px-3 pb-6 sm:px-4"
+          : "px-3 pb-4 pt-2 sm:px-4"
       }
     >
       <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#3a3c43] ring-2 ring-accent/40">

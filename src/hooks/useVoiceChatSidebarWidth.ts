@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 const STORAGE_KEY = "redsss-voice-chat-sidebar-width";
-export const VOICE_CHAT_MIN = 240;
+export const VOICE_CHAT_MIN = 280;
 export const VOICE_CHAT_MAX = 480;
-export const VOICE_CHAT_DEFAULT = 320;
+export const VOICE_CHAT_DEFAULT = 340;
 
 function clamp(width: number) {
   return Math.min(VOICE_CHAT_MAX, Math.max(VOICE_CHAT_MIN, Math.round(width)));

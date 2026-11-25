@@ -595,7 +595,7 @@ export function MessageComposer({
 
   return (
     <div
-      className="shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 sm:px-4 sm:pb-4"
+      className="min-w-0 shrink-0 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 sm:px-4 sm:pb-4"
       onDragEnter={(event) => {
         if (!allowAttach) return;
         event.preventDefault();
@@ -762,7 +762,7 @@ export function MessageComposer({
           })}
         </div>
       )}
-      <div className="relative">
+      <div className="relative min-w-0">
         {filteredMentions.length > 0 && (
           <ul className="absolute bottom-full left-0 z-20 mb-1 max-h-48 w-full overflow-y-auto rounded-md border border-[var(--ms-border)] bg-[#111214] py-1 shadow-xl">
             {filteredMentions.map((item, index) => {
@@ -839,7 +839,7 @@ export function MessageComposer({
         )}
         <form
           onSubmit={handleSubmit}
-          className={`relative flex flex-wrap items-end gap-1.5 border border-white/[0.04] bg-[var(--ms-input,#383a40)] px-2 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:flex-nowrap sm:gap-2.5 sm:px-3.5 sm:py-3 ${
+          className={`relative flex min-w-0 items-end gap-1 border border-white/[0.04] bg-[var(--ms-input,#383a40)] px-1.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:gap-2.5 sm:px-3.5 sm:py-3 ${
             dragging ? "ring-2 ring-accent/40" : ""
           } ${
             replying || pendingFiles.length > 0
@@ -946,7 +946,7 @@ export function MessageComposer({
               </div>
             </>
           )}
-          <div className="relative min-h-[24px] min-w-[10rem] flex-1 basis-[12rem]">
+          <div className="relative min-h-[24px] min-w-0 flex-1">
             <div
               ref={mirrorRef}
               className="pointer-events-none absolute inset-0 overflow-y-auto text-[15px] leading-6 text-[var(--ms-text)]"
@@ -1200,9 +1200,9 @@ export function MessageComposer({
               sending ||
               (!draft.trim() && pendingFiles.length === 0)
             }
-            className="mb-0.5 shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-[#4e5058] disabled:opacity-50"
+            className="mb-0.5 shrink-0 rounded-lg bg-accent px-2 py-1.5 text-[11px] font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-[#4e5058] disabled:opacity-50 sm:px-3 sm:text-xs"
           >
-            {sending ? "Sending…" : "Send"}
+            {sending ? "…" : "Send"}
           </button>
         </form>
       </div>

@@ -316,7 +316,7 @@ export function MessageItem({
     <article
       id={`message-${message.id}`}
       data-message-id={message.id}
-      className={`group relative flex gap-4 px-4 transition-colors hover:bg-white/[0.03] ${
+      className={`group relative flex gap-3 px-2 transition-colors hover:bg-white/[0.03] sm:gap-4 sm:px-4 ${
         compact ? "items-start py-0" : "items-start py-0.5"
       } ${message.optimistic ? "opacity-70" : ""} ${
         message.failed ? "bg-accent-muted/40" : ""

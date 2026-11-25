@@ -4992,7 +4992,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         ) : null}
         {voiceMode && !channelPending && voiceChatOpen && (
           <aside
-            className="absolute inset-y-0 right-0 z-20 flex flex-col border-l border-black/30 bg-[var(--ms-sidebar)] shadow-2xl shadow-black/40 sm:relative sm:z-auto sm:shadow-none"
+            className="absolute inset-y-0 right-0 z-20 flex min-w-0 flex-col overflow-hidden border-l border-black/30 bg-[var(--ms-sidebar)] shadow-2xl shadow-black/40 sm:relative sm:z-auto sm:shadow-none"
             style={{ width: `min(100%, ${voiceChatWidth}px)` }}
           >
             <div
@@ -5007,10 +5007,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             >
               <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
             </div>
-            <div className="messenger-header flex h-12 shrink-0 items-center bg-[var(--ms-sidebar)] px-4 text-sm font-semibold text-white">
+            <div className="messenger-header flex h-11 shrink-0 items-center bg-[var(--ms-sidebar)] px-3 text-sm font-semibold text-white sm:px-4">
               Voice Chat
             </div>
-            <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <ChatTimeline
                 messages={visibleMessages}
                 loading={loadingChannelMessages}
