@@ -333,9 +333,9 @@ export function DiscoverPane({
             </div>
           ) : filtered.length === 0 ? (
             <div className="rounded-md border border-dashed border-[#3f4147] bg-[#2b2d31]/50 px-6 py-16 text-center">
-              <Compass className="mx-auto mb-3 h-8 w-8 text-muted" strokeWidth={1.5} />
-              <p className="text-sm font-medium text-foreground">No public servers found</p>
-              <p className="mt-1 text-xs text-muted">
+              <Compass className="mx-auto mb-3 h-8 w-8 text-[#949ba4]" strokeWidth={1.5} />
+              <p className="text-sm font-medium text-white">No public servers found</p>
+              <p className="mt-1 text-xs text-[#949ba4]">
                 Create a server and turn on Discoverable in Server Settings.
               </p>
             </div>

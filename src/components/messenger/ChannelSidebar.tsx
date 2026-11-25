@@ -296,7 +296,7 @@ export function ChannelSidebar({
               );
             })}
             {people.length > 8 && (
-              <li className="px-2 text-[11px] text-muted">+{people.length - 8} more</li>
+              <li className="px-2 text-[11px] text-[#949ba4]">+{people.length - 8} more</li>
             )}
           </ul>
         )}
@@ -348,10 +348,10 @@ export function ChannelSidebar({
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {loading ? (
-          <p className="px-2 text-xs text-muted">Loading channels…</p>
+          <p className="px-2 text-xs text-[#949ba4]">Loading channels…</p>
         ) : sections.length === 0 ? (
           <div className="px-2">
-            <p className="mb-3 text-xs text-muted">No channels yet.</p>
+            <p className="mb-3 text-xs text-[#949ba4]">No channels yet.</p>
             {!previewMode && (onCreateChannel || onCreateCategory) && (
               <div className="flex flex-wrap gap-2">
                 {onCreateChannel && (

@@ -294,7 +294,7 @@ export function MessageItem({
   const statusBits = (
     <>
       {message.edited_at && (
-        <span className="text-[11px] text-muted">(edited)</span>
+        <span className="text-[11px] text-[#949ba4]">(edited)</span>
       )}
       {message.pinned && (
         <span className="inline-flex items-center gap-1 text-[11px] text-accent">
@@ -303,7 +303,7 @@ export function MessageItem({
         </span>
       )}
       {message.optimistic && !message.failed && (
-        <span className="text-[11px] text-muted">Sending…</span>
+        <span className="text-[11px] text-[#949ba4]">Sending…</span>
       )}
       {message.failed && (
         <span className="text-[11px] text-accent">Failed to send</span>
@@ -388,7 +388,7 @@ export function MessageItem({
               >
                 {replyAuthor}
               </span>
-              <span className="min-w-0 truncate text-xs text-muted">
+              <span className="min-w-0 truncate text-xs text-[#949ba4]">
                 {reply.content
                   ? displayMentionText(reply.content, mentionMaps)
                   : "Attachment"}
@@ -408,7 +408,7 @@ export function MessageItem({
             >
               {author}
             </button>
-            <time className="text-[11px] text-muted">
+            <time className="text-[11px] text-[#949ba4]">
               {formatTimestamp(message.created_at)}
             </time>
             {statusBits}
@@ -472,12 +472,12 @@ export function MessageItem({
                   setEditing(false);
                   setEditDraft(message.content);
                 }}
-                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover hover:text-foreground"
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-[#949ba4] hover:bg-surface-hover hover:text-foreground"
               >
                 <X className="h-3.5 w-3.5" strokeWidth={2} />
                 Cancel
               </button>
-              <span className="text-[10px] text-muted">
+              <span className="text-[10px] text-[#949ba4]">
                 escape to cancel · enter to save
               </span>
             </div>

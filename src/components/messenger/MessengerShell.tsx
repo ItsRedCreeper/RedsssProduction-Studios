@@ -2997,8 +2997,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
     element.scrollIntoView({ behavior: "smooth", block: "center" });
-    element.classList.add("bg-accent-muted");
-    window.setTimeout(() => element.classList.remove("bg-accent-muted"), 1200);
+    element.classList.add("bg-[#404249]");
+    window.setTimeout(() => element.classList.remove("bg-[#404249]"), 1200);
     setPinsOpen(false);
   }
 
@@ -4395,7 +4395,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
           {previewMode && activeServer && (
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e1f22] bg-[#2b2d31] px-4 py-2">
-              <p className="text-xs font-medium text-[#f2b8b5] sm:text-sm">
+              <p className="text-xs font-medium text-[#f23f43] sm:text-sm">
                 Previewing <span className="text-white">{activeServer.name}</span>
               </p>
               <div className="flex shrink-0 items-center gap-2">
@@ -4892,7 +4892,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             !channelPending &&
             !previewMode &&
             (dmMode && dmBlocked ? (
-              <div className="border-t border-[#1e1f22] bg-[#2b2d31] px-4 py-3 text-sm text-[#f2b8b5]">
+              <div className="border-t border-[#1e1f22] bg-[#2b2d31] px-4 py-3 text-sm text-[#f23f43]">
                 You blocked this user. Unblock them from Friends → Blocked to
                 message again.
               </div>
