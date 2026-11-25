@@ -616,7 +616,7 @@ export function MessageComposer({
     >
       <TypingIndicator people={typingPeople} className="mb-1.5 px-1" />
       {replying && (
-        <div className="flex items-center gap-2 rounded-t-xl border-l-4 border-accent bg-[#2b2d31] px-4 py-2">
+        <div className="flex items-center gap-2 rounded-t-xl border-l-4 border-accent bg-[var(--ms-sidebar)] px-4 py-2">
           <Reply className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-accent">
@@ -628,7 +628,7 @@ export function MessageComposer({
               delayMs={40}
               className="block min-w-0"
             >
-              <p className="truncate text-xs text-[#949ba4]">{replyContent}</p>
+              <p className="truncate text-xs text-[var(--ms-text-muted)]">{replyContent}</p>
             </HoverTip>
           </div>
           {onReplyPingChange ? (
@@ -646,7 +646,7 @@ export function MessageComposer({
                 className={`rounded-md px-2 py-1 text-[11px] font-semibold ${
                   replyPing
                     ? "bg-accent/20 text-accent"
-                    : "bg-white/5 text-[#949ba4]"
+                    : "bg-white/5 text-[var(--ms-text-muted)]"
                 }`}
                 aria-pressed={replyPing}
               >
@@ -658,7 +658,7 @@ export function MessageComposer({
             <button
               type="button"
               onClick={onCancelReply}
-              className="rounded-md p-1 text-[#949ba4] hover:bg-white/10 hover:text-white"
+              className="rounded-md p-1 text-[var(--ms-text-muted)] hover:bg-white/10 hover:text-white"
               aria-label="Cancel reply"
             >
               <X className="h-4 w-4" strokeWidth={2} />
@@ -668,7 +668,7 @@ export function MessageComposer({
       )}
       {pendingFiles.length > 0 && (
         <div
-          className={`flex flex-wrap gap-2 bg-[#2b2d31] px-3 py-2 ${
+          className={`flex flex-wrap gap-2 bg-[var(--ms-sidebar)] px-3 py-2 ${
             replying ? "" : "rounded-t-md"
           }`}
         >
@@ -679,7 +679,7 @@ export function MessageComposer({
             return (
               <div
                 key={item.id}
-                className="relative w-28 overflow-hidden rounded-md border border-[#3f4147] bg-[#1e1f22]"
+                className="relative w-28 overflow-hidden rounded-md border border-[#3f4147] bg-[var(--ms-border)]"
               >
                 {image && item.previewUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -692,7 +692,7 @@ export function MessageComposer({
                   />
                 ) : (
                   <div
-                    className={`flex h-20 flex-col items-center justify-center gap-1 px-2 text-[#949ba4] ${
+                    className={`flex h-20 flex-col items-center justify-center gap-1 px-2 text-[var(--ms-text-muted)] ${
                       spoiler ? "blur-[6px] brightness-75" : ""
                     }`}
                   >
@@ -714,10 +714,10 @@ export function MessageComposer({
                   </span>
                 )}
                 <div className="space-y-0.5 px-1.5 py-1">
-                  <p className="truncate text-[10px] text-[#dbdee1]">
+                  <p className="truncate text-[10px] text-[var(--ms-text)]">
                     {item.file.name}
                   </p>
-                  <p className="text-[10px] text-[#949ba4]">
+                  <p className="text-[10px] text-[var(--ms-text-muted)]">
                     {formatFileSize(item.file.size)}
                     {item.file.size > MAX_ATTACHMENT_BYTES ? " · too large" : ""}
                   </p>
@@ -761,7 +761,7 @@ export function MessageComposer({
       )}
       <div className="relative">
         {filteredMentions.length > 0 && (
-          <ul className="absolute bottom-full left-0 z-20 mb-1 max-h-48 w-full overflow-y-auto rounded-md border border-[#1e1f22] bg-[#111214] py-1 shadow-xl">
+          <ul className="absolute bottom-full left-0 z-20 mb-1 max-h-48 w-full overflow-y-auto rounded-md border border-[var(--ms-border)] bg-[#111214] py-1 shadow-xl">
             {filteredMentions.map((item, index) => {
               const Icon =
                 item.kind === "channel"
@@ -780,10 +780,10 @@ export function MessageComposer({
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
                       index === mentionIndex
                         ? "bg-[#3a3c43] text-white"
-                        : "text-[#dbdee1] hover:bg-white/5"
+                        : "text-[var(--ms-text)] hover:bg-white/5"
                     }`}
                   >
-                    <Icon className="h-3.5 w-3.5 text-[#949ba4]" strokeWidth={2} />
+                    <Icon className="h-3.5 w-3.5 text-[var(--ms-text-muted)]" strokeWidth={2} />
                     <span className="font-medium">
                       {item.kind === "channel" ? "#" : "@"}
                       {item.label}
@@ -798,7 +798,7 @@ export function MessageComposer({
           </ul>
         )}
         {filteredMentions.length === 0 && filteredEmojiSuggestions.length > 0 && (
-          <ul className="absolute bottom-full left-0 z-20 mb-1 max-h-56 w-full overflow-y-auto rounded-md border border-[#1e1f22] bg-[#111214] py-1 shadow-xl">
+          <ul className="absolute bottom-full left-0 z-20 mb-1 max-h-56 w-full overflow-y-auto rounded-md border border-[var(--ms-border)] bg-[#111214] py-1 shadow-xl">
             {filteredEmojiSuggestions.map((emoji, index) => {
               const duplicate =
                 (nameCounts.get(emoji.name.toLowerCase()) ?? 0) > 1;
@@ -817,13 +817,13 @@ export function MessageComposer({
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
                       index === emojiSuggestIndex
                         ? "bg-accent/20 text-white"
-                        : "text-[#dbdee1] hover:bg-white/5"
+                        : "text-[var(--ms-text)] hover:bg-white/5"
                     }`}
                   >
                     <CustomEmoji emoji={emoji} size={22} title="" />
                     <span className="font-medium">:{emoji.name}:</span>
                     {duplicate && (
-                      <span className="truncate text-xs text-[#949ba4]">
+                      <span className="truncate text-xs text-[var(--ms-text-muted)]">
                         {serverLabel}
                         {isPreferred ? " · this server" : ""}
                       </span>
@@ -865,7 +865,7 @@ export function MessageComposer({
                     sending ||
                     pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE
                   }
-                  className="mb-0.5 hidden shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40 sm:inline-flex"
+                  className="mb-0.5 hidden shrink-0 rounded-full bg-[#4e5058] p-1 text-[var(--ms-text)] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40 sm:inline-flex"
                   aria-label="Attach file"
                 >
                   <Plus className="h-5 w-5" strokeWidth={2.25} />
@@ -880,17 +880,17 @@ export function MessageComposer({
                     sending ||
                     pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE
                   }
-                  className="mb-0.5 inline-flex shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
+                  className="mb-0.5 inline-flex shrink-0 rounded-full bg-[#4e5058] p-1 text-[var(--ms-text)] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
                   aria-label="More composer actions"
                   aria-expanded={attachMenuOpen}
                 >
                   <Plus className="h-5 w-5" strokeWidth={2.25} />
                 </button>
                 {attachMenuOpen ? (
-                  <div className="absolute bottom-full left-0 z-30 mb-2 w-44 overflow-hidden rounded-md border border-[#1e1f22] bg-[#111214] py-1 shadow-xl shadow-black/50">
+                  <div className="absolute bottom-full left-0 z-30 mb-2 w-44 overflow-hidden rounded-md border border-[var(--ms-border)] bg-[#111214] py-1 shadow-xl shadow-black/50">
                     <button
                       type="button"
-                      className="block w-full px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#404249]"
+                      className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
                       onClick={() => {
                         setAttachMenuOpen(false);
                         fileRef.current?.click();
@@ -901,7 +901,7 @@ export function MessageComposer({
                     {onPickGif ? (
                       <button
                         type="button"
-                        className="block w-full px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#404249]"
+                        className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
                         onClick={() => {
                           setAttachMenuOpen(false);
                           setGifOpen(true);
@@ -915,7 +915,7 @@ export function MessageComposer({
                     {onOpenPoll ? (
                       <button
                         type="button"
-                        className="block w-full px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#404249]"
+                        className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
                         onClick={() => {
                           setAttachMenuOpen(false);
                           onOpenPoll();
@@ -927,7 +927,7 @@ export function MessageComposer({
                     {onPickSticker && stickers.length > 0 ? (
                       <button
                         type="button"
-                        className="block w-full px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#404249]"
+                        className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
                         onClick={() => {
                           setAttachMenuOpen(false);
                           setStickerOpen(true);
@@ -946,7 +946,7 @@ export function MessageComposer({
           <div className="relative min-h-[24px] min-w-[10rem] flex-1 basis-[12rem]">
             <div
               ref={mirrorRef}
-              className="pointer-events-none absolute inset-0 overflow-y-auto text-[15px] leading-6 text-[#dbdee1]"
+              className="pointer-events-none absolute inset-0 overflow-y-auto text-[15px] leading-6 text-[var(--ms-text)]"
             >
               {/* slotVersion keeps mirror in sync when chip map changes */}
               <span className="sr-only">{slotVersion}</span>
@@ -1088,7 +1088,7 @@ export function MessageComposer({
                 dragging ? "Drop files to attach…" : placeholder
               }
               disabled={disabled || sending}
-              className="relative z-10 max-h-40 min-h-[24px] w-full resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-transparent caret-[#dbdee1] outline-none placeholder:text-[#6d6f78] selection:bg-accent/30 [overflow-wrap:anywhere] whitespace-pre-wrap"
+              className="relative z-10 max-h-40 min-h-[24px] w-full resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-transparent caret-[#dbdee1] outline-none placeholder:text-[var(--ms-text-faint)] selection:bg-accent/30 [overflow-wrap:anywhere] whitespace-pre-wrap"
             />
           </div>
           <HoverTip label="Emoji" delayMs={40}>
@@ -1191,8 +1191,8 @@ export function MessageComposer({
                 onPick={handleEmojiPick}
               />
             ) : stickerOpen ? (
-              <div className="w-72 max-w-[min(18rem,calc(100vw-1rem))] rounded-md border border-[#1e1f22] bg-[#2b2d31] p-2 shadow-xl shadow-black/50">
-                <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+              <div className="w-72 max-w-[min(18rem,calc(100vw-1rem))] rounded-md border border-[var(--ms-border)] bg-[var(--ms-sidebar)] p-2 shadow-xl shadow-black/50">
+                <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                   Stickers
                 </p>
                 <div className="grid max-h-56 grid-cols-3 gap-2 overflow-y-auto">
@@ -1204,7 +1204,7 @@ export function MessageComposer({
                         onPickSticker?.(sticker);
                         setStickerOpen(false);
                       }}
-                      className="rounded-md bg-[#1e1f22] p-1.5 hover:bg-white/10"
+                      className="rounded-md bg-[var(--ms-border)] p-1.5 hover:bg-white/10"
                       title={sticker.name}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}

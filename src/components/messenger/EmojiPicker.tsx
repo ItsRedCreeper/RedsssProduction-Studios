@@ -62,30 +62,30 @@ export function EmojiPicker({
 
   return (
     <div
-      className={`flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#2b2d31] shadow-2xl shadow-black/50 ring-1 ring-accent/10 ${className}`}
+      className={`flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-sidebar)] shadow-2xl shadow-black/50 ring-1 ring-accent/10 ${className}`}
     >
       <div className="border-b border-black/30 p-2">
-        <label className="flex items-center gap-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5">
-          <Search className="h-3.5 w-3.5 shrink-0 text-[#949ba4]" strokeWidth={2} />
+        <label className="flex items-center gap-2 rounded-md bg-[var(--ms-border)] px-2.5 py-1.5">
+          <Search className="h-3.5 w-3.5 shrink-0 text-[var(--ms-text-muted)]" strokeWidth={2} />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find the perfect emoji"
-            className="min-w-0 flex-1 bg-transparent text-sm text-[#dbdee1] outline-none placeholder:text-[#6d6f78]"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--ms-text)] outline-none placeholder:text-[var(--ms-text-faint)]"
             autoFocus
           />
         </label>
       </div>
       <div className="max-h-72 overflow-y-auto px-2 py-2">
         {empty && (
-          <div className="flex flex-col items-center gap-2 py-8 text-[#949ba4]">
+          <div className="flex flex-col items-center gap-2 py-8 text-[var(--ms-text-muted)]">
             <Smile className="h-8 w-8 opacity-50" strokeWidth={1.5} />
             <p className="text-sm">No emoji match that search.</p>
           </div>
         )}
         {customGroups.map((group) => (
           <section key={group.serverId} className="mb-3">
-            <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+            <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
               {group.label}
             </h3>
             <div className="grid grid-cols-8 gap-0.5">
@@ -119,7 +119,7 @@ export function EmojiPicker({
         ))}
         {unicodeGroups.map((group) => (
           <section key={group.id} className="mb-3">
-            <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+            <h3 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
               {group.label}
             </h3>
             <div className="grid grid-cols-8 gap-0.5">

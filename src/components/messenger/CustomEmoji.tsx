@@ -53,7 +53,7 @@ export function CustomEmoji({
   if (!resolved.url) {
     return (
       <span
-        className={`text-[#949ba4] ${className}`}
+        className={`text-[var(--ms-text-muted)] ${className}`}
         style={style}
         title={tip}
       >

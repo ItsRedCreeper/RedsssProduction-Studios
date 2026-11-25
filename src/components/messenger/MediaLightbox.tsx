@@ -200,7 +200,7 @@ export function MediaLightbox({
             >
               <Minus className="h-4 w-4" strokeWidth={2} />
             </button>
-            <span className="min-w-[3.25rem] text-center text-xs font-medium tabular-nums text-[#dbdee1]">
+            <span className="min-w-[3.25rem] text-center text-xs font-medium tabular-nums text-[var(--ms-text)]">
               {Math.round(zoom * 100)}%
             </span>
             <button
@@ -294,7 +294,7 @@ export function MediaLightbox({
               href={current.url}
               target="_blank"
               rel="noreferrer"
-              className="rounded-md bg-[#2b2d31] px-4 py-3 text-sm text-white hover:bg-[#35373c]"
+              className="rounded-md bg-[var(--ms-sidebar)] px-4 py-3 text-sm text-white hover:bg-[#35373c]"
             >
               Open file
             </a>
@@ -311,7 +311,7 @@ export function MediaLightbox({
           )}
         </div>
         {hasMany && (
-          <p className="mt-2 text-xs text-[#949ba4]">
+          <p className="mt-2 text-xs text-[var(--ms-text-muted)]">
             {index + 1} / {items.length}
           </p>
         )}

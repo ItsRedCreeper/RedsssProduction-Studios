@@ -100,24 +100,24 @@ function LinkPreviewCard({
   if (!loading && !meta && !youtubeId && !safeHostname(url)) return null;
 
   const card = youtubeId ? (
-    <div className="max-w-md overflow-hidden rounded-[4px] bg-[#2b2d31]">
+    <div className="max-w-md overflow-hidden rounded-[4px] bg-[var(--ms-sidebar)]">
       <div className="flex">
         <div className="w-1 shrink-0 bg-accent" aria-hidden />
         <div className="min-w-0 flex-1 px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
             {site}
           </p>
           <a
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="mt-0.5 line-clamp-2 text-base font-semibold text-[#00a8fc] hover:underline"
+            className="mt-0.5 line-clamp-2 text-base font-semibold text-[var(--ms-link)] hover:underline"
             onClick={(event) => event.stopPropagation()}
           >
             {title}
           </a>
           {meta?.author_name && (
-            <p className="mt-1 line-clamp-1 text-sm text-[#dbdee1]">
+            <p className="mt-1 line-clamp-1 text-sm text-[var(--ms-text)]">
               {meta.author_name}
             </p>
           )}
@@ -163,7 +163,7 @@ function LinkPreviewCard({
       href={url}
       target="_blank"
       rel="noreferrer"
-      className="block max-w-md overflow-hidden rounded-[4px] bg-[#2b2d31] transition hover:bg-[#2e3035]"
+      className="block max-w-md overflow-hidden rounded-[4px] bg-[var(--ms-sidebar)] transition hover:bg-[#2e3035]"
       onClick={(event) => {
         // While covered by SpoilerMedia, pointer-events are off; after reveal, navigate.
         if (spoiler) event.stopPropagation();
@@ -172,14 +172,14 @@ function LinkPreviewCard({
       <div className="flex">
         <div className="w-1 shrink-0 bg-accent" aria-hidden />
         <div className="min-w-0 flex-1 px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
             {site}
           </p>
-          <p className="mt-0.5 line-clamp-2 text-base font-semibold text-[#00a8fc]">
+          <p className="mt-0.5 line-clamp-2 text-base font-semibold text-[var(--ms-link)]">
             {title}
           </p>
           {description ? (
-            <p className="mt-1 line-clamp-3 text-sm leading-snug text-[#dbdee1]">
+            <p className="mt-1 line-clamp-3 text-sm leading-snug text-[var(--ms-text)]">
               {description}
             </p>
           ) : null}

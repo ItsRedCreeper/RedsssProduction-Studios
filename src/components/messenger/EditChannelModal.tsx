@@ -75,7 +75,7 @@ function TriState({
           ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
           : state === "deny"
             ? "border-accent/50 bg-accent-muted text-accent"
-            : "border-[#3f4147] bg-[#1e1f22] text-[#949ba4]"
+            : "border-[#3f4147] bg-[var(--ms-border)] text-[var(--ms-text-muted)]"
       }`}
     >
       {state === "allow" ? (
@@ -267,14 +267,14 @@ export function EditChannelModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-channel-title"
-        className="relative z-10 flex max-h-[min(90dvh,42rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
+        className="relative z-10 flex max-h-[min(90dvh,42rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
         <div className="messenger-header flex items-start justify-between bg-[var(--ms-chat,#313338)] px-5 py-4">
           <div className="flex items-center gap-2">
             {channel.type === "voice" ? (
               <Volume2 className="h-5 w-5 text-accent" strokeWidth={1.75} />
             ) : (
-              <Hash className="h-5 w-5 text-[#949ba4]" strokeWidth={2} />
+              <Hash className="h-5 w-5 text-[var(--ms-text-muted)]" strokeWidth={2} />
             )}
             <div>
               <h2
@@ -283,7 +283,7 @@ export function EditChannelModal({
               >
                 Edit Channel
               </h2>
-              <p className="text-sm text-[#949ba4]">#{channel.name}</p>
+              <p className="text-sm text-[var(--ms-text-muted)]">#{channel.name}</p>
             </div>
           </div>
           <button
@@ -310,7 +310,7 @@ export function EditChannelModal({
               className={`border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
                 tab === id
                   ? "border-accent text-white"
-                  : "border-transparent text-[#949ba4] hover:text-[#dbdee1]"
+                  : "border-transparent text-[var(--ms-text-muted)] hover:text-[var(--ms-text)]"
               }`}
             >
               {label}
@@ -335,7 +335,7 @@ export function EditChannelModal({
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   maxLength={CHANNEL_NAME_MAX}
-                  className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
+                  className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
                 />
               </label>
               {channel.type === "text" && (
@@ -349,7 +349,7 @@ export function EditChannelModal({
                     rows={3}
                     maxLength={1024}
                     placeholder="Let everyone know how to use this channel"
-                    className="w-full resize-none rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
+                    className="w-full resize-none rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
                   />
                 </label>
               )}
@@ -361,7 +361,7 @@ export function EditChannelModal({
                   <select
                     value={slowmode}
                     onChange={(event) => setSlowmode(Number(event.target.value))}
-                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
+                    className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
                   >
                     {SLOWMODE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -371,7 +371,7 @@ export function EditChannelModal({
                   </select>
                 </label>
               )}
-              <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[#2b2d31] px-3 py-2.5">
+              <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[var(--ms-sidebar)] px-3 py-2.5">
                 <input
                   type="checkbox"
                   checked={nsfw}
@@ -382,7 +382,7 @@ export function EditChannelModal({
                   <span className="block text-sm font-medium text-white">
                     Age-Restricted Channel
                   </span>
-                  <span className="mt-0.5 block text-xs text-[#949ba4]">
+                  <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
                     Users must confirm they are of age to view this channel.
                   </span>
                 </span>
@@ -393,7 +393,7 @@ export function EditChannelModal({
                     type="button"
                     disabled={saving}
                     onClick={() => void duplicateChannel()}
-                    className="rounded-md px-3 py-2 text-sm text-[#dbdee1] hover:bg-white/5 disabled:opacity-50"
+                    className="rounded-md px-3 py-2 text-sm text-[var(--ms-text)] hover:bg-white/5 disabled:opacity-50"
                   >
                     Duplicate Channel
                   </button>
@@ -412,7 +412,7 @@ export function EditChannelModal({
 
           {tab === "permissions" && (
             <div className="space-y-4">
-              <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[#2b2d31] px-3 py-2.5">
+              <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[var(--ms-sidebar)] px-3 py-2.5">
                 <input
                   type="checkbox"
                   checked={privateChannel}
@@ -427,7 +427,7 @@ export function EditChannelModal({
                   <span className="block text-sm font-medium text-white">
                     Private Channel
                   </span>
-                  <span className="mt-0.5 block text-xs text-[#949ba4]">
+                  <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
                     Only selected roles can view this channel.
                   </span>
                 </span>
@@ -435,7 +435,7 @@ export function EditChannelModal({
 
               <div className="grid gap-4 sm:grid-cols-[11rem_1fr]">
                 <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                     Roles
                   </p>
                   <button
@@ -444,7 +444,7 @@ export function EditChannelModal({
                     className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
                       target === EVERYONE_OVERRIDE_KEY
                         ? "bg-[#404249] text-white"
-                        : "text-[#dbdee1] hover:bg-white/5"
+                        : "text-[var(--ms-text)] hover:bg-white/5"
                     }`}
                   >
                     Default
@@ -459,7 +459,7 @@ export function EditChannelModal({
                         className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
                           target === role.id
                             ? "bg-[#404249] text-white"
-                            : "text-[#dbdee1] hover:bg-white/5"
+                            : "text-[var(--ms-text)] hover:bg-white/5"
                         }`}
                       >
                         <span
@@ -472,11 +472,11 @@ export function EditChannelModal({
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                     Advanced permissions
                   </p>
                   {privateChannel && target !== EVERYONE_OVERRIDE_KEY ? (
-                    <label className="mb-2 flex items-center gap-2 text-sm text-[#dbdee1]">
+                    <label className="mb-2 flex items-center gap-2 text-sm text-[var(--ms-text)]">
                       <input
                         type="checkbox"
                         checked={
@@ -506,7 +506,7 @@ export function EditChannelModal({
                         key={option.key}
                         className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-white/5"
                       >
-                        <span className="text-sm text-[#dbdee1]">
+                        <span className="text-sm text-[var(--ms-text)]">
                           {option.label}
                         </span>
                         <TriState

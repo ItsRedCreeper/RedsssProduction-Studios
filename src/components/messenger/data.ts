@@ -131,7 +131,7 @@ export function isPresenceOnline(status: string | null | undefined) {
 
 export function statusDotClass(status: string | null | undefined) {
   const value = (status ?? "offline").toLowerCase();
-  if (value === "online") return "bg-[#23a559]";
+  if (value === "online") return "bg-[var(--ms-connected)]";
   if (value === "idle") return "bg-[#f0b232]";
   if (value === "dnd") return "bg-[#dc2626]";
   return "bg-[#80848e]";

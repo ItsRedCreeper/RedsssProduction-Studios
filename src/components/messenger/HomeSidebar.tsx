@@ -56,8 +56,8 @@ export function HomeSidebar({
   }, [feed, watchKey]);
 
   return (
-    <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
-      <div className="messenger-header flex h-12 shrink-0 items-center gap-2 bg-[#2b2d31] px-4">
+    <aside className="flex h-full w-full flex-col bg-[var(--ms-sidebar)]">
+      <div className="messenger-header flex h-12 shrink-0 items-center gap-2 bg-[var(--ms-sidebar)] px-4">
         <span className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight text-white">
           Direct Messages
         </span>
@@ -79,7 +79,7 @@ export function HomeSidebar({
           <button
             type="button"
             onClick={() => profileUi.openFriends("online")}
-            className="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] text-[#949ba4] transition-colors hover:bg-white/5 hover:text-white hover:shadow-[inset_2px_0_0_0_var(--accent)]"
+            className="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] text-[var(--ms-text-muted)] transition-colors hover:bg-white/5 hover:text-white hover:shadow-[inset_2px_0_0_0_var(--accent)]"
           >
             <Users className="h-4 w-4 shrink-0" strokeWidth={2} />
             <span className="min-w-0 flex-1 truncate font-medium">Friends</span>
@@ -98,7 +98,7 @@ export function HomeSidebar({
             ))}
           </div>
         ) : threads.length === 0 ? (
-          <p className="px-2 py-2 text-xs leading-relaxed text-[#6d6f78]">
+          <p className="px-2 py-2 text-xs leading-relaxed text-[var(--ms-text-faint)]">
             No conversations yet. Message someone from a server member list to start a DM.
           </p>
         ) : (
@@ -122,7 +122,7 @@ export function HomeSidebar({
                     className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pr-8 text-left ${
                       active
                         ? "messenger-row-active text-white"
-                        : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
+                        : "text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-[var(--ms-text)]"
                     }`}
                   >
                     <span className="relative shrink-0 overflow-visible">
@@ -140,8 +140,8 @@ export function HomeSidebar({
                           ringClassName="ring-[#2b2d31]"
                         />
                       ) : (
-                        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2d31] ring-2 ring-[#2b2d31]">
-                          <Users className="h-2.5 w-2.5 text-[#949ba4]" strokeWidth={2.5} />
+                        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--ms-sidebar)] ring-2 ring-[#2b2d31]">
+                          <Users className="h-2.5 w-2.5 text-[var(--ms-text-muted)]" strokeWidth={2.5} />
                         </span>
                       )}
                     </span>
@@ -160,7 +160,7 @@ export function HomeSidebar({
                         <span
                           role="button"
                           tabIndex={0}
-                          className="block truncate text-left text-[11px] font-medium text-[#23a559] hover:underline"
+                          className="block truncate text-left text-[11px] font-medium text-[var(--ms-connected)] hover:underline"
                           onClick={(event) => {
                             event.stopPropagation();
                             onJoinCall?.(thread.id);
@@ -175,7 +175,7 @@ export function HomeSidebar({
                           Call in progress — Join
                         </span>
                       ) : thread.isGroup ? (
-                        <span className="block truncate text-[11px] text-[#6d6f78]">
+                        <span className="block truncate text-[11px] text-[var(--ms-text-faint)]">
                           {(thread.participantIds?.length ?? 0) + 1} members
                         </span>
                       ) : (
@@ -205,7 +205,7 @@ export function HomeSidebar({
                           event.stopPropagation();
                           onCloseThread(thread.id);
                         }}
-                        className="rounded-md p-1 text-[#949ba4] hover:bg-black/30 hover:text-white"
+                        className="rounded-md p-1 text-[var(--ms-text-muted)] hover:bg-black/30 hover:text-white"
                       >
                         <X className="h-3.5 w-3.5" strokeWidth={2} />
                       </button>

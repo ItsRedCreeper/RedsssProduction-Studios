@@ -53,7 +53,7 @@ export function CreatePollModal({
       />
       <form
         onSubmit={submit}
-        className="relative z-10 w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl ring-1 ring-accent/15"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl ring-1 ring-accent/15"
       >
         <div className="flex items-center justify-between border-b border-black/30 px-4 py-3">
           <h2 className="text-base font-semibold text-white">Create Poll</h2>
@@ -75,7 +75,7 @@ export function CreatePollModal({
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               maxLength={300}
-              className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/60"
+              className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm outline-none focus:border-accent/60"
               autoFocus
             />
           </label>
@@ -94,7 +94,7 @@ export function CreatePollModal({
                   }}
                   maxLength={100}
                   placeholder={`Option ${index + 1}`}
-                  className="min-w-0 flex-1 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/60"
+                  className="min-w-0 flex-1 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm outline-none focus:border-accent/60"
                 />
                 {options.length > 2 && (
                   <button
@@ -114,14 +114,14 @@ export function CreatePollModal({
               <button
                 type="button"
                 onClick={() => setOptions((prev) => [...prev, ""])}
-                className="inline-flex items-center gap-1 text-sm text-[#dbdee1] hover:text-white"
+                className="inline-flex items-center gap-1 text-sm text-[var(--ms-text)] hover:text-white"
               >
                 <Plus className="h-4 w-4" strokeWidth={2} />
                 Add option
               </button>
             )}
           </div>
-          <label className="flex items-center gap-2 text-sm text-[#dbdee1]">
+          <label className="flex items-center gap-2 text-sm text-[var(--ms-text)]">
             <input
               type="checkbox"
               checked={allowMultiple}
@@ -134,7 +134,7 @@ export function CreatePollModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
+              className="rounded-md px-3 py-2 text-sm text-[var(--ms-text)] hover:bg-white/5"
             >
               Cancel
             </button>

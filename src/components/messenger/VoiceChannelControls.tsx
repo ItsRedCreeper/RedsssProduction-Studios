@@ -104,7 +104,7 @@ function VolumeSlider({
   return (
     <div className="px-3 py-2">
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
           {label}
         </span>
         <span className="text-[11px] tabular-nums text-[#b5bac1]">{percent}%</span>
@@ -115,7 +115,7 @@ function VolumeSlider({
         max={100}
         value={percent}
         onChange={(event) => onChange(Number(event.target.value) / 100)}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[#1e1f22] accent-[#23a559]"
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--ms-border)] accent-[#23a559]"
         aria-label={label}
       />
     </div>
@@ -167,13 +167,13 @@ function DevicePickerPanel({
       role="menu"
       aria-label={label}
       style={{ bottom, left }}
-      className="fixed z-[130] max-h-[min(22rem,calc(100dvh-2rem))] w-[280px] overflow-y-auto rounded-md border border-[#1e1f22] bg-[#111214] py-1 shadow-xl shadow-black/50"
+      className="fixed z-[130] max-h-[min(22rem,calc(100dvh-2rem))] w-[280px] overflow-y-auto rounded-md border border-[var(--ms-border)] bg-[#111214] py-1 shadow-xl shadow-black/50"
     >
-      <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+      <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
         {label}
       </p>
       {options.length === 0 ? (
-        <p className="px-3 py-2 text-sm text-[#949ba4]">No devices found.</p>
+        <p className="px-3 py-2 text-sm text-[var(--ms-text-muted)]">No devices found.</p>
       ) : (
         options.map((option) => {
           const selected = selectedId === option.deviceId;
@@ -185,7 +185,7 @@ function DevicePickerPanel({
               aria-checked={selected}
               onClick={() => onSelect(option.deviceId)}
               className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#404249] hover:text-white ${
-                selected ? "text-white" : "text-[#dbdee1]"
+                selected ? "text-white" : "text-[var(--ms-text)]"
               }`}
             >
               <Check
@@ -255,7 +255,7 @@ function SettingsPanel({
       role="menu"
       aria-label={kind === "input" ? "Input settings" : "Output settings"}
       style={{ bottom, left }}
-      className="fixed z-[120] w-[300px] overflow-hidden rounded-md border border-[#1e1f22] bg-[#111214] py-1 shadow-xl shadow-black/50"
+      className="fixed z-[120] w-[300px] overflow-hidden rounded-md border border-[var(--ms-border)] bg-[#111214] py-1 shadow-xl shadow-black/50"
     >
       <button
         type="button"
@@ -264,12 +264,12 @@ function SettingsPanel({
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-[#404249] hover:text-white"
       >
         <span className="min-w-0 flex-1">
-          <span className="block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+          <span className="block text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
             {deviceLabel}
           </span>
-          <span className="mt-0.5 block truncate text-sm text-[#dbdee1]">{selected}</span>
+          <span className="mt-0.5 block truncate text-sm text-[var(--ms-text)]">{selected}</span>
         </span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-[#949ba4]" strokeWidth={2} />
+        <ChevronRight className="h-4 w-4 shrink-0 text-[var(--ms-text-muted)]" strokeWidth={2} />
       </button>
       <div className="mx-2 border-t border-white/10" />
       <VolumeSlider
@@ -351,7 +351,7 @@ export function VoiceChannelControls({
     <div
       className={`flex items-center gap-0.5 ${
         compact
-          ? "mt-1 mb-2 ml-2 rounded-xl border border-white/[0.04] bg-[#1e1f22]/80 px-1.5 py-1.5"
+          ? "mt-1 mb-2 ml-2 rounded-xl border border-white/[0.04] bg-[var(--ms-border)]/80 px-1.5 py-1.5"
           : ""
       }`}
     >
@@ -372,7 +372,7 @@ export function VoiceChannelControls({
             onClick={onToggleMute}
             className={`relative rounded-l-md p-1.5 ${
               muted
-                ? "bg-[#ed4245]/20 text-[#ed4245]"
+                ? "bg-[#ed4245]/20 text-[var(--ms-danger)]"
                 : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
             }`}
             aria-label={muted ? "Unmute" : "Mute"}
@@ -388,7 +388,7 @@ export function VoiceChannelControls({
                 aria-hidden
               >
                 <span
-                  className="block h-full origin-left rounded-full bg-[#23a559] transition-[transform] duration-75"
+                  className="block h-full origin-left rounded-full bg-[var(--ms-connected)] transition-[transform] duration-75"
                   style={{
                     transform: `scaleX(${Math.min(1, Math.max(0.04, micLevel * inputVolume))})`,
                   }}
@@ -406,7 +406,7 @@ export function VoiceChannelControls({
               onClick={() => togglePanel("input")}
               className={`rounded-r-md p-1 ${
                 muted
-                  ? "bg-[#ed4245]/20 text-[#ed4245]"
+                  ? "bg-[#ed4245]/20 text-[var(--ms-danger)]"
                   : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
               }`}
               aria-label="Input settings"
@@ -433,7 +433,7 @@ export function VoiceChannelControls({
             onClick={onToggleDeafen}
             className={`rounded-l-md p-1.5 ${
               deafened
-                ? "bg-[#ed4245]/20 text-[#ed4245]"
+                ? "bg-[#ed4245]/20 text-[var(--ms-danger)]"
                 : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
             }`}
             aria-label={deafened ? "Undeafen" : "Deafen"}
@@ -454,7 +454,7 @@ export function VoiceChannelControls({
               onClick={() => togglePanel("output")}
               className={`rounded-r-md p-1 ${
                 deafened
-                  ? "bg-[#ed4245]/20 text-[#ed4245]"
+                  ? "bg-[#ed4245]/20 text-[var(--ms-danger)]"
                   : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
               }`}
               aria-label="Output settings"
@@ -505,7 +505,7 @@ export function VoiceChannelControls({
             onClick={onToggleScreenShare}
             className={`rounded-md p-1.5 ${
               screenSharing
-                ? "bg-[#ed4245]/20 text-[#ed4245]"
+                ? "bg-[#ed4245]/20 text-[var(--ms-danger)]"
                 : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
             }`}
             aria-label={screenSharing ? "Stop screen share" : "Share screen"}
@@ -520,7 +520,7 @@ export function VoiceChannelControls({
           <button
             type="button"
             onClick={onLeave}
-            className="rounded-md p-1.5 text-[#b5bac1] hover:bg-[#ed4245]/15 hover:text-[#ed4245]"
+            className="rounded-md p-1.5 text-[#b5bac1] hover:bg-[#ed4245]/15 hover:text-[var(--ms-danger)]"
             aria-label="Disconnect"
           >
             <PhoneOff className="h-4 w-4" strokeWidth={2} />

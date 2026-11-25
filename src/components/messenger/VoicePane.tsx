@@ -127,7 +127,7 @@ function VoiceTile({
           ? `Exit focus on ${name}`
           : `Focus ${name} in the voice grid`
       }
-      className={`relative aspect-video w-full overflow-hidden rounded-2xl bg-[#1e1f22] text-left ring-2 transition-[box-shadow,filter] duration-200 hover:brightness-110 ${
+      className={`relative aspect-video w-full overflow-hidden rounded-2xl bg-[var(--ms-border)] text-left ring-2 transition-[box-shadow,filter] duration-200 hover:brightness-110 ${
         speaking
           ? "ring-[#23a559]"
           : isSelf
@@ -135,7 +135,7 @@ function VoiceTile({
             : "ring-transparent hover:ring-white/10"
       }`}
     >
-      <div className="absolute inset-0 bg-[#2b2d31]">
+      <div className="absolute inset-0 bg-[var(--ms-sidebar)]">
         {hasPhoto ? (
           <>
             <div
@@ -177,7 +177,7 @@ function VoiceTile({
 
         {(state.muted || state.deafened) && (
           <span
-            className={`absolute flex items-center justify-center rounded-full bg-[#1e1f22]/90 text-[#ed4245] ring-2 ring-black/40 ${
+            className={`absolute flex items-center justify-center rounded-full bg-[var(--ms-border)]/90 text-[var(--ms-danger)] ring-2 ring-black/40 ${
               compact
                 ? "right-1.5 top-1.5 h-6 w-6"
                 : "right-3 top-3 h-8 w-8"
@@ -214,14 +214,14 @@ function VoiceTile({
             >
               {name}
               {isSelf ? (
-                <span className="ml-1 text-[10px] font-normal text-[#dbdee1]">
+                <span className="ml-1 text-[10px] font-normal text-[var(--ms-text)]">
                   (You)
                 </span>
               ) : null}
             </p>
           </HoverTip>
           {!compact && (
-            <div className="flex shrink-0 items-center gap-1.5 text-[#dbdee1]">
+            <div className="flex shrink-0 items-center gap-1.5 text-[var(--ms-text)]">
               {(state.muted || state.deafened) && (
                 <MicOff className="h-3.5 w-3.5" strokeWidth={2} />
               )}
@@ -308,7 +308,7 @@ export function VoicePane({
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-[radial-gradient(ellipse_at_center,_rgba(220,38,38,0.08),_transparent_55%),#1e1f22]/40] px-6 py-10">
         <div className="flex max-w-sm flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2b2d31] text-[#b5bac1] ring-2 ring-accent/30">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--ms-sidebar)] text-[#b5bac1] ring-2 ring-accent/30">
             <Volume2 className="h-7 w-7" strokeWidth={1.75} />
           </div>
           <h2 className="text-xl font-semibold tracking-tight text-white">
@@ -346,7 +346,7 @@ export function VoicePane({
               </p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-[#949ba4]">
+            <p className="mt-3 text-sm text-[var(--ms-text-muted)]">
               No one is in this voice channel yet.
             </p>
           )}
@@ -354,7 +354,7 @@ export function VoicePane({
           <button
             type="button"
             onClick={onRejoin}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#23a559] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[var(--ms-connected)] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
           >
             <Volume2 className="h-4 w-4" strokeWidth={2} />
             Join Voice
@@ -366,11 +366,11 @@ export function VoicePane({
 
   const emptyStage = (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-[#b5bac1]">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--ms-sidebar)] text-[#b5bac1]">
         <Volume2 className="h-7 w-7" strokeWidth={1.75} />
       </div>
       <h2 className="text-xl font-semibold text-white">{channelName}</h2>
-      <p className="mt-2 max-w-sm text-sm text-[#949ba4]">
+      <p className="mt-2 max-w-sm text-sm text-[var(--ms-text-muted)]">
         Setting up your voice tile…
       </p>
     </div>
@@ -449,7 +449,7 @@ export function VoicePane({
     );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#1e1f22]/40">
+    <div className="flex min-h-0 flex-1 flex-col bg-[var(--ms-border)]/40">
       <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 py-5 sm:px-6">
         {stage}
       </div>

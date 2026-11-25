@@ -89,7 +89,7 @@ export function CreateCategoryModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-category-title"
-        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
+        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
         <div className="flex items-start justify-between gap-3 px-4 pt-4">
           <div>
@@ -122,7 +122,7 @@ export function CreateCategoryModal({
               minLength={CATEGORY_NAME_MIN}
               maxLength={CATEGORY_NAME_MAX}
               placeholder="Text Channels"
-              className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-white outline-none focus:border-accent/60"
+              className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm text-white outline-none focus:border-accent/60"
             />
           </label>
 

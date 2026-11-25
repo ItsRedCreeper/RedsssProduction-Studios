@@ -51,7 +51,7 @@ export function TypingIndicator({ people, className = "" }: TypingIndicatorProps
           </span>
         ))}
       </div>
-      <p className="truncate text-xs text-[#949ba4]">{label}</p>
+      <p className="truncate text-xs text-[var(--ms-text-muted)]">{label}</p>
     </div>
   );
 }

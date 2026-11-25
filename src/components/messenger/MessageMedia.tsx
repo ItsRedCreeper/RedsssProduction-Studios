@@ -96,7 +96,7 @@ export function MessageMedia({ message }: MessageMediaProps) {
               target="_blank"
               rel="noreferrer"
               download={item.name}
-              className="inline-flex max-w-full items-center gap-3 rounded-md border border-[#3f4147] bg-[#2b2d31] px-3 py-2.5 text-sm text-[#dbdee1] hover:bg-[#35373c]"
+              className="inline-flex max-w-full items-center gap-3 rounded-md border border-[#3f4147] bg-[var(--ms-sidebar)] px-3 py-2.5 text-sm text-[var(--ms-text)] hover:bg-[#35373c]"
             >
               {item.type.includes("pdf") || item.type.startsWith("text/") ? (
                 <FileText className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.75} />
@@ -108,12 +108,12 @@ export function MessageMedia({ message }: MessageMediaProps) {
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{item.name}</span>
                 {item.size > 0 && (
-                  <span className="text-[11px] text-[#949ba4]">
+                  <span className="text-[11px] text-[var(--ms-text-muted)]">
                     {formatFileSize(item.size)}
                   </span>
                 )}
               </span>
-              <Download className="h-4 w-4 shrink-0 text-[#949ba4]" strokeWidth={1.75} />
+              <Download className="h-4 w-4 shrink-0 text-[var(--ms-text-muted)]" strokeWidth={1.75} />
             </a>
           );
 

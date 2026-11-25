@@ -4041,11 +4041,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       : activeChannel?.name ??
         (waitingForChannel || (pane === "server" && loadingServers) ? "Loading…" : "No channel");
   const headerIcon = dmMode || homeEmpty ? (
-    <MessagesSquare className="h-5 w-5 text-[#949ba4]" strokeWidth={1.75} />
+    <MessagesSquare className="h-5 w-5 text-[var(--ms-text-muted)]" strokeWidth={1.75} />
   ) : activeChannel?.type === "voice" ? (
-    <Volume2 className="h-5 w-5 text-[#949ba4]" strokeWidth={1.75} />
+    <Volume2 className="h-5 w-5 text-[var(--ms-text-muted)]" strokeWidth={1.75} />
   ) : (
-    <Hash className="h-5 w-5 text-[#949ba4]" strokeWidth={2.25} />
+    <Hash className="h-5 w-5 text-[var(--ms-text-muted)]" strokeWidth={2.25} />
   );
 
   const speakingUserIds = useMemo(() => {
@@ -4304,19 +4304,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         ) : pane === "server" &&
           !!user &&
           (loadingServers || channelPending) ? (
-          <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
-            <div className="messenger-header flex h-12 items-center bg-[#2b2d31] px-4 text-sm font-semibold text-white">
+          <aside className="flex h-full w-full flex-col bg-[var(--ms-sidebar)]">
+            <div className="messenger-header flex h-12 items-center bg-[var(--ms-sidebar)] px-4 text-sm font-semibold text-white">
               Loading…
             </div>
             <div className="flex-1" />
             {sidebarFooter}
           </aside>
         ) : (
-          <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
-            <div className="messenger-header flex h-12 items-center bg-[#2b2d31] px-4 text-sm font-semibold text-white">
+          <aside className="flex h-full w-full flex-col bg-[var(--ms-sidebar)]">
+            <div className="messenger-header flex h-12 items-center bg-[var(--ms-sidebar)] px-4 text-sm font-semibold text-white">
               No server
             </div>
-            <p className="flex-1 px-4 py-4 text-sm text-[#949ba4]">
+            <p className="flex-1 px-4 py-4 text-sm text-[var(--ms-text-muted)]">
               Create a server or open Home for direct messages.
             </p>
             {sidebarFooter}
@@ -4325,7 +4325,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       </ResizableSidebar>
 
       <div className="relative flex min-h-0 min-w-0 flex-1">
-        <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#313338]">
+        <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--ms-chat)]">
           {pane === "server" && activeServer && (
             <div className="sm:hidden">
               <ServerHeaderMenu
@@ -4386,7 +4386,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               <button
                 type="button"
                 onClick={() => setViewAsRoleId(null)}
-                className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-[#dbdee1] hover:bg-white/5"
+                className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-[var(--ms-text)] hover:bg-white/5"
               >
                 Exit
               </button>
@@ -4402,7 +4402,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 <button
                   type="button"
                   onClick={selectDiscover}
-                  className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#dbdee1] hover:bg-white/5"
+                  className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[var(--ms-text)] hover:bg-white/5"
                 >
                   Back to Discover
                 </button>
@@ -4525,7 +4525,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
           {needsSignIn ? (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-              <p className="text-sm text-[#949ba4]">
+              <p className="text-sm text-[var(--ms-text-muted)]">
                 Sign in to open your servers and direct messages.
               </p>
               <Link
@@ -4538,7 +4538,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           ) : null}
 
           {channelPending && !needsSignIn ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-sm text-[#949ba4]">
+            <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-sm text-[var(--ms-text-muted)]">
               Loading…
             </div>
           ) : null}
@@ -4549,7 +4549,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search messages"
-                className="w-full rounded-xl bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-2 focus:ring-accent/40"
+                className="w-full rounded-xl bg-[var(--ms-border)] px-3 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] placeholder:text-[var(--ms-text-faint)] focus:ring-2 focus:ring-accent/40"
               />
             </div>
           )}
@@ -4566,7 +4566,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium ${
                       active
                         ? "bg-accent/20 text-white ring-1 ring-accent/40"
-                        : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]"
+                        : "bg-[var(--ms-sidebar)] text-[var(--ms-text-muted)] hover:bg-[#35373c] hover:text-[var(--ms-text)]"
                     }`}
                   >
                     {channel.type === "text" ? (
@@ -4597,7 +4597,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium ${
                     thread.id === activeConversationId
                       ? "bg-accent/20 text-white ring-1 ring-accent/40"
-                      : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]"
+                      : "bg-[var(--ms-sidebar)] text-[var(--ms-text-muted)] hover:bg-[#35373c] hover:text-[var(--ms-text)]"
                   }`}
                 >
                   {chipName}
@@ -4608,7 +4608,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           )}
 
           {error && (
-            <div className="border-b border-[#ed4245]/40 bg-[#ed4245]/10 px-4 py-2 text-xs text-[#ed4245]">
+            <div className="border-b border-[var(--ms-danger)]/40 bg-[#ed4245]/10 px-4 py-2 text-xs text-[var(--ms-danger)]">
               {error}
             </div>
           )}
@@ -4620,13 +4620,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   role="dialog"
                   aria-label="Pinned messages"
                   style={{ top: pinsAnchor.top, right: pinsAnchor.right }}
-                  className="fixed z-[70] max-h-96 w-[min(20rem,calc(100vw-1rem))] overflow-y-auto rounded-md border border-[#1e1f22] bg-[#2b2d31] p-2 shadow-xl shadow-black/50"
+                  className="fixed z-[70] max-h-96 w-[min(20rem,calc(100vw-1rem))] overflow-y-auto rounded-md border border-[var(--ms-border)] bg-[var(--ms-sidebar)] p-2 shadow-xl shadow-black/50"
                 >
-                  <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                  <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                     Pinned messages
                   </p>
                   {pinList.length === 0 ? (
-                    <p className="px-2 py-3 text-sm text-[#949ba4]">No pinned messages.</p>
+                    <p className="px-2 py-3 text-sm text-[var(--ms-text-muted)]">No pinned messages.</p>
                   ) : (
                     pinList.map((message) => (
                       <button
@@ -4638,10 +4638,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                         }}
                         className="block w-full rounded-md px-2 py-2 text-left hover:bg-[#404249]"
                       >
-                        <p className="text-xs font-semibold text-[#dbdee1]">
+                        <p className="text-xs font-semibold text-[var(--ms-text)]">
                           {message.profiles?.username ?? "Unknown"}
                         </p>
-                        <p className="truncate text-sm text-[#dbdee1]">
+                        <p className="truncate text-sm text-[var(--ms-text)]">
                           {message.content || "Attachment"}
                         </p>
                       </button>
@@ -4656,7 +4656,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
               <MessagesSquare className="mb-3 h-12 w-12 text-[#4e5058]" strokeWidth={1.5} />
               <h2 className="text-xl font-semibold text-white">Your DMs</h2>
-              <p className="mt-2 max-w-sm text-sm text-[#949ba4]">
+              <p className="mt-2 max-w-sm text-sm text-[var(--ms-text-muted)]">
                 Pick a conversation from the sidebar, or message someone from a server member list.
               </p>
             </div>
@@ -4711,8 +4711,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           {textMode && !channelPending && !needsSignIn && (
             <>
               {activeThreadId ? (
-                <div className="messenger-header flex shrink-0 items-center gap-2 bg-[#2b2d31] px-4 py-2">
-                  <MessagesSquare className="h-4 w-4 text-[#949ba4]" strokeWidth={1.75} />
+                <div className="messenger-header flex shrink-0 items-center gap-2 bg-[var(--ms-sidebar)] px-4 py-2">
+                  <MessagesSquare className="h-4 w-4 text-[var(--ms-text-muted)]" strokeWidth={1.75} />
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
                     {channelThreads.find((thread) => thread.id === activeThreadId)?.name ??
                       "Thread"}
@@ -4720,7 +4720,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   <button
                     type="button"
                     onClick={() => setActiveThreadId(null)}
-                    className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10"
+                    className="rounded-md px-2 py-1 text-xs text-[var(--ms-text)] hover:bg-white/10"
                   >
                     Close
                   </button>
@@ -4813,14 +4813,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             previewMode ? (
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
                 <Volume2 className="h-10 w-10 text-[#4e5058]" strokeWidth={1.5} />
-                <p className="text-sm font-medium text-[#dbdee1]">
+                <p className="text-sm font-medium text-[var(--ms-text)]">
                   #{activeChannel.name}
                 </p>
                 <button
                   type="button"
                   disabled={joiningPreview}
                   onClick={() => void joinPreviewServer()}
-                  className="mt-1 rounded-md bg-[#23a559] px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+                  className="mt-1 rounded-md bg-[var(--ms-connected)] px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
                 >
                   {joiningPreview ? "Joining…" : "Join Server"}
                 </button>
@@ -4865,13 +4865,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             !activeChannel &&
             !channelPending &&
             channels.length === 0 && (
-            <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[#949ba4]">
+            <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--ms-text-muted)]">
               This server has no channels yet.
             </div>
           )}
 
           {previewMode && textMode && !channelPending && !needsSignIn && (
-            <div className="flex items-center justify-between gap-3 border-t border-[#1e1f22] bg-[#2b2d31] px-4 py-3">
+            <div className="flex items-center justify-between gap-3 border-t border-[var(--ms-border)] bg-[var(--ms-sidebar)] px-4 py-3">
               <p className="min-w-0 text-sm text-[#b5bac1]">
                 You&apos;re previewing this server. Join to chat in #
                 {activeChannel?.name ?? "channel"}.
@@ -4880,7 +4880,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 type="button"
                 disabled={joiningPreview}
                 onClick={() => void joinPreviewServer()}
-                className="shrink-0 rounded-md bg-[#23a559] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+                className="shrink-0 rounded-md bg-[var(--ms-connected)] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
               >
                 {joiningPreview ? "Joining…" : "Join Server"}
               </button>
@@ -4892,12 +4892,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             !channelPending &&
             !previewMode &&
             (dmMode && dmBlocked ? (
-              <div className="border-t border-[#1e1f22] bg-[#2b2d31] px-4 py-3 text-sm text-[#f23f43]">
+              <div className="border-t border-[var(--ms-border)] bg-[var(--ms-sidebar)] px-4 py-3 text-sm text-[#f23f43]">
                 You blocked this user. Unblock them from Friends → Blocked to
                 message again.
               </div>
             ) : dmMode && dmBlockedByThem ? (
-              <div className="border-t border-[#1e1f22] bg-[#2b2d31] px-4 py-3 text-sm text-[#b5bac1]">
+              <div className="border-t border-[var(--ms-border)] bg-[var(--ms-sidebar)] px-4 py-3 text-sm text-[#b5bac1]">
                 This user has blocked you. You can&apos;t send them messages.
               </div>
             ) : (
@@ -4998,7 +4998,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         ) : null}
         {voiceMode && !channelPending && voiceChatOpen && (
           <aside
-            className="absolute inset-y-0 right-0 z-20 flex flex-col border-l border-black/30 bg-[#2b2d31] shadow-2xl shadow-black/40 sm:relative sm:z-auto sm:shadow-none"
+            className="absolute inset-y-0 right-0 z-20 flex flex-col border-l border-black/30 bg-[var(--ms-sidebar)] shadow-2xl shadow-black/40 sm:relative sm:z-auto sm:shadow-none"
             style={{ width: `min(100%, ${voiceChatWidth}px)` }}
           >
             <div
@@ -5013,7 +5013,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             >
               <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
             </div>
-            <div className="messenger-header flex h-12 shrink-0 items-center bg-[#2b2d31] px-4 text-sm font-semibold text-white">
+            <div className="messenger-header flex h-12 shrink-0 items-center bg-[var(--ms-sidebar)] px-4 text-sm font-semibold text-white">
               Voice Chat
             </div>
             <div className="flex min-h-0 flex-1 flex-col">
@@ -5307,7 +5307,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             aria-label="Cancel leave"
             onClick={() => setLeaveOpen(false)}
           />
-          <div className="relative z-10 w-full max-w-sm rounded-md border border-[#1e1f22] bg-[#313338] p-5 shadow-2xl">
+          <div className="relative z-10 w-full max-w-sm rounded-md border border-[var(--ms-border)] bg-[var(--ms-chat)] p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-white">Leave {activeServer.name}?</h2>
             <p className="mt-2 text-sm text-[#b5bac1]">
               You can rejoin later with an invite link.
@@ -5316,7 +5316,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               <button
                 type="button"
                 onClick={() => setLeaveOpen(false)}
-                className="rounded-md px-3 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
+                className="rounded-md px-3 py-2 text-sm text-[var(--ms-text)] hover:bg-white/5"
               >
                 Cancel
               </button>
@@ -5334,7 +5334,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
       {toast && (
         <div
-          className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-md border border-[#1e1f22] bg-[#111214] px-4 py-2.5 text-sm text-white shadow-lg shadow-black/40"
+          className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-md border border-[var(--ms-border)] bg-[#111214] px-4 py-2.5 text-sm text-white shadow-lg shadow-black/40"
           role="status"
         >
           {toast}

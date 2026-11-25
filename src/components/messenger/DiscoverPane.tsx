@@ -210,12 +210,12 @@ export function DiscoverPane({
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <ResizableSidebar width={sidebarWidth} onResizeStart={onSidebarResizeStart}>
-        <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
-          <div className="messenger-header flex h-12 shrink-0 items-center bg-[#2b2d31] px-4 text-[15px] font-semibold tracking-tight text-white">
+        <aside className="flex h-full w-full flex-col bg-[var(--ms-sidebar)]">
+          <div className="messenger-header flex h-12 shrink-0 items-center bg-[var(--ms-sidebar)] px-4 text-[15px] font-semibold tracking-tight text-white">
             Discover
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-            <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+            <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
               Browse
             </p>
             <ul className="space-y-0.5">
@@ -230,7 +230,7 @@ export function DiscoverPane({
                       className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] ${
                         active
                           ? "messenger-row-active text-white"
-                          : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
+                          : "text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-[var(--ms-text)]"
                       }`}
                     >
                       <Icon
@@ -248,7 +248,7 @@ export function DiscoverPane({
         </aside>
       </ResizableSidebar>
 
-      <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#313338]">
+      <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--ms-chat)]">
         <div className="messenger-header relative shrink-0 overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(220,38,38,0.22),_transparent_55%),linear-gradient(135deg,#1a1b1e_0%,#2b2d31_45%,#111214_100%)]" />
           <div className="relative px-5 py-6 sm:px-8 sm:py-8">
@@ -267,14 +267,14 @@ export function DiscoverPane({
             </div>
             <label className="relative mt-5 block max-w-xl">
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#949ba4]"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ms-text-muted)]"
                 strokeWidth={2}
               />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Explore public servers"
-                className="w-full rounded-xl border border-transparent bg-[#1e1f22]/90 py-3 pl-10 pr-4 text-sm text-foreground outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-2 focus:ring-accent/50"
+                className="w-full rounded-xl border border-transparent bg-[var(--ms-border)]/90 py-3 pl-10 pr-4 text-sm text-foreground outline-none ring-1 ring-[#3f4147] placeholder:text-[var(--ms-text-faint)] focus:ring-2 focus:ring-accent/50"
               />
             </label>
           </div>
@@ -291,7 +291,7 @@ export function DiscoverPane({
                 className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium ${
                   active
                     ? "bg-accent/20 text-white ring-1 ring-accent/40"
-                    : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c]"
+                    : "bg-[var(--ms-sidebar)] text-[var(--ms-text-muted)] hover:bg-[#35373c]"
                 }`}
               >
                 {item.label}
@@ -312,7 +312,7 @@ export function DiscoverPane({
               <h2 className="text-lg font-semibold text-white">
                 {category === "featured" ? "Featured" : "All public servers"}
               </h2>
-              <p className="text-xs text-[#949ba4]">
+              <p className="text-xs text-[var(--ms-text-muted)]">
                 {loading
                   ? "Loading…"
                   : category === "featured"
@@ -327,15 +327,15 @@ export function DiscoverPane({
               {Array.from({ length: 6 }).map((_, index) => (
                 <div
                   key={index}
-                  className="h-52 animate-pulse rounded-2xl bg-[#2b2d31]"
+                  className="h-52 animate-pulse rounded-2xl bg-[var(--ms-sidebar)]"
                 />
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#3f4147] bg-[#2b2d31]/50 px-6 py-16 text-center">
+            <div className="rounded-2xl border border-dashed border-[#3f4147] bg-[var(--ms-sidebar)]/50 px-6 py-16 text-center">
               <Compass className="mx-auto mb-3 h-8 w-8 text-accent/70" strokeWidth={1.5} />
               <p className="text-sm font-medium text-white">No public servers found</p>
-              <p className="mt-1 text-xs text-[#949ba4]">
+              <p className="mt-1 text-xs text-[var(--ms-text-muted)]">
                 Create a server and turn on Discoverable in Server Settings.
               </p>
             </div>
@@ -350,11 +350,11 @@ export function DiscoverPane({
                 return (
                   <li
                     key={server.id}
-                    className="flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#2b2d31] transition-colors hover:border-accent/40 hover:ring-1 hover:ring-accent/20"
+                    className="flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[var(--ms-sidebar)] transition-colors hover:border-accent/40 hover:ring-1 hover:ring-accent/20"
                   >
                     <div className="h-24 bg-[linear-gradient(135deg,rgba(220,38,38,0.35),#1e1f22_55%,#111214)]" />
                     <div className="relative flex flex-1 flex-col px-4 pb-4 pt-0">
-                      <div className="-mt-7 mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-[#313338] text-sm font-bold text-white ring-4 ring-[#2b2d31]">
+                      <div className="-mt-7 mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-[var(--ms-chat)] text-sm font-bold text-white ring-4 ring-[#2b2d31]">
                         {server.icon_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -374,9 +374,9 @@ export function DiscoverPane({
                       <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm text-[#b5bac1]">
                         {server.description || "No description yet."}
                       </p>
-                      <div className="mt-3 flex items-center gap-3 text-xs text-[#949ba4]">
+                      <div className="mt-3 flex items-center gap-3 text-xs text-[var(--ms-text-muted)]">
                         <span className="inline-flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full bg-[#23a559]" />
+                          <span className="h-2 w-2 rounded-full bg-[var(--ms-connected)]" />
                           {stats.online_count.toLocaleString()} Online
                         </span>
                         <span className="inline-flex items-center gap-1.5">

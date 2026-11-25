@@ -887,7 +887,7 @@ export function FriendsPanel({
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search by username"
-                  className="w-full rounded-md border border-border bg-[#1e1f22] py-2.5 pl-9 pr-3 text-sm text-white outline-none focus:border-accent/50"
+                  className="w-full rounded-md border border-border bg-[var(--ms-border)] py-2.5 pl-9 pr-3 text-sm text-white outline-none focus:border-accent/50"
                 />
               </label>
               {searching && (
@@ -983,7 +983,7 @@ export function FriendsPanel({
                             </button>
                           )}
                           {rel.status === "outgoing" && (
-                            <span className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-[#dbdee1]">
+                            <span className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-[var(--ms-text)]">
                               Request Sent
                             </span>
                           )}
@@ -1040,7 +1040,7 @@ export function FriendsPanel({
                           avatarUrl={person.avatar_url}
                           size="md"
                         />
-                        <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface p-0.5 text-[#949ba4]">
+                        <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-surface p-0.5 text-[var(--ms-text-muted)]">
                           <EyeOff className="h-3 w-3" strokeWidth={2} />
                         </span>
                       </span>

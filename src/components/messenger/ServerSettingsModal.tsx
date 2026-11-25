@@ -1788,7 +1788,7 @@ export function ServerSettingsModal({
             {tab === "overview" && canEditOverview && (
               <form onSubmit={saveOverview} className="space-y-4">
                 <div className="flex flex-wrap items-center gap-4">
-                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[#1e1f22] text-xl font-bold text-white">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[var(--ms-border)] text-xl font-bold text-white">
                     {server.icon_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -1816,11 +1816,11 @@ export function ServerSettingsModal({
                       type="button"
                       disabled={iconBusy}
                       onClick={() => iconFileRef.current?.click()}
-                      className="rounded-md bg-[#3f4147] px-3 py-2 text-sm text-[#dbdee1] hover:bg-[#4e5058] disabled:opacity-50"
+                      className="rounded-md bg-[#3f4147] px-3 py-2 text-sm text-[var(--ms-text)] hover:bg-[#4e5058] disabled:opacity-50"
                     >
                       {iconBusy ? "Uploading…" : "Change Icon"}
                     </button>
-                    <p className="text-[11px] text-[#949ba4]">
+                    <p className="text-[11px] text-[var(--ms-text-muted)]">
                       PNG, JPG, GIF, or WebP · max 512 KB
                     </p>
                   </div>
@@ -1834,7 +1834,7 @@ export function ServerSettingsModal({
                     onChange={(event) => setName(event.target.value)}
                     minLength={SERVER_NAME_MIN}
                     maxLength={SERVER_NAME_MAX}
-                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60"
+                    className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60"
                   />
                 </label>
                 <label className="block space-y-1.5">
@@ -1846,7 +1846,7 @@ export function ServerSettingsModal({
                     onChange={(event) => setDescription(event.target.value)}
                     rows={4}
                     maxLength={SERVER_DESCRIPTION_MAX}
-                    className="w-full resize-none rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60"
+                    className="w-full resize-none rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60"
                   />
                 </label>
                 <label className="block space-y-1.5">
@@ -1858,7 +1858,7 @@ export function ServerSettingsModal({
                     onChange={(event) =>
                       setVerificationLevel(Number(event.target.value))
                     }
-                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
+                    className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
                   >
                     <option value={0}>None</option>
                     <option value={1}>Low — verified account age</option>
@@ -1871,7 +1871,7 @@ export function ServerSettingsModal({
                     </option>
                   </select>
                 </label>
-                <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-3">
+                <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-3">
                   <input
                     type="checkbox"
                     checked={isPublic}
@@ -1907,14 +1907,14 @@ export function ServerSettingsModal({
                     <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-danger)]">
                       Danger zone
                     </p>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                       Transfer ownership
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <select
                         value={transferTo}
                         onChange={(event) => setTransferTo(event.target.value)}
-                        className="min-w-[12rem] flex-1 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm"
+                        className="min-w-[12rem] flex-1 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm"
                       >
                         <option value="">Select a member…</option>
                         {members
@@ -1943,7 +1943,7 @@ export function ServerSettingsModal({
               <div className="flex min-h-[20rem] gap-3">
                 <form
                   onSubmit={createRole}
-                  className="flex w-40 shrink-0 flex-col rounded-md border border-[#3f4147] bg-[#2b2d31]"
+                  className="flex w-40 shrink-0 flex-col rounded-md border border-[#3f4147] bg-[var(--ms-sidebar)]"
                 >
                   <div className="flex-1 overflow-y-auto p-2">
                     {roles.length === 0 ? (
@@ -1958,7 +1958,7 @@ export function ServerSettingsModal({
                               className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm ${
                                 selectedRoleId === role.id
                                   ? "bg-[#404249] text-white"
-                                  : "text-[#dbdee1] hover:bg-white/5"
+                                  : "text-[var(--ms-text)] hover:bg-white/5"
                               }`}
                             >
                               <span
@@ -1980,14 +1980,14 @@ export function ServerSettingsModal({
                       onChange={(event) => setRoleName(event.target.value)}
                       placeholder="Role name"
                       maxLength={ROLE_NAME_MAX}
-                      className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-2 py-1.5 text-sm outline-none focus:border-accent/60"
+                      className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-2 py-1.5 text-sm outline-none focus:border-accent/60"
                     />
                     <input
                       type="color"
                       value={roleColor}
                       onChange={(event) => setRoleColor(event.target.value)}
                       aria-label="New role color"
-                      className="h-9 w-full cursor-pointer rounded-md border border-[#3f4147] bg-[#1e1f22]"
+                      className="h-9 w-full cursor-pointer rounded-md border border-[#3f4147] bg-[var(--ms-border)]"
                     />
                     <button
                       type="submit"
@@ -2049,20 +2049,20 @@ export function ServerSettingsModal({
               (canManageRoles || canKickMembers || canBanMembers || isOwner) && (
               <ul className="space-y-2">
                 {(canBanMembers || isOwner) && bans.length > 0 && (
-                  <li className="mb-1 space-y-2 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                  <li className="mb-1 space-y-2 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                       Bans
                     </p>
                     <ul className="space-y-1">
                       {bans.map((ban) => (
                         <li
                           key={ban.user_id}
-                          className="flex items-center justify-between gap-2 text-sm text-[#dbdee1]"
+                          className="flex items-center justify-between gap-2 text-sm text-[var(--ms-text)]"
                         >
                           <span className="min-w-0 truncate">
                             {ban.username ?? ban.user_id}
                             {ban.reason ? (
-                              <span className="text-[#949ba4]">
+                              <span className="text-[var(--ms-text-muted)]">
                                 {" "}
                                 — {ban.reason}
                               </span>
@@ -2089,7 +2089,7 @@ export function ServerSettingsModal({
                   return (
                     <li
                       key={member.user_id}
-                      className="rounded-md bg-[#2b2d31] px-3 py-2.5"
+                      className="rounded-md bg-[var(--ms-sidebar)] px-3 py-2.5"
                     >
                       <div className="flex items-center gap-3">
                         <UserAvatar
@@ -2149,7 +2149,7 @@ export function ServerSettingsModal({
                                   setTimeoutMemberId(member.user_id);
                                   setTimeoutMinutes(60);
                                 }}
-                                className="rounded-md px-2 py-1 text-xs font-medium text-[#dbdee1] hover:bg-white/10"
+                                className="rounded-md px-2 py-1 text-xs font-medium text-[var(--ms-text)] hover:bg-white/10"
                               >
                                 Timeout
                               </button>
@@ -2161,7 +2161,7 @@ export function ServerSettingsModal({
                                   setNickEditId(member.user_id);
                                   setNickDraft(member.nickname ?? "");
                                 }}
-                                className="rounded-md px-2 py-1 text-xs font-medium text-[#dbdee1] hover:bg-white/10"
+                                className="rounded-md px-2 py-1 text-xs font-medium text-[var(--ms-text)] hover:bg-white/10"
                               >
                                 Nick
                               </button>
@@ -2213,15 +2213,15 @@ export function ServerSettingsModal({
                         </div>
                       ) : null}
                       {timeoutMemberId === member.user_id ? (
-                        <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
-                          <label className="text-xs text-[#949ba4]">
+                        <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3">
+                          <label className="text-xs text-[var(--ms-text-muted)]">
                             Duration
                             <select
                               value={timeoutMinutes}
                               onChange={(event) =>
                                 setTimeoutMinutes(Number(event.target.value))
                               }
-                              className="mt-1 block rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
+                              className="mt-1 block rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm text-[var(--ms-text)]"
                             >
                               <option value={1}>60 seconds</option>
                               <option value={5}>5 minutes</option>
@@ -2248,28 +2248,28 @@ export function ServerSettingsModal({
                         </div>
                       ) : null}
                       {banMemberId === member.user_id ? (
-                        <div className="mt-2 space-y-2 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                        <div className="mt-2 space-y-2 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3">
                           <input
                             value={banReason}
                             onChange={(event) => setBanReason(event.target.value)}
                             placeholder="Reason (optional)"
                             className="w-full rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm outline-none focus:border-accent/60"
                           />
-                          <label className="block text-xs text-[#949ba4]">
+                          <label className="block text-xs text-[var(--ms-text-muted)]">
                             Delete message history
                             <select
                               value={banDeleteDays}
                               onChange={(event) =>
                                 setBanDeleteDays(Number(event.target.value))
                               }
-                              className="mt-1 block w-full rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
+                              className="mt-1 block w-full rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm text-[var(--ms-text)]"
                             >
                               <option value={0}>Don&apos;t delete any</option>
                               <option value={1}>Previous 24 hours</option>
                               <option value={7}>Previous 7 days</option>
                             </select>
                           </label>
-                          <label className="block text-xs text-[#949ba4]">
+                          <label className="block text-xs text-[var(--ms-text-muted)]">
                             Ban duration
                             <select
                               value={String(banDurationHours)}
@@ -2279,7 +2279,7 @@ export function ServerSettingsModal({
                                   value === "perm" ? "perm" : Number(value),
                                 );
                               }}
-                              className="mt-1 block w-full rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm text-[#dbdee1]"
+                              className="mt-1 block w-full rounded-md border border-[#3f4147] bg-[#111214] px-2 py-1.5 text-sm text-[var(--ms-text)]"
                             >
                               <option value="perm">Permanent</option>
                               <option value="1">1 hour</option>
@@ -2383,7 +2383,7 @@ export function ServerSettingsModal({
                               const value = event.target.value;
                               if (value) void assignRole(member.user_id, value);
                             }}
-                            className="rounded-md border border-[#3f4147] bg-[#1e1f22] px-2 py-1 text-xs text-[#dbdee1] outline-none focus:border-accent/60"
+                            className="rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-2 py-1 text-xs text-[var(--ms-text)] outline-none focus:border-accent/60"
                           >
                             <option value="">Add role…</option>
                             {roles
@@ -2415,7 +2415,7 @@ export function ServerSettingsModal({
             {tab === "invites" && (canCreateInvites || isOwner) && (
               <div className="space-y-4">
                 {(canManageServer || isOwner) && (
-                  <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[#2b2d31] px-3 py-2.5">
+                  <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[var(--ms-sidebar)] px-3 py-2.5">
                     <input
                       type="checkbox"
                       checked={Boolean(server.invites_paused)}
@@ -2426,7 +2426,7 @@ export function ServerSettingsModal({
                       <span className="block text-sm font-medium text-white">
                         Pause Invites
                       </span>
-                      <span className="mt-0.5 block text-xs text-[#949ba4]">
+                      <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
                         Temporarily stop new members from joining with invite links.
                       </span>
                     </span>
@@ -2434,7 +2434,7 @@ export function ServerSettingsModal({
                 )}
                 <form
                   onSubmit={(event) => void createTimedInvite(event)}
-                  className="flex flex-wrap items-end gap-2 rounded-md bg-[#2b2d31] p-3"
+                  className="flex flex-wrap items-end gap-2 rounded-md bg-[var(--ms-sidebar)] p-3"
                 >
                   <label className="space-y-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-muted">
@@ -2448,7 +2448,7 @@ export function ServerSettingsModal({
                           value === "never" ? "never" : Number(value),
                         );
                       }}
-                      className="block rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm"
+                      className="block rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm"
                     >
                       <option value="0.5">30 minutes</option>
                       <option value="1">1 hour</option>
@@ -2469,7 +2469,7 @@ export function ServerSettingsModal({
                         const value = event.target.value;
                         setInviteMaxUses(value === "" ? "" : Number(value));
                       }}
-                      className="block rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm"
+                      className="block rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm"
                     >
                       <option value="">No limit</option>
                       <option value="1">1 use</option>
@@ -2487,7 +2487,7 @@ export function ServerSettingsModal({
                     <select
                       value={inviteChannelId}
                       onChange={(event) => setInviteChannelId(event.target.value)}
-                      className="block min-w-[10rem] rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm"
+                      className="block min-w-[10rem] rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm"
                     >
                       <option value="">Default</option>
                       {channels
@@ -2514,10 +2514,10 @@ export function ServerSettingsModal({
                   {invites.map((invite) => (
                     <li
                       key={invite.id}
-                      className="rounded-md bg-[#2b2d31] px-3 py-3"
+                      className="rounded-md bg-[var(--ms-sidebar)] px-3 py-3"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <code className="min-w-0 flex-1 truncate text-sm text-[#dbdee1]">
+                        <code className="min-w-0 flex-1 truncate text-sm text-[var(--ms-text)]">
                           {inviteUrl(invite.code)}
                         </code>
                         <button
@@ -2541,7 +2541,7 @@ export function ServerSettingsModal({
                           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
                         </button>
                       </div>
-                      <p className="mt-2 text-xs text-[#6d6f78]">
+                      <p className="mt-2 text-xs text-[var(--ms-text-faint)]">
                         {invite.uses}
                         {invite.max_uses != null ? `/${invite.max_uses}` : ""} uses
                         {invite.expires_at
@@ -2566,7 +2566,7 @@ export function ServerSettingsModal({
                       onChange={(event) => setCategoryName(event.target.value)}
                       placeholder="Category name"
                       maxLength={ROLE_NAME_MAX}
-                      className="block w-52 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/60"
+                      className="block w-52 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm outline-none focus:border-accent/60"
                     />
                   </label>
                   <button
@@ -2594,7 +2594,7 @@ export function ServerSettingsModal({
                       return (
                         <li
                           key={category.id}
-                          className="rounded-md px-2 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
+                          className="rounded-md px-2 py-2 text-sm text-[var(--ms-text)] hover:bg-white/5"
                         >
                           <CategoryRow
                             category={category}
@@ -2608,7 +2608,7 @@ export function ServerSettingsModal({
                             }
                           />
                           {permsOpen ? (
-                            <div className="mt-3 space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                            <div className="mt-3 space-y-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3">
                               <label className="flex cursor-pointer items-start gap-2">
                                 <input
                                   type="checkbox"
@@ -2629,7 +2629,7 @@ export function ServerSettingsModal({
                                   <span className="block text-sm font-medium text-white">
                                     Private Category
                                   </span>
-                                  <span className="mt-0.5 block text-xs text-[#949ba4]">
+                                  <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
                                     Only selected roles can view channels in this
                                     category (until synced per channel).
                                   </span>
@@ -2637,11 +2637,11 @@ export function ServerSettingsModal({
                               </label>
                               {privateCategory ? (
                                 <div className="space-y-2 border-t border-[#3f4147] pt-3">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                                     Who can access
                                   </p>
                                   {grantableRoles.length === 0 ? (
-                                    <p className="text-xs text-[#949ba4]">
+                                    <p className="text-xs text-[var(--ms-text-muted)]">
                                       Create a role first, then grant access here.
                                     </p>
                                   ) : (
@@ -2677,7 +2677,7 @@ export function ServerSettingsModal({
                                                     role.color || "#99aab5",
                                                 }}
                                               />
-                                              <span className="text-sm text-[#dbdee1]">
+                                              <span className="text-sm text-[var(--ms-text)]">
                                                 {role.name}
                                               </span>
                                             </label>
@@ -2710,7 +2710,7 @@ export function ServerSettingsModal({
                         onChange={(event) => setChannelName(event.target.value)}
                         placeholder="channel-name"
                         maxLength={ROLE_NAME_MAX}
-                        className="block w-52 rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/60"
+                        className="block w-52 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm outline-none focus:border-accent/60"
                       />
                     </label>
                     <label className="space-y-1">
@@ -2722,7 +2722,7 @@ export function ServerSettingsModal({
                         onChange={(event) =>
                           setChannelType(event.target.value as "text" | "voice")
                         }
-                        className="block rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/60"
+                        className="block rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm outline-none focus:border-accent/60"
                       >
                         <option value="text">Text</option>
                         <option value="voice">Voice</option>
@@ -2735,7 +2735,7 @@ export function ServerSettingsModal({
                       <select
                         value={channelCategoryId}
                         onChange={(event) => setChannelCategoryId(event.target.value)}
-                        className="block min-w-[10rem] rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/60"
+                        className="block min-w-[10rem] rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm outline-none focus:border-accent/60"
                       >
                         {sortedCategories.length === 0 && (
                           <option value="">No category</option>
@@ -2755,7 +2755,7 @@ export function ServerSettingsModal({
                       Create channel
                     </button>
                   </div>
-                  <label className="flex cursor-pointer items-center gap-2 text-sm text-[#dbdee1]">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--ms-text)]">
                     <input
                       type="checkbox"
                       checked={newChannelPrivate}
@@ -2783,7 +2783,7 @@ export function ServerSettingsModal({
                     return (
                       <li
                         key={channel.id}
-                        className="rounded-md px-2 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
+                        className="rounded-md px-2 py-2 text-sm text-[var(--ms-text)] hover:bg-white/5"
                       >
                         <div className="flex flex-wrap items-center gap-2">
                           {channel.type === "voice" ? (
@@ -2793,13 +2793,13 @@ export function ServerSettingsModal({
                             />
                           ) : (
                             <Hash
-                              className="h-4 w-4 text-[#949ba4]"
+                              className="h-4 w-4 text-[var(--ms-text-muted)]"
                               strokeWidth={2}
                             />
                           )}
                           {privateChannel ? (
                             <Lock
-                              className="h-3.5 w-3.5 text-[#949ba4]"
+                              className="h-3.5 w-3.5 text-[var(--ms-text-muted)]"
                               strokeWidth={2}
                               aria-label="Private"
                             />
@@ -2811,7 +2811,7 @@ export function ServerSettingsModal({
                                 onChange={(event) =>
                                   setEditChannelName(event.target.value)
                                 }
-                                className="min-w-0 flex-1 rounded-md border border-[#3f4147] bg-[#1e1f22] px-2 py-1 text-sm outline-none focus:border-accent/60"
+                                className="min-w-0 flex-1 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-2 py-1 text-sm outline-none focus:border-accent/60"
                                 autoFocus
                               />
                               <DirtySaveButton
@@ -2852,7 +2852,7 @@ export function ServerSettingsModal({
                                   setConfirmChannelId(null);
                                   setEditingChannelId(null);
                                 }}
-                                className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10"
+                                className="rounded-md px-2 py-1 text-xs text-[var(--ms-text)] hover:bg-white/10"
                               >
                                 Permissions
                               </button>
@@ -2864,7 +2864,7 @@ export function ServerSettingsModal({
                                   onClick={() =>
                                     void syncChannelToCategory(channel)
                                   }
-                                  className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10 disabled:opacity-50"
+                                  className="rounded-md px-2 py-1 text-xs text-[var(--ms-text)] hover:bg-white/10 disabled:opacity-50"
                                 >
                                   Sync Now
                                 </button>
@@ -2877,7 +2877,7 @@ export function ServerSettingsModal({
                                   setConfirmChannelId(null);
                                   setPermsChannelId(null);
                                 }}
-                                className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10"
+                                className="rounded-md px-2 py-1 text-xs text-[var(--ms-text)] hover:bg-white/10"
                               >
                                 Rename
                               </button>
@@ -2915,7 +2915,7 @@ export function ServerSettingsModal({
                           )}
                         </div>
                         {permsOpen ? (
-                          <div className="mt-3 space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                          <div className="mt-3 space-y-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3">
                             <label className="flex cursor-pointer items-start gap-2">
                               <input
                                 type="checkbox"
@@ -2936,18 +2936,18 @@ export function ServerSettingsModal({
                                 <span className="block text-sm font-medium text-white">
                                   Private Channel
                                 </span>
-                                <span className="mt-0.5 block text-xs text-[#949ba4]">
+                                <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
                                   Only selected roles can view this channel.
                                 </span>
                               </span>
                             </label>
                             {privateChannel ? (
                               <div className="space-y-2 border-t border-[#3f4147] pt-3">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                                   Who can access
                                 </p>
                                 {grantableRoles.length === 0 ? (
-                                  <p className="text-xs text-[#949ba4]">
+                                  <p className="text-xs text-[var(--ms-text-muted)]">
                                     Create a role first, then grant it access here.
                                   </p>
                                 ) : (
@@ -2983,7 +2983,7 @@ export function ServerSettingsModal({
                                                   role.color || "#99aab5",
                                               }}
                                             />
-                                            <span className="text-sm text-[#dbdee1]">
+                                            <span className="text-sm text-[var(--ms-text)]">
                                               {role.name}
                                             </span>
                                           </label>
@@ -3008,15 +3008,15 @@ export function ServerSettingsModal({
                 <p className="text-sm text-[#b5bac1]">
                   Upload custom emojis for this server. Members can use them in
                   chat with{" "}
-                  <span className="font-mono text-[#dbdee1]">:name:</span>.
+                  <span className="font-mono text-[var(--ms-text)]">:name:</span>.
                 </p>
                 {canManageEmojis || isOwner ? (
                   <form
                     onSubmit={(event) => void uploadServerEmoji(event)}
-                    className="space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3"
+                    className="space-y-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3"
                   >
                     <div className="flex flex-wrap items-end gap-3">
-                      <label className="min-w-[10rem] flex-1 space-y-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                      <label className="min-w-[10rem] flex-1 space-y-1 text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                         Name
                         <input
                           value={emojiName}
@@ -3025,11 +3025,11 @@ export function ServerSettingsModal({
                           }
                           placeholder="wave_hello"
                           maxLength={32}
-                          className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/60"
+                          className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--ms-text)] outline-none focus:border-accent/60"
                         />
                       </label>
                       <div className="space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                           Image
                         </p>
                         <input
@@ -3052,7 +3052,7 @@ export function ServerSettingsModal({
                         <button
                           type="button"
                           onClick={() => emojiFileRef.current?.click()}
-                          className="inline-flex items-center gap-2 rounded-md bg-[#3f4147] px-3 py-2 text-sm text-[#dbdee1] hover:bg-[#4e5058]"
+                          className="inline-flex items-center gap-2 rounded-md bg-[#3f4147] px-3 py-2 text-sm text-[var(--ms-text)] hover:bg-[#4e5058]"
                         >
                           <Upload className="h-4 w-4" strokeWidth={1.75} />
                           {emojiFile ? emojiFile.name : "Choose file"}
@@ -3066,13 +3066,13 @@ export function ServerSettingsModal({
                         {emojiBusy ? "Uploading…" : "Upload"}
                       </button>
                     </div>
-                    <p className="text-[11px] text-[#949ba4]">
+                    <p className="text-[11px] text-[var(--ms-text-muted)]">
                       PNG, JPG, GIF, or WebP · max 512 KB · names use letters,
                       numbers, and underscores
                     </p>
                   </form>
                 ) : (
-                  <p className="rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm text-[#949ba4]">
+                  <p className="rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm text-[var(--ms-text-muted)]">
                     You need the Manage Emojis permission to upload or delete
                     emojis.
                   </p>
@@ -3088,10 +3088,10 @@ export function ServerSettingsModal({
                     >
                       <CustomEmoji emoji={emoji} size={28} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-[#dbdee1]">
+                        <p className="truncate text-sm font-medium text-[var(--ms-text)]">
                           :{emoji.name}:
                         </p>
-                        <p className="text-[11px] text-[#949ba4]">
+                        <p className="text-[11px] text-[var(--ms-text-muted)]">
                           {emoji.animated ? "Animated" : "Static"}
                         </p>
                       </div>
@@ -3120,10 +3120,10 @@ export function ServerSettingsModal({
                 </p>
                 <form
                   onSubmit={(event) => void uploadServerSticker(event)}
-                  className="space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3"
+                  className="space-y-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3"
                 >
                   <div className="flex flex-wrap items-end gap-3">
-                    <label className="min-w-[10rem] flex-1 space-y-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                    <label className="min-w-[10rem] flex-1 space-y-1 text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                       Name
                       <input
                         value={stickerName}
@@ -3134,11 +3134,11 @@ export function ServerSettingsModal({
                         }
                         placeholder="celebrate"
                         maxLength={32}
-                        className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/60"
+                        className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--ms-text)] outline-none focus:border-accent/60"
                       />
                     </label>
                     <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                         Image
                       </p>
                       <input
@@ -3161,7 +3161,7 @@ export function ServerSettingsModal({
                       <button
                         type="button"
                         onClick={() => stickerFileRef.current?.click()}
-                        className="inline-flex items-center gap-2 rounded-md bg-[#3f4147] px-3 py-2 text-sm text-[#dbdee1] hover:bg-[#4e5058]"
+                        className="inline-flex items-center gap-2 rounded-md bg-[#3f4147] px-3 py-2 text-sm text-[var(--ms-text)] hover:bg-[#4e5058]"
                       >
                         <Upload className="h-4 w-4" strokeWidth={1.75} />
                         {stickerFile ? stickerFile.name : "Choose file"}
@@ -3175,7 +3175,7 @@ export function ServerSettingsModal({
                       {stickerBusy ? "Uploading…" : "Upload"}
                     </button>
                   </div>
-                  <p className="text-[11px] text-[#949ba4]">
+                  <p className="text-[11px] text-[var(--ms-text-muted)]">
                     PNG, JPG, GIF, or WebP · max 512 KB
                   </p>
                 </form>
@@ -3195,7 +3195,7 @@ export function ServerSettingsModal({
                         className="h-14 w-14 rounded-md object-contain"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-[#dbdee1]">
+                        <p className="truncate text-sm font-medium text-[var(--ms-text)]">
                           {sticker.name}
                         </p>
                       </div>
@@ -3222,10 +3222,10 @@ export function ServerSettingsModal({
                 </p>
                 <form
                   onSubmit={(event) => void createAutomodRule(event)}
-                  className="space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3"
+                  className="space-y-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3"
                 >
                   <div className="flex flex-wrap items-end gap-3">
-                    <label className="min-w-[8rem] flex-1 space-y-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                    <label className="min-w-[8rem] flex-1 space-y-1 text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                       Rule name
                       <input
                         value={automodRuleName}
@@ -3234,10 +3234,10 @@ export function ServerSettingsModal({
                         }
                         placeholder="No spam links"
                         maxLength={64}
-                        className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/60"
+                        className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--ms-text)] outline-none focus:border-accent/60"
                       />
                     </label>
-                    <label className="min-w-[12rem] flex-[2] space-y-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                    <label className="min-w-[12rem] flex-[2] space-y-1 text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                       Keywords (comma-separated)
                       <input
                         value={automodKeywords}
@@ -3245,7 +3245,7 @@ export function ServerSettingsModal({
                           setAutomodKeywords(event.target.value)
                         }
                         placeholder="spam-link.example, click here"
-                        className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/60"
+                        className="mt-1 w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[var(--ms-text)] outline-none focus:border-accent/60"
                       />
                     </label>
                     <button
@@ -3256,24 +3256,24 @@ export function ServerSettingsModal({
                       Add rule
                     </button>
                   </div>
-                  <p className="text-[11px] text-[#949ba4]">
+                  <p className="text-[11px] text-[var(--ms-text-muted)]">
                     Action: block message · new rules start enabled
                   </p>
                 </form>
                 <ul className="space-y-2">
                   {automodRules.length === 0 && (
-                    <li className="text-sm text-[#949ba4]">No AutoMod rules yet.</li>
+                    <li className="text-sm text-[var(--ms-text-muted)]">No AutoMod rules yet.</li>
                   )}
                   {automodRules.map((rule) => (
                     <li
                       key={rule.id}
-                      className="rounded-md bg-[#2b2d31] px-3 py-3"
+                      className="rounded-md bg-[var(--ms-sidebar)] px-3 py-3"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#dbdee1]">
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--ms-text)]">
                           {rule.name}
                         </span>
-                        <label className="flex items-center gap-2 text-xs text-[#949ba4]">
+                        <label className="flex items-center gap-2 text-xs text-[var(--ms-text-muted)]">
                           <input
                             type="checkbox"
                             checked={rule.enabled}
@@ -3298,7 +3298,7 @@ export function ServerSettingsModal({
                           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
                         </button>
                       </div>
-                      <p className="mt-2 text-xs text-[#949ba4]">
+                      <p className="mt-2 text-xs text-[var(--ms-text-muted)]">
                         {rule.keywords.join(", ") || "No keywords"}
                       </p>
                     </li>
@@ -3321,9 +3321,9 @@ export function ServerSettingsModal({
                   </button>{" "}
                   tab.
                 </p>
-                <div className="space-y-4 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                <div className="space-y-4 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3">
                   <label className="block space-y-1.5">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                       Verification level
                     </span>
                     <select
@@ -3331,7 +3331,7 @@ export function ServerSettingsModal({
                       onChange={(event) =>
                         setVerificationLevel(Number(event.target.value))
                       }
-                      className="w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2.5 text-sm text-[#dbdee1] outline-none focus:border-accent/60"
+                      className="w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2.5 text-sm text-[var(--ms-text)] outline-none focus:border-accent/60"
                     >
                       <option value={0}>None</option>
                       <option value={1}>Low — verified account age</option>
@@ -3362,14 +3362,14 @@ export function ServerSettingsModal({
                       <span className="block text-sm font-medium text-white">
                         Pause invites
                       </span>
-                      <span className="mt-0.5 block text-xs text-[#949ba4]">
+                      <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
                         Temporarily stop new members from joining with invite
                         links.
                       </span>
                     </span>
                   </label>
                 </div>
-                <p className="text-xs text-[#949ba4]">
+                <p className="text-xs text-[var(--ms-text-muted)]">
                   Overview also includes verification when you save server
                   details there — both use the same setting.
                 </p>
@@ -3453,7 +3453,7 @@ function RoleRow({
     );
 
   return (
-    <div className="space-y-3 rounded-md bg-[#2b2d31] px-3 py-3">
+    <div className="space-y-3 rounded-md bg-[var(--ms-sidebar)] px-3 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-col gap-0.5">
           <button
@@ -3484,12 +3484,12 @@ function RoleRow({
           className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none focus:border-accent/60 disabled:opacity-50"
         />
         {role.is_default ? (
-          <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+          <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
             Default
           </span>
         ) : null}
         {!canEdit ? (
-          <span className="rounded-md px-2 py-1 text-[10px] font-medium text-[#949ba4]">
+          <span className="rounded-md px-2 py-1 text-[10px] font-medium text-[var(--ms-text-muted)]">
             Above your role
           </span>
         ) : role.is_default ? null : confirm ? (
@@ -3530,12 +3530,12 @@ function RoleRow({
       </div>
 
       <div className="space-y-2 border-t border-black/25 pt-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
           Display
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-xs text-[#dbdee1]">
-            <span className="text-[#949ba4]">Role color</span>
+          <label className="flex items-center gap-2 text-xs text-[var(--ms-text)]">
+            <span className="text-[var(--ms-text-muted)]">Role color</span>
             <input
               type="color"
               value={color}
@@ -3548,7 +3548,7 @@ function RoleRow({
         </div>
         {!role.is_default ? (
           <label
-            className={`flex items-start gap-2 text-xs text-[#dbdee1] ${
+            className={`flex items-start gap-2 text-xs text-[var(--ms-text)] ${
               canEdit ? "" : "opacity-50"
             }`}
           >
@@ -3567,14 +3567,14 @@ function RoleRow({
       </div>
 
       <div className="space-y-2 border-t border-black/25 pt-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
           Permissions
         </p>
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
           {ROLE_PERM_OPTIONS.map((option) => (
             <label
               key={option.key}
-              className={`flex items-center gap-1.5 text-[11px] text-[#dbdee1] ${
+              className={`flex items-center gap-1.5 text-[11px] text-[var(--ms-text)] ${
                 canEdit ? "" : "opacity-50"
               }`}
             >
@@ -3622,13 +3622,13 @@ function CategoryRow({
   const dirty = name.trim() !== category.name && name.trim().length > 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md bg-[#2b2d31] px-2 py-2">
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-[var(--ms-sidebar)] px-2 py-2">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
         Category
       </span>
       {privateCategory ? (
         <Lock
-          className="h-3.5 w-3.5 text-[#949ba4]"
+          className="h-3.5 w-3.5 text-[var(--ms-text-muted)]"
           strokeWidth={2}
           aria-label="Private"
         />
@@ -3649,7 +3649,7 @@ function CategoryRow({
         <button
           type="button"
           onClick={onTogglePerms}
-          className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10"
+          className="rounded-md px-2 py-1 text-xs text-[var(--ms-text)] hover:bg-white/10"
         >
           Permissions
         </button>

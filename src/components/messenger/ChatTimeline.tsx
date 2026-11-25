@@ -100,7 +100,7 @@ function ChannelStartHeader({
       <p className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
         {emptyTitle}
       </p>
-      <p className="mt-2 max-w-lg text-sm leading-relaxed text-[#949ba4]">
+      <p className="mt-2 max-w-lg text-sm leading-relaxed text-[var(--ms-text-muted)]">
         {emptyBody}
       </p>
     </div>
@@ -349,12 +349,12 @@ export function ChatTimeline({
             {(hasMore || loadingOlder) && (
               <div className="flex justify-center px-4 py-2">
                 {loadingOlder ? (
-                  <p className="text-xs text-[#949ba4]">Loading older messages…</p>
+                  <p className="text-xs text-[var(--ms-text-muted)]">Loading older messages…</p>
                 ) : (
                   <button
                     type="button"
                     onClick={() => maybeLoadOlder()}
-                    className="text-xs font-medium text-[#949ba4] hover:text-white"
+                    className="text-xs font-medium text-[var(--ms-text-muted)] hover:text-white"
                   >
                     Load older messages
                   </button>
@@ -374,7 +374,7 @@ export function ChatTimeline({
             {!showStartHeader && messages.length === 0 && (
               <div className="flex h-full min-h-[12rem] flex-col items-start justify-center px-4">
                 <p className="text-lg font-semibold text-white">{emptyTitle}</p>
-                <p className="mt-1 max-w-lg text-sm text-[#949ba4]">{emptyBody}</p>
+                <p className="mt-1 max-w-lg text-sm text-[var(--ms-text-muted)]">{emptyBody}</p>
               </div>
             )}
 
@@ -409,7 +409,7 @@ export function ChatTimeline({
                       aria-label={dayLabel}
                     >
                       <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#3f4147] to-[#3f4147]" />
-                      <span className="rounded-full bg-[#2b2d31] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[#949ba4] ring-1 ring-white/[0.04]">
+                      <span className="rounded-full bg-[var(--ms-sidebar)] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--ms-text-muted)] ring-1 ring-white/[0.04]">
                         {dayLabel}
                       </span>
                       <div className="h-px flex-1 bg-gradient-to-l from-transparent via-[#3f4147] to-[#3f4147]" />
@@ -486,7 +486,7 @@ export function ChatTimeline({
         <button
           type="button"
           onClick={() => jumpToLatest(true)}
-          className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[#3f4147] bg-[#1e1f22]/95 px-3 py-1.5 text-xs font-semibold text-[#dbdee1] shadow-lg shadow-black/40 backdrop-blur-sm transition hover:border-accent/50 hover:text-white"
+          className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[#3f4147] bg-[var(--ms-border)]/95 px-3 py-1.5 text-xs font-semibold text-[var(--ms-text)] shadow-lg shadow-black/40 backdrop-blur-sm transition hover:border-accent/50 hover:text-white"
         >
           <span>Jump to present</span>
           <ArrowDown className="h-3.5 w-3.5 text-accent" strokeWidth={2.25} />

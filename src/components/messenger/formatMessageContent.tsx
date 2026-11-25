@@ -49,7 +49,7 @@ export function formatMessageContent(
     return [
       <blockquote
         key={nextKey()}
-        className="my-0.5 border-l-4 border-[#4e5058] pl-3 text-[#dbdee1]"
+        className="my-0.5 border-l-4 border-[#4e5058] pl-3 text-[var(--ms-text)]"
       >
         {parseInline(multiQuote[1], opts, namedPatterns, emojiSize, nextKey)}
       </blockquote>,
@@ -84,7 +84,7 @@ export function formatMessageContent(
     const subtext = line.match(/^-# (.+)$/);
     if (subtext) {
       parts.push(
-        <div key={nextKey()} className="text-xs text-[#949ba4]">
+        <div key={nextKey()} className="text-xs text-[var(--ms-text-muted)]">
           {parseInline(subtext[1], opts, namedPatterns, emojiSize, nextKey)}
         </div>,
       );
@@ -97,7 +97,7 @@ export function formatMessageContent(
       parts.push(
         <blockquote
           key={nextKey()}
-          className="my-0.5 border-l-4 border-[#4e5058] pl-3 text-[#dbdee1]"
+          className="my-0.5 border-l-4 border-[#4e5058] pl-3 text-[var(--ms-text)]"
         >
           {parseInline(quote[1], opts, namedPatterns, emojiSize, nextKey)}
         </blockquote>,
@@ -236,7 +236,7 @@ function parseInline(
         parts.push(
           <pre
             key={nextKey()}
-            className="my-1 overflow-x-auto rounded-md bg-[#1e1f22] p-2 font-mono text-[0.85em] text-[#f2f3f5]"
+            className="my-1 overflow-x-auto rounded-md bg-[var(--ms-border)] p-2 font-mono text-[0.85em] text-[#f2f3f5]"
           >
             <code>{body}</code>
           </pre>,
@@ -431,7 +431,7 @@ function parseInline(
     const strike = matchWrapped(slice, "~~");
     if (strike) {
       parts.push(
-        <span key={nextKey()} className="line-through text-[#949ba4]">
+        <span key={nextKey()} className="line-through text-[var(--ms-text-muted)]">
           {parseInline(strike.inner, opts, namedPatterns, emojiSize, nextKey)}
         </span>,
       );
@@ -600,7 +600,7 @@ function linkNode(key: number, label: string, href: string) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="break-all text-[#00a8fc] hover:underline"
+      className="break-all text-[var(--ms-link)] hover:underline"
     >
       {label}
     </a>

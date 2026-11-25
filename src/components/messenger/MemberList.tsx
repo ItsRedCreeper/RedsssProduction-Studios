@@ -216,7 +216,7 @@ export function MemberList({
   function renderGroup(group: MemberGroup) {
     return (
       <section key={group.key} className="mb-3">
-        <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+        <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
           {group.title} — {group.count}
         </p>
         <ul>
@@ -250,13 +250,13 @@ export function MemberList({
   }
 
   return (
-    <aside className={`flex w-60 shrink-0 flex-col bg-[#2b2d31] ${className}`}>
-      <div className="messenger-header flex h-12 shrink-0 items-center bg-[#2b2d31] px-4 text-sm font-semibold text-white">
+    <aside className={`flex w-60 shrink-0 flex-col bg-[var(--ms-sidebar)] ${className}`}>
+      <div className="messenger-header flex h-12 shrink-0 items-center bg-[var(--ms-sidebar)] px-4 text-sm font-semibold text-white">
         Members
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {members.length === 0 ? (
-          <p className="px-2 text-xs text-[#6d6f78]">No members yet.</p>
+          <p className="px-2 text-xs text-[var(--ms-text-faint)]">No members yet.</p>
         ) : (
           groups.map(renderGroup)
         )}

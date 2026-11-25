@@ -38,7 +38,7 @@ function VideoTile({
 
   return (
     <div
-      className={`relative min-h-[9rem] overflow-hidden rounded-2xl bg-[#1e1f22] ${
+      className={`relative min-h-[9rem] overflow-hidden rounded-2xl bg-[var(--ms-border)] ${
         watching
           ? "ring-2 ring-accent/70"
           : speaking
@@ -55,7 +55,7 @@ function VideoTile({
           className={`h-full w-full object-cover ${muted ? "-scale-x-100" : ""}`}
         />
       ) : (
-        <div className="flex h-full min-h-[9rem] flex-col items-center justify-center gap-2 px-3 text-sm text-[#949ba4]">
+        <div className="flex h-full min-h-[9rem] flex-col items-center justify-center gap-2 px-3 text-sm text-[var(--ms-text-muted)]">
           {cameraOff ? (
             <UserAvatar username={label} size="lg" className="!h-16 !w-16" />
           ) : null}
@@ -155,13 +155,13 @@ export function CallOverlay() {
 
   if (!call.stageExpanded) {
     return (
-      <div className="absolute left-[4.25rem] right-2 top-2 z-40 w-auto max-w-[18rem] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a1b1e]/95 shadow-xl shadow-black/50 ring-1 ring-accent/15 backdrop-blur-sm sm:bottom-3 sm:left-3 sm:right-auto sm:top-auto sm:w-[min(100%-1.5rem,18rem)] sm:max-w-none">
+      <div className="absolute left-[4.25rem] right-2 top-2 z-40 w-auto max-w-[18rem] overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-rail)]/95 shadow-xl shadow-black/50 ring-1 ring-accent/15 backdrop-blur-sm sm:bottom-3 sm:left-3 sm:right-auto sm:top-auto sm:w-[min(100%-1.5rem,18rem)] sm:max-w-none">
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold text-[#23a559]">
+            <p className="text-[11px] font-semibold text-[var(--ms-connected)]">
               {statusLabel}
             </p>
-            <p className="truncate text-xs text-[#dbdee1]">
+            <p className="truncate text-xs text-[var(--ms-text)]">
               {call.connection.label}
               {call.screenSharing ? " · Live" : ""}
             </p>
@@ -180,7 +180,7 @@ export function CallOverlay() {
             <button
               type="button"
               onClick={() => void call.leaveCall()}
-              className="rounded-md p-1.5 text-[#ed4245] hover:bg-[#ed4245]/15"
+              className="rounded-md p-1.5 text-[var(--ms-danger)] hover:bg-[#ed4245]/15"
               aria-label="Disconnect"
             >
               <PhoneOff className="h-4 w-4" strokeWidth={1.75} />
@@ -218,14 +218,14 @@ export function CallOverlay() {
 
   const stage = (
     <div className="fixed inset-x-0 bottom-0 top-14 z-[45] flex flex-col bg-[#111214] isolate">
-      <div className="messenger-header flex h-12 shrink-0 items-center justify-between gap-3 bg-[#1a1b1e] px-4">
+      <div className="messenger-header flex h-12 shrink-0 items-center justify-between gap-3 bg-[var(--ms-rail)] px-4">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#23a559]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-connected)]">
             {statusLabel}
           </p>
           <p className="truncate text-sm font-semibold text-white">
             {call.connection.label}
-            <span className="ml-2 text-xs font-normal text-[#949ba4]">
+            <span className="ml-2 text-xs font-normal text-[var(--ms-text-muted)]">
               {ringing ? "Waiting for an answer" : `${inCallCount} in call`}
             </span>
           </p>
@@ -339,7 +339,7 @@ export function CallOverlay() {
         </div>
       )}
 
-      <div className="flex shrink-0 flex-wrap items-center justify-center gap-1 border-t border-black/40 bg-[#232428] px-3 py-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-center gap-1 border-t border-black/40 bg-[var(--ms-elevated)] px-3 py-3">
         <VoiceChannelControls
           muted={call.muted}
           deafened={call.deafened}

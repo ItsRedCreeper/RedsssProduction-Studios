@@ -158,7 +158,7 @@ export function InviteLanding({ code }: InviteLandingProps) {
 
   return (
     <div className="flex flex-1 items-center justify-center bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.14),_transparent_50%),#1a1b1e] px-4 py-10">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-[#2b2d31] shadow-2xl shadow-black/40 ring-1 ring-accent/20">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-sidebar)] shadow-2xl shadow-black/40 ring-1 ring-accent/20">
         {loading || profileLoading ? (
           <p className="p-6 text-sm text-muted">Looking up invite…</p>
         ) : missing || !server || !invite ? (
@@ -188,7 +188,7 @@ export function InviteLanding({ code }: InviteLandingProps) {
               <div className="absolute inset-0 bg-gradient-to-t from-[#2b2d31] via-[#2b2d31]/40 to-transparent" />
             </div>
             <div className="relative px-6 pb-6 pt-0">
-              <div className="-mt-10 mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border-4 border-[#2b2d31] bg-[#313338] text-lg font-bold text-white shadow-lg shadow-black/40 ring-2 ring-accent/30">
+              <div className="-mt-10 mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border-4 border-[#2b2d31] bg-[var(--ms-chat)] text-lg font-bold text-white shadow-lg shadow-black/40 ring-2 ring-accent/30">
                 {server.icon_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={server.icon_url} alt="" className="h-full w-full object-cover" />
@@ -198,16 +198,16 @@ export function InviteLanding({ code }: InviteLandingProps) {
                   </span>
                 )}
               </div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                 You&apos;ve been invited to join
               </p>
               <h1 className="mt-1 truncate text-2xl font-bold text-white">{server.name}</h1>
               <p className="mt-2 text-sm leading-relaxed text-[#b5bac1]">
                 {server.description || "No description yet."}
               </p>
-              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-[#dbdee1]">
+              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-[var(--ms-text)]">
                 <span className="inline-flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#23a559]" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[var(--ms-connected)]" />
                   {onlineCount} Online
                 </span>
                 <span className="inline-flex items-center gap-2">
@@ -217,12 +217,12 @@ export function InviteLanding({ code }: InviteLandingProps) {
               </div>
 
               {expired && (
-                <p className="mt-4 rounded-md border border-[#ed4245]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[#ed4245]">
+                <p className="mt-4 rounded-md border border-[var(--ms-danger)]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[var(--ms-danger)]">
                   This invite has expired or reached its use limit.
                 </p>
               )}
               {error && (
-                <p className="mt-4 rounded-md border border-[#ed4245]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[#ed4245]">
+                <p className="mt-4 rounded-md border border-[var(--ms-danger)]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[var(--ms-danger)]">
                   {error}
                 </p>
               )}

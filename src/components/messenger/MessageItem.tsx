@@ -294,7 +294,7 @@ export function MessageItem({
   const statusBits = (
     <>
       {message.edited_at && (
-        <span className="text-[11px] text-[#949ba4]">(edited)</span>
+        <span className="text-[11px] text-[var(--ms-text-muted)]">(edited)</span>
       )}
       {message.pinned && (
         <span className="inline-flex items-center gap-1 text-[11px] text-accent">
@@ -303,7 +303,7 @@ export function MessageItem({
         </span>
       )}
       {message.optimistic && !message.failed && (
-        <span className="text-[11px] text-[#949ba4]">Sending…</span>
+        <span className="text-[11px] text-[var(--ms-text-muted)]">Sending…</span>
       )}
       {message.failed && (
         <span className="text-[11px] text-accent">Failed to send</span>
@@ -329,7 +329,7 @@ export function MessageItem({
           <time
             dateTime={message.created_at}
             title={formatTimestamp(message.created_at)}
-            className="pointer-events-none absolute right-0 top-0 select-none whitespace-nowrap text-[10px] leading-[1.375rem] text-[#949ba4] opacity-0 transition-opacity group-hover:opacity-100"
+            className="pointer-events-none absolute right-0 top-0 select-none whitespace-nowrap text-[10px] leading-[1.375rem] text-[var(--ms-text-muted)] opacity-0 transition-opacity group-hover:opacity-100"
           >
             {formatMessageTime(message.created_at)}
           </time>
@@ -358,7 +358,7 @@ export function MessageItem({
                 className="mb-1 ml-2 mr-0.5 h-2.5 w-7 shrink-0 rounded-tl-md border-l-2 border-t-2 border-[#4e5058]"
                 aria-hidden
               />
-              <span className="min-w-0 truncate text-xs italic text-[#949ba4]">
+              <span className="min-w-0 truncate text-xs italic text-[var(--ms-text-muted)]">
                 {replyBlocked
                   ? "Original message was sent by a blocked user."
                   : "Original message was sent by an ignored user."}
@@ -382,13 +382,13 @@ export function MessageItem({
               />
               <span
                 className={`shrink-0 text-xs font-medium hover:underline ${
-                  replyRoleColor ? "" : "text-[#dbdee1]"
+                  replyRoleColor ? "" : "text-[var(--ms-text)]"
                 }`}
                 style={replyRoleColor ? { color: replyRoleColor } : undefined}
               >
                 {replyAuthor}
               </span>
-              <span className="min-w-0 truncate text-xs text-[#949ba4]">
+              <span className="min-w-0 truncate text-xs text-[var(--ms-text-muted)]">
                 {reply.content
                   ? displayMentionText(reply.content, mentionMaps)
                   : "Attachment"}
@@ -408,7 +408,7 @@ export function MessageItem({
             >
               {author}
             </button>
-            <time className="text-[11px] text-[#949ba4]">
+            <time className="text-[11px] text-[var(--ms-text-muted)]">
               {formatTimestamp(message.created_at)}
             </time>
             {statusBits}
@@ -440,7 +440,7 @@ export function MessageItem({
                 setEditDraft(value);
               }}
               rows={2}
-              className="w-full resize-y rounded-md border border-[#1e1f22] bg-[#1e1f22] px-3 py-2 text-sm text-foreground outline-none [overflow-wrap:anywhere] whitespace-pre-wrap focus:border-accent/60 focus:ring-1 focus:ring-accent/40"
+              className="w-full resize-y rounded-md border border-[var(--ms-border)] bg-[var(--ms-border)] px-3 py-2 text-sm text-foreground outline-none [overflow-wrap:anywhere] whitespace-pre-wrap focus:border-accent/60 focus:ring-1 focus:ring-accent/40"
               autoFocus
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -472,12 +472,12 @@ export function MessageItem({
                   setEditing(false);
                   setEditDraft(message.content);
                 }}
-                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-[#949ba4] hover:bg-surface-hover hover:text-foreground"
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-[var(--ms-text-muted)] hover:bg-surface-hover hover:text-foreground"
               >
                 <X className="h-3.5 w-3.5" strokeWidth={2} />
                 Cancel
               </button>
-              <span className="text-[10px] text-[#949ba4]">
+              <span className="text-[10px] text-[var(--ms-text-muted)]">
                 escape to cancel · enter to save
               </span>
             </div>
@@ -487,7 +487,7 @@ export function MessageItem({
             {message.forwarded_from &&
             typeof message.forwarded_from === "object" &&
             !Array.isArray(message.forwarded_from) ? (
-              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#949ba4]">
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--ms-text-muted)]">
                 Forwarded
                 {(message.forwarded_from as { from?: string }).from
                   ? ` from ${(message.forwarded_from as { from?: string }).from}`
@@ -495,7 +495,7 @@ export function MessageItem({
               </p>
             ) : null}
             {message.content && message.message_kind !== "poll" && (
-              <div className="break-words text-[0.95rem] leading-relaxed text-[#dbdee1] [overflow-wrap:anywhere] whitespace-pre-wrap">
+              <div className="break-words text-[0.95rem] leading-relaxed text-[var(--ms-text)] [overflow-wrap:anywhere] whitespace-pre-wrap">
                 {formatMessageContent(message.content, {
                   currentUserId,
                   currentUsername,
@@ -533,7 +533,7 @@ export function MessageItem({
               const pillClass = `inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition ${
                 reaction.reacted
                   ? "border-accent/60 bg-accent/15 text-white shadow-[0_0_0_1px_rgba(220,38,38,0.12)]"
-                  : "border-transparent bg-[#2b2d31] text-[#dbdee1] hover:border-[#4e5058]"
+                  : "border-transparent bg-[var(--ms-sidebar)] text-[var(--ms-text)] hover:border-[#4e5058]"
               }`;
               const body = (
                 <>
@@ -574,7 +574,7 @@ export function MessageItem({
                   setFullPickerOpen(true);
                   setMenuOpen(false);
                 }}
-                className="inline-flex items-center rounded-full border border-transparent bg-[#2b2d31] px-1.5 py-0.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 hover:border-[#4e5058] hover:text-white"
+                className="inline-flex items-center rounded-full border border-transparent bg-[var(--ms-sidebar)] px-1.5 py-0.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 hover:border-[#4e5058] hover:text-white"
                 aria-label="Add reaction"
               >
                 <SmilePlus className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -600,7 +600,7 @@ export function MessageItem({
                   key={emoji}
                   type="button"
                   onClick={() => react(emoji)}
-                  className="px-1.5 py-1 text-sm transition-colors hover:bg-[#2b2d31]"
+                  className="px-1.5 py-1 text-sm transition-colors hover:bg-[var(--ms-sidebar)]"
                   aria-label={`React with ${emoji}`}
                 >
                   {emoji}
@@ -615,7 +615,7 @@ export function MessageItem({
                       setFullPickerOpen((open) => !open);
                       setMenuOpen(false);
                     }}
-                    className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+                    className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[var(--ms-sidebar)] hover:text-foreground"
                     aria-label="More reactions"
                   >
                     <Plus className="h-4 w-4" strokeWidth={2} />
@@ -642,7 +642,7 @@ export function MessageItem({
             <button
               type="button"
               onClick={() => onReply(message)}
-              className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+              className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[var(--ms-sidebar)] hover:text-foreground"
               aria-label="Reply"
             >
               <Reply className="h-4 w-4" strokeWidth={1.75} />
@@ -656,7 +656,7 @@ export function MessageItem({
               <button
                 type="button"
                 onClick={onTogglePin}
-                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[var(--ms-sidebar)] hover:text-foreground"
                 aria-label={message.pinned ? "Unpin message" : "Pin message"}
               >
                 {message.pinned ? (
@@ -677,7 +677,7 @@ export function MessageItem({
                   setMenuOpen(false);
                   setFullPickerOpen(false);
                 }}
-                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[var(--ms-sidebar)] hover:text-foreground"
                 aria-label="Edit"
               >
                 <Pencil className="h-4 w-4" strokeWidth={1.75} />
@@ -693,7 +693,7 @@ export function MessageItem({
                   setMenuOpen((open) => !open);
                   setFullPickerOpen(false);
                 }}
-                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[#2b2d31] hover:text-foreground"
+                className="p-1.5 text-[#b5bac1] transition-colors hover:bg-[var(--ms-sidebar)] hover:text-foreground"
                 aria-label="More"
                 aria-expanded={menuOpen}
               >
@@ -705,12 +705,12 @@ export function MessageItem({
               anchorRef={moreBtnRef}
               menuRef={moreMenuRef}
               estimatedHeight={260}
-              className="min-w-[11rem] overflow-hidden rounded-md border border-[#1e1f22] bg-[#111214] py-1.5 shadow-xl shadow-black/50"
+              className="min-w-[11rem] overflow-hidden rounded-md border border-[var(--ms-border)] bg-[#111214] py-1.5 shadow-xl shadow-black/50"
             >
               <button
                 type="button"
                 onClick={() => void copyText()}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
               >
                 {copied ? (
                   <Check className="h-4 w-4" strokeWidth={2} />
@@ -725,7 +725,7 @@ export function MessageItem({
                   onReply(message);
                   setMenuOpen(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
               >
                 <Reply className="h-4 w-4" strokeWidth={1.75} />
                 Reply
@@ -737,7 +737,7 @@ export function MessageItem({
                     onTogglePin();
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
                 >
                   {message.pinned ? (
                     <PinOff className="h-4 w-4" strokeWidth={1.75} />
@@ -754,7 +754,7 @@ export function MessageItem({
                     onForward(message);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
                 >
                   <Forward className="h-4 w-4" strokeWidth={1.75} />
                   Forward
@@ -767,7 +767,7 @@ export function MessageItem({
                     onCreateThread(message);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
                 >
                   <MessagesSquare className="h-4 w-4" strokeWidth={1.75} />
                   Create Thread
@@ -780,7 +780,7 @@ export function MessageItem({
                     onMarkUnread(message);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
                 >
                   Mark Unread
                 </button>
@@ -792,7 +792,7 @@ export function MessageItem({
                     onCopyLink(message);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
                 >
                   <Link2 className="h-4 w-4" strokeWidth={1.75} />
                   Copy Message Link
@@ -806,7 +806,7 @@ export function MessageItem({
                     setEditing(true);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
                 >
                   <Pencil className="h-4 w-4" strokeWidth={1.75} />
                   Edit Message
@@ -814,14 +814,14 @@ export function MessageItem({
               )}
               {(isOwn || canDeleteOthers) && (
                 <>
-                  <div className="my-1 border-t border-[#1e1f22]" />
+                  <div className="my-1 border-t border-[var(--ms-border)]" />
                   <button
                     type="button"
                     onClick={() => {
                       setMenuOpen(false);
                       setDeleteOpen(true);
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#ed4245] hover:bg-[#ed4245] hover:text-white"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-danger)] hover:bg-[#ed4245] hover:text-white"
                   >
                     <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                     Delete Message

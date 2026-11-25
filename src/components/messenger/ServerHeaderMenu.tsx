@@ -70,7 +70,7 @@ export function ServerHeaderMenu({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="messenger-header relative shrink-0 bg-[#2b2d31]">
+    <div ref={rootRef} className="messenger-header relative shrink-0 bg-[var(--ms-sidebar)]">
       <div className="flex h-12 items-center gap-1 px-2">
         <HoverTip
           label={serverName}
@@ -123,7 +123,7 @@ export function ServerHeaderMenu({
                 setOpen(false);
                 onCreateChannel();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
             >
               <Hash className="h-4 w-4" strokeWidth={1.75} />
               Create Channel
@@ -137,7 +137,7 @@ export function ServerHeaderMenu({
                 setOpen(false);
                 onCreateCategory();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
             >
               <FolderPlus className="h-4 w-4" strokeWidth={1.75} />
               Create Category
@@ -151,7 +151,7 @@ export function ServerHeaderMenu({
                 setOpen(false);
                 onSettings();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
             >
               <Settings className="h-4 w-4" strokeWidth={1.75} />
               Server Settings
@@ -163,13 +163,13 @@ export function ServerHeaderMenu({
                 type="button"
                 role="menuitem"
                 onClick={() => setViewAsOpen((value) => !value)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
               >
                 <Eye className="h-4 w-4" strokeWidth={1.75} />
                 View Server As Role
               </button>
               {viewAsOpen ? (
-                <ul className="mx-2 mb-1 max-h-40 overflow-y-auto rounded-md border border-[#2b2d31] bg-[#1e1f22] py-1">
+                <ul className="mx-2 mb-1 max-h-40 overflow-y-auto rounded-md border border-[#2b2d31] bg-[var(--ms-border)] py-1">
                   {roles.map((role) => (
                     <li key={role.id}>
                       <button
@@ -179,7 +179,7 @@ export function ServerHeaderMenu({
                           setViewAsOpen(false);
                           onViewAsRole(role.id);
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[#dbdee1] hover:bg-white/10"
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[var(--ms-text)] hover:bg-white/10"
                       >
                         <span
                           className="h-2 w-2 shrink-0 rounded-full"
@@ -203,7 +203,7 @@ export function ServerHeaderMenu({
                   setOpen(false);
                   onLeave();
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#ed4245] hover:bg-[#ed4245] hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-danger)] hover:bg-[#ed4245] hover:text-white"
               >
                 <LogOut className="h-4 w-4" strokeWidth={1.75} />
                 Leave Server

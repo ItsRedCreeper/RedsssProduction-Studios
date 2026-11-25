@@ -163,7 +163,7 @@ function EmojiHoverShell({
                 ? { top: pos.top, left: pos.left }
                 : { top: -9999, left: -9999, visibility: "hidden" }
             }
-            className="pointer-events-none fixed z-[90] w-max max-w-[min(18rem,calc(100vw-1rem))] rounded-lg border border-[#1e1f22] bg-[#111214] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.55)]"
+            className="pointer-events-none fixed z-[90] w-max max-w-[min(18rem,calc(100vw-1rem))] rounded-lg border border-[var(--ms-border)] bg-[#111214] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.55)]"
           >
             {content}
           </div>,
@@ -343,7 +343,7 @@ export function MessageEmoji({
         <p className="text-xs text-[#b5bac1]">This emoji is from {serverName}</p>
       )}
       {isCustom && (
-        <p className="text-[11px] font-medium text-[#949ba4]">
+        <p className="text-[11px] font-medium text-[var(--ms-text-muted)]">
           Click to learn more
         </p>
       )}
@@ -362,10 +362,10 @@ export function MessageEmoji({
                 ? { top: pos.top, left: pos.left }
                 : { top: -9999, left: -9999, visibility: "hidden" }
             }
-            className="fixed z-[95] w-[16.5rem] rounded-xl border border-[#1e1f22] bg-[#111214] p-4 shadow-[0_12px_40px_rgba(0,0,0,0.65)]"
+            className="fixed z-[95] w-[16.5rem] rounded-xl border border-[var(--ms-border)] bg-[#111214] p-4 shadow-[0_12px_40px_rgba(0,0,0,0.65)]"
           >
             <div className="flex flex-col items-center gap-3 text-center">
-              <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-[#1e1f22]">
+              <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-[var(--ms-border)]">
                 <CustomEmoji emoji={resolved} catalog={catalog} size={72} />
               </div>
               <div>
@@ -373,16 +373,16 @@ export function MessageEmoji({
                 {serverName ? (
                   <p className="mt-1 text-sm text-[#b5bac1]">
                     This emoji is from{" "}
-                    <span className="font-medium text-[#dbdee1]">{serverName}</span>
+                    <span className="font-medium text-[var(--ms-text)]">{serverName}</span>
                   </p>
                 ) : (
                   <p className="mt-1 text-sm text-[#b5bac1]">
                     Custom emoji from one of your servers.
                   </p>
                 )}
-                <p className="mt-2 text-xs leading-relaxed text-[#949ba4]">
+                <p className="mt-2 text-xs leading-relaxed text-[var(--ms-text-muted)]">
                   Type{" "}
-                  <span className="rounded bg-black/40 px-1 py-0.5 font-mono text-[#dbdee1]">
+                  <span className="rounded bg-black/40 px-1 py-0.5 font-mono text-[var(--ms-text)]">
                     {shortName}
                   </span>{" "}
                   in chat to use it. If another server has the same name, this

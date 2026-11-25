@@ -27,7 +27,7 @@ export function SpoilerText({ children }: { children: ReactNode }) {
       tabIndex={0}
       onClick={reveal}
       onKeyDown={onKeyDown}
-      className="cursor-pointer rounded bg-[#1e1f22] px-0.5 text-transparent transition hover:bg-[#2b2d31]"
+      className="cursor-pointer rounded bg-[var(--ms-border)] px-0.5 text-transparent transition hover:bg-[var(--ms-sidebar)]"
       aria-label="Reveal spoiler"
       title="Reveal spoiler"
     >

@@ -69,7 +69,7 @@ export function ChannelHeader({
   onExpandCall,
 }: ChannelHeaderProps) {
   return (
-    <header className="messenger-header flex h-12 shrink-0 items-center gap-2 bg-[#313338]/80 px-2 backdrop-blur-sm sm:px-4">
+    <header className="messenger-header flex h-12 shrink-0 items-center gap-2 bg-[var(--ms-chat)]/80 px-2 backdrop-blur-sm sm:px-4">
       {onOpenList ? (
         <button
           type="button"
@@ -80,7 +80,7 @@ export function ChannelHeader({
           <Menu className="h-5 w-5" strokeWidth={1.75} />
         </button>
       ) : null}
-      <span className="shrink-0 text-[#949ba4]">{icon}</span>
+      <span className="shrink-0 text-[var(--ms-text-muted)]">{icon}</span>
       <HoverTip label={title} onlyIfTruncated delayMs={40} className="min-w-0 shrink">
         <h1 className="truncate text-base font-semibold tracking-tight text-white">
           {title}
@@ -95,7 +95,7 @@ export function ChannelHeader({
             delayMs={40}
             className="hidden min-w-0 flex-1 sm:block"
           >
-            <p className="truncate text-sm text-[#949ba4]">{topic}</p>
+            <p className="truncate text-sm text-[var(--ms-text-muted)]">{topic}</p>
           </HoverTip>
         </>
       ) : (
@@ -106,7 +106,7 @@ export function ChannelHeader({
           <button
             type="button"
             onClick={onExpandCall}
-            className="mr-1 rounded-md bg-[#23a559]/15 px-2 py-1 text-xs font-semibold text-[#23a559] hover:bg-[#23a559]/25"
+            className="mr-1 rounded-md bg-[var(--ms-connected)]/15 px-2 py-1 text-xs font-semibold text-[var(--ms-connected)] hover:bg-[var(--ms-connected)]/25"
           >
             In call
           </button>
@@ -115,7 +115,7 @@ export function ChannelHeader({
           <HoverTip label="Join Call" delayMs={40}>
             <button
               type="button"
-              className="rounded-md bg-[#23a559]/20 px-2.5 py-1.5 text-xs font-semibold text-[#23a559] hover:bg-[#23a559]/30"
+              className="rounded-md bg-[var(--ms-connected)]/20 px-2.5 py-1.5 text-xs font-semibold text-[var(--ms-connected)] hover:bg-[var(--ms-connected)]/30"
               aria-label="Join call"
               onClick={onJoinCall}
             >

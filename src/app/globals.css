@@ -144,7 +144,24 @@ body::before {
   }
 }
 
-/* RedsssMessenger chrome tokens — Discord-adjacent grays, Redsss composition */
+/*
+ * RedsssMessenger chrome tokens
+ * Role map:
+ *  --ms-chat        main chat / settings content background (#313338)
+ *  --ms-sidebar     channel/DM/member sidebars (#2b2d31)
+ *  --ms-rail        server icon rail (#1a1b1e)
+ *  --ms-elevated    account dock / floating bars (#232428)
+ *  --ms-input       composer fill (#383a40)
+ *  --ms-border      hairlines / panel edges (#1e1f22)
+ *  --ms-text        primary message text (#dbdee1)
+ *  --ms-text-muted  secondary labels (#949ba4)
+ *  --ms-text-faint  placeholders / @handles (#6d6f78)
+ *  --ms-active      selected row fill (#3a3c43)
+ *  --ms-connected   voice/online/join green (#23a559)
+ *  --ms-danger      destructive actions (#ed4245) — not brand accent
+ *  --ms-link        inline links/embeds — soft blue for AA on chat bg
+ *  --ms-focus       keyboard focus fallback (prefer accent ring)
+ */
 .messenger-shell {
   --ms-chat: #313338;
   --ms-sidebar: #2b2d31;
@@ -160,8 +177,29 @@ body::before {
   --ms-active: #3a3c43;
   --ms-connected: #23a559;
   --ms-danger: #ed4245;
+  --ms-link: #6cb6ff;
   --ms-focus: #5c6bc0;
   background: var(--ms-chat);
+  color: var(--ms-text);
+}
+
+:root {
+  --ms-chat: #313338;
+  --ms-sidebar: #2b2d31;
+  --ms-rail: #1a1b1e;
+  --ms-elevated: #232428;
+  --ms-input: #383a40;
+  --ms-border: #1e1f22;
+  --ms-border-soft: rgba(255, 255, 255, 0.06);
+  --ms-text: #dbdee1;
+  --ms-text-muted: #949ba4;
+  --ms-text-faint: #6d6f78;
+  --ms-hover: rgba(255, 255, 255, 0.05);
+  --ms-active: #3a3c43;
+  --ms-connected: #23a559;
+  --ms-danger: #ed4245;
+  --ms-link: #6cb6ff;
+  --ms-focus: #5c6bc0;
 }
 
 .messenger-header {

@@ -141,7 +141,7 @@ export function CreateChannelModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-channel-title"
-        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
         <div className="flex items-start justify-between border-b border-black/30 px-5 py-4">
           <div>
@@ -151,7 +151,7 @@ export function CreateChannelModal({
             >
               Create Channel
             </h2>
-            <p className="mt-1 text-sm text-[#949ba4]">
+            <p className="mt-1 text-sm text-[var(--ms-text-muted)]">
               Add a text or voice channel to this server.
             </p>
           </div>
@@ -173,7 +173,7 @@ export function CreateChannelModal({
               className={`flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium ${
                 type === "text"
                   ? "bg-accent text-white"
-                  : "bg-[#2b2d31] text-[#dbdee1] hover:bg-[#3f4147]"
+                  : "bg-[var(--ms-sidebar)] text-[var(--ms-text)] hover:bg-[#3f4147]"
               }`}
             >
               <Hash className="h-4 w-4" strokeWidth={2} />
@@ -185,7 +185,7 @@ export function CreateChannelModal({
               className={`flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium ${
                 type === "voice"
                   ? "bg-accent text-white"
-                  : "bg-[#2b2d31] text-[#dbdee1] hover:bg-[#3f4147]"
+                  : "bg-[var(--ms-sidebar)] text-[var(--ms-text)] hover:bg-[#3f4147]"
               }`}
             >
               <Volume2 className="h-4 w-4" strokeWidth={2} />
@@ -204,7 +204,7 @@ export function CreateChannelModal({
               minLength={CHANNEL_NAME_MIN}
               maxLength={CHANNEL_NAME_MAX}
               autoFocus
-              className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60"
+              className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60"
             />
           </label>
 
@@ -216,7 +216,7 @@ export function CreateChannelModal({
               <select
                 value={categoryId}
                 onChange={(event) => setCategoryId(event.target.value)}
-                className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
+                className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
               >
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
@@ -227,7 +227,7 @@ export function CreateChannelModal({
             </label>
           )}
 
-          <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[#2b2d31] px-3 py-2.5">
+          <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[var(--ms-sidebar)] px-3 py-2.5">
             <input
               type="checkbox"
               checked={isPrivate}
@@ -238,7 +238,7 @@ export function CreateChannelModal({
               <span className="block text-sm font-medium text-white">
                 Private Channel
               </span>
-              <span className="mt-0.5 block text-xs text-[#949ba4]">
+              <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
                 Only you and roles you choose can see this channel.
               </span>
             </span>
@@ -254,7 +254,7 @@ export function CreateChannelModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-4 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
+              className="rounded-md px-4 py-2 text-sm text-[var(--ms-text)] hover:bg-white/5"
             >
               Cancel
             </button>

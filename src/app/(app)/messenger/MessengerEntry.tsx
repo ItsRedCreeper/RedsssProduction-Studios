@@ -32,7 +32,7 @@ export function MessengerEntry() {
   }, [router, target]);
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-[#313338] px-4 text-sm text-[#949ba4]">
+    <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-[var(--ms-chat)] px-4 text-sm text-[var(--ms-text-muted)]">
       <p>Opening messenger…</p>
       {stuck ? (
         <a

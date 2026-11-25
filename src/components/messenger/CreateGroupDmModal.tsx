@@ -92,7 +92,7 @@ export function CreateGroupDmModal({
       />
       <form
         onSubmit={(event) => void handleSubmit(event)}
-        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl ring-1 ring-accent/15"
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl ring-1 ring-accent/15"
       >
         <div className="flex items-center justify-between border-b border-black/30 px-4 py-3">
           <h2 className="text-base font-semibold text-white">New Group DM</h2>
@@ -114,10 +114,10 @@ export function CreateGroupDmModal({
               value={name}
               onChange={(event) => setName(event.target.value)}
               maxLength={100}
-              className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/60"
+              className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm outline-none focus:border-accent/60"
             />
           </label>
-          <p className="text-xs text-[#949ba4]">
+          <p className="text-xs text-[var(--ms-text-muted)]">
             Select up to 9 friends ({selected.length}/9)
           </p>
           <ul className="max-h-56 space-y-1 overflow-y-auto">
@@ -132,7 +132,7 @@ export function CreateGroupDmModal({
                       onChange={() => toggle(friend.id)}
                       className="h-4 w-4 accent-accent"
                     />
-                    <span className="text-sm text-[#dbdee1]">
+                    <span className="text-sm text-[var(--ms-text)]">
                       {friend.username}
                     </span>
                   </label>
@@ -149,7 +149,7 @@ export function CreateGroupDmModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
+              className="rounded-md px-3 py-2 text-sm text-[var(--ms-text)] hover:bg-white/5"
             >
               Cancel
             </button>

@@ -101,17 +101,17 @@ function ChannelButton({
             ? "messenger-row-active text-white"
             : unread
               ? "font-semibold text-white hover:bg-white/5"
-              : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
+              : "text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-[var(--ms-text)]"
         }`}
       >
         {voice ? (
           <Volume2
-            className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-[#949ba4]"}`}
+            className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-[var(--ms-text-muted)]"}`}
             strokeWidth={2}
           />
         ) : (
           <Hash
-            className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-[#949ba4]"}`}
+            className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-[var(--ms-text-muted)]"}`}
             strokeWidth={2.25}
           />
         )}
@@ -276,7 +276,7 @@ export function ChannelSidebar({
                         event.currentTarget,
                       )
                     }
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-[var(--ms-text)]"
                   >
                     <UserAvatar
                       username={person.username}
@@ -296,7 +296,7 @@ export function ChannelSidebar({
               );
             })}
             {people.length > 8 && (
-              <li className="px-2 text-[11px] text-[#949ba4]">+{people.length - 8} more</li>
+              <li className="px-2 text-[11px] text-[var(--ms-text-muted)]">+{people.length - 8} more</li>
             )}
           </ul>
         )}
@@ -324,7 +324,7 @@ export function ChannelSidebar({
   ];
 
   return (
-    <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
+    <aside className="flex h-full w-full flex-col bg-[var(--ms-sidebar)]">
       <ServerHeaderMenu
         serverName={serverName}
         interactive={!previewMode}
@@ -348,10 +348,10 @@ export function ChannelSidebar({
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {loading ? (
-          <p className="px-2 text-xs text-[#949ba4]">Loading channels…</p>
+          <p className="px-2 text-xs text-[var(--ms-text-muted)]">Loading channels…</p>
         ) : sections.length === 0 ? (
           <div className="px-2">
-            <p className="mb-3 text-xs text-[#949ba4]">No channels yet.</p>
+            <p className="mb-3 text-xs text-[var(--ms-text-muted)]">No channels yet.</p>
             {!previewMode && (onCreateChannel || onCreateCategory) && (
               <div className="flex flex-wrap gap-2">
                 {onCreateChannel && (
@@ -406,7 +406,7 @@ export function ChannelSidebar({
                         }}
                         maxLength={40}
                         minLength={2}
-                        className="min-w-0 flex-1 rounded-md border border-accent/40 bg-[#1e1f22] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white outline-none"
+                        className="min-w-0 flex-1 rounded-md border border-accent/40 bg-[var(--ms-border)] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white outline-none"
                       />
                     </form>
                   ) : (
@@ -424,7 +424,7 @@ export function ChannelSidebar({
                           setEditingCategoryId(section.id);
                           setEditName(section.name);
                         }}
-                        className="flex w-full min-w-0 items-center gap-0.5 rounded-md px-0.5 py-1 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#949ba4] hover:text-[#dbdee1]"
+                        className="flex w-full min-w-0 items-center gap-0.5 rounded-md px-0.5 py-1 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--ms-text-muted)] hover:text-[var(--ms-text)]"
                         aria-expanded={!isCollapsed}
                       >
                         <ChevronDown
@@ -445,7 +445,7 @@ export function ChannelSidebar({
                           setEditingCategoryId(section.id);
                           setEditName(section.name);
                         }}
-                        className="rounded-md p-1 text-[#949ba4] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
+                        className="rounded-md p-1 text-[var(--ms-text-muted)] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
                         aria-label={`Rename ${section.name}`}
                       >
                         <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
@@ -463,7 +463,7 @@ export function ChannelSidebar({
                               section.id === "uncategorized" ? null : section.id,
                           })
                         }
-                        className="rounded-md p-1 text-[#949ba4] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
+                        className="rounded-md p-1 text-[var(--ms-text-muted)] opacity-0 transition-opacity hover:bg-white/10 hover:text-white group-hover/category:opacity-100 focus:opacity-100"
                         aria-label={`Create channel in ${section.name}`}
                       >
                         <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
@@ -474,7 +474,7 @@ export function ChannelSidebar({
                 {!isCollapsed && (
                   <ul className="mt-0.5 space-y-0.5">
                     {section.channels.length === 0 ? (
-                      <li className="px-2 py-1 text-xs text-[#6d6f78]">No channels</li>
+                      <li className="px-2 py-1 text-xs text-[var(--ms-text-faint)]">No channels</li>
                     ) : (
                       section.channels.map(renderChannel)
                     )}

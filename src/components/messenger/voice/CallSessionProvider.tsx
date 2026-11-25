@@ -876,8 +876,8 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       {children}
       {incoming && !connection ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-sm rounded-md border border-[#1e1f22] bg-[#313338] p-5 shadow-2xl">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+          <div className="w-full max-w-sm rounded-md border border-[var(--ms-border)] bg-[var(--ms-chat)] p-5 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
               Incoming {incoming.withVideo ? "video" : "voice"} call
             </p>
             <p className="mt-2 text-lg font-semibold text-white">
@@ -887,14 +887,14 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={declineCall}
-                className="rounded-md px-3 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
+                className="rounded-md px-3 py-2 text-sm text-[var(--ms-text)] hover:bg-white/5"
               >
                 Decline
               </button>
               <button
                 type="button"
                 onClick={() => void acceptCall()}
-                className="rounded-md bg-[#23a559] px-3 py-2 text-sm font-semibold text-white hover:brightness-110"
+                className="rounded-md bg-[var(--ms-connected)] px-3 py-2 text-sm font-semibold text-white hover:brightness-110"
               >
                 Accept
               </button>
@@ -904,8 +904,8 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       ) : null}
       {outgoing && connection ? (
         <div className="pointer-events-none fixed inset-x-0 top-16 z-[85] flex justify-center px-4">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-md border border-[#1e1f22] bg-[#313338] px-4 py-2 shadow-xl">
-            <span className="text-sm text-[#dbdee1]">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-md border border-[var(--ms-border)] bg-[var(--ms-chat)] px-4 py-2 shadow-xl">
+            <span className="text-sm text-[var(--ms-text)]">
               Calling {outgoing.label}…
             </span>
             <button

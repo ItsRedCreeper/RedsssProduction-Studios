@@ -252,7 +252,7 @@ export function InvitePeopleModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="invite-people-title"
-        className="relative z-10 flex max-h-[min(36rem,90dvh)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
+        className="relative z-10 flex max-h-[min(36rem,90dvh)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
         <div className="flex items-start justify-between border-b border-black/30 px-5 py-4">
           <div>
@@ -278,15 +278,15 @@ export function InvitePeopleModal({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search friends"
-            className="w-full rounded-md border border-transparent bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none placeholder:text-[#6d6f78] focus:border-accent/60"
+            className="w-full rounded-md border border-transparent bg-[var(--ms-border)] px-3 py-2 text-sm text-white outline-none placeholder:text-[var(--ms-text-faint)] focus:border-accent/60"
           />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           {loading ? (
-            <p className="px-2 py-4 text-sm text-[#949ba4]">Loading friends…</p>
+            <p className="px-2 py-4 text-sm text-[var(--ms-text-muted)]">Loading friends…</p>
           ) : visible.length === 0 ? (
-            <p className="px-2 py-4 text-sm text-[#949ba4]">
+            <p className="px-2 py-4 text-sm text-[var(--ms-text-muted)]">
               {friends.length === 0
                 ? "No friends yet. Copy the invite link below instead."
                 : "No friends match that search."}
@@ -314,7 +314,7 @@ export function InvitePeopleModal({
                         ringClassName="ring-[#313338]"
                       />
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#dbdee1]">
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--ms-text)]">
                       {friend.username}
                     </span>
                     <button
@@ -323,8 +323,8 @@ export function InvitePeopleModal({
                       onClick={() => void inviteFriend(friend)}
                       className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold ${
                         friend.alreadyMember || friend.alreadyInvited
-                          ? "bg-[#1e1f22] text-[#6d6f78]"
-                          : "bg-[#23a559] text-white hover:brightness-110 disabled:opacity-60"
+                          ? "bg-[var(--ms-border)] text-[var(--ms-text-faint)]"
+                          : "bg-[var(--ms-connected)] text-white hover:brightness-110 disabled:opacity-60"
                       }`}
                     >
                       {friend.alreadyMember ? (
@@ -351,13 +351,13 @@ export function InvitePeopleModal({
         </div>
 
         {error && (
-          <p className="mx-5 mb-2 rounded-md border border-[#ed4245]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[#ed4245]">
+          <p className="mx-5 mb-2 rounded-md border border-[var(--ms-danger)]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[var(--ms-danger)]">
             {error}
           </p>
         )}
 
-        <div className="border-t border-black/30 bg-[#2b2d31] px-5 py-4">
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+        <div className="border-t border-black/30 bg-[var(--ms-sidebar)] px-5 py-4">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
             <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
             Permanent server invite link
           </p>
@@ -365,13 +365,13 @@ export function InvitePeopleModal({
             <input
               readOnly
               value={link || "Creating link…"}
-              className="min-w-0 flex-1 truncate rounded-md border border-[#1e1f22] bg-[#1e1f22] px-3 py-2 text-sm text-[#dbdee1]"
+              className="min-w-0 flex-1 truncate rounded-md border border-[var(--ms-border)] bg-[var(--ms-border)] px-3 py-2 text-sm text-[var(--ms-text)]"
             />
             <button
               type="button"
               disabled={!inviteCode}
               onClick={() => void copyLink()}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#23a559] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[var(--ms-connected)] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
             >
               {copied ? (
                 <Check className="h-4 w-4" strokeWidth={2.5} />

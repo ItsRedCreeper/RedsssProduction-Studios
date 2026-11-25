@@ -96,7 +96,7 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
           <p className="truncate text-sm font-semibold text-white">{name}</p>
         </HoverTip>
         <HoverTip label={subtitle} onlyIfTruncated delayMs={40} className="block min-w-0">
-          <p className="truncate text-[11px] text-[#949ba4]">{subtitle}</p>
+          <p className="truncate text-[11px] text-[var(--ms-text-muted)]">{subtitle}</p>
         </HoverTip>
       </button>
       <div className="relative shrink-0">

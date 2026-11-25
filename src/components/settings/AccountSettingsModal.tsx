@@ -212,7 +212,7 @@ export function AccountSettingsModal({
               </p>
             </div>
             {googleConnected ? (
-              <p className="rounded-md border border-[#23a559]/40 bg-[#23a559]/10 px-3 py-2 text-sm text-[#23a559]">
+              <p className="rounded-md border border-[#23a559]/40 bg-[var(--ms-connected)]/10 px-3 py-2 text-sm text-[var(--ms-connected)]">
                 Connected
               </p>
             ) : (
@@ -220,7 +220,7 @@ export function AccountSettingsModal({
                 type="button"
                 disabled={googleBusy || busy}
                 onClick={() => void handleConnectGoogle()}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#3f4147] bg-[#1e1f22] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2b2d31] disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--ms-sidebar)] disabled:opacity-60"
               >
                 {googleBusy ? "Redirecting…" : "Connect Google"}
               </button>
@@ -232,7 +232,7 @@ export function AccountSettingsModal({
               <h3 className="text-sm font-semibold text-white">
                 Change Password
               </h3>
-              <p className="mt-1 text-xs text-[#949ba4]">
+              <p className="mt-1 text-xs text-[var(--ms-text-muted)]">
                 {canChangePassword
                   ? "Update the password for your email sign-in."
                   : "Password changes are available for email accounts."}
@@ -245,7 +245,7 @@ export function AccountSettingsModal({
                 className="space-y-3"
               >
                 <label className="block space-y-1.5">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[#949ba4]">
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--ms-text-muted)]">
                     Current password
                   </span>
                   <PasswordInput
@@ -253,11 +253,11 @@ export function AccountSettingsModal({
                     maxLength={PASSWORD_MAX}
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
-                    className="border-[#3f4147] bg-[#1e1f22] text-white focus:ring-accent"
+                    className="border-[#3f4147] bg-[var(--ms-border)] text-white focus:ring-accent"
                   />
                 </label>
                 <label className="block space-y-1.5">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[#949ba4]">
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--ms-text-muted)]">
                     New password
                   </span>
                   <PasswordInput
@@ -266,11 +266,11 @@ export function AccountSettingsModal({
                     maxLength={PASSWORD_MAX}
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
-                    className="border-[#3f4147] bg-[#1e1f22] text-white focus:ring-accent"
+                    className="border-[#3f4147] bg-[var(--ms-border)] text-white focus:ring-accent"
                   />
                 </label>
                 <label className="block space-y-1.5">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[#949ba4]">
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--ms-text-muted)]">
                     Confirm new password
                   </span>
                   <PasswordInput
@@ -279,7 +279,7 @@ export function AccountSettingsModal({
                     maxLength={PASSWORD_MAX}
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
-                    className="border-[#3f4147] bg-[#1e1f22] text-white focus:ring-accent"
+                    className="border-[#3f4147] bg-[var(--ms-border)] text-white focus:ring-accent"
                   />
                 </label>
 
@@ -292,7 +292,7 @@ export function AccountSettingsModal({
                 </button>
               </form>
             ) : (
-              <p className="rounded-md border border-white/10 bg-[#1e1f22] px-3 py-3 text-sm text-[#b5bac1]">
+              <p className="rounded-md border border-white/10 bg-[var(--ms-border)] px-3 py-3 text-sm text-[#b5bac1]">
                 This account signed in with Google. There is no password to
                 change here.
               </p>
@@ -305,7 +305,7 @@ export function AccountSettingsModal({
             </p>
           )}
           {success && (
-            <p className="rounded-md border border-[#23a559]/40 bg-[#23a559]/10 px-3 py-2 text-sm text-[#23a559]">
+            <p className="rounded-md border border-[#23a559]/40 bg-[var(--ms-connected)]/10 px-3 py-2 text-sm text-[var(--ms-connected)]">
               {success}
             </p>
           )}

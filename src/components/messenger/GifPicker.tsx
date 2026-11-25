@@ -193,11 +193,11 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
 
   return (
     <div
-      className={`flex w-[28rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#2b2d31] shadow-2xl shadow-black/50 ring-1 ring-accent/10 ${className}`}
+      className={`flex w-[28rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-sidebar)] shadow-2xl shadow-black/50 ring-1 ring-accent/10 ${className}`}
     >
       <div className="border-b border-black/30 p-2">
-        <label className="flex items-center gap-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5">
-          <Search className="h-3.5 w-3.5 shrink-0 text-[#949ba4]" strokeWidth={2} />
+        <label className="flex items-center gap-2 rounded-md bg-[var(--ms-border)] px-2.5 py-1.5">
+          <Search className="h-3.5 w-3.5 shrink-0 text-[var(--ms-text-muted)]" strokeWidth={2} />
           <input
             value={query}
             onChange={(event) => {
@@ -207,7 +207,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
               }
             }}
             placeholder="Search GIFs"
-            className="min-w-0 flex-1 bg-transparent text-sm text-[#dbdee1] outline-none placeholder:text-[#6d6f78]"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[var(--ms-text)] outline-none placeholder:text-[var(--ms-text-faint)]"
             autoFocus
           />
         </label>
@@ -223,7 +223,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
                   className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     active
                       ? "bg-accent text-white"
-                      : "bg-[#1e1f22] text-[#dbdee1] hover:bg-[#232428] hover:text-white"
+                      : "bg-[var(--ms-border)] text-[var(--ms-text)] hover:bg-[var(--ms-elevated)] hover:text-white"
                   }`}
                 >
                   {cat.label}
@@ -235,7 +235,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
       </div>
       <div className="max-h-[26rem] overflow-y-auto p-2">
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-[#949ba4]">
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-[var(--ms-text-muted)]">
             <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
             Loading…
           </div>
@@ -244,7 +244,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
           <p className="px-2 py-8 text-center text-sm text-accent">{error}</p>
         )}
         {!loading && !error && items.length === 0 && (
-          <p className="px-2 py-8 text-center text-sm text-[#949ba4]">
+          <p className="px-2 py-8 text-center text-sm text-[var(--ms-text-muted)]">
             No GIFs found.
           </p>
         )}
@@ -256,7 +256,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
                   key={gif.id}
                   type="button"
                   onClick={() => onPick(gif)}
-                  className="aspect-square overflow-hidden rounded-md bg-[#1e1f22] hover:ring-2 hover:ring-accent/70"
+                  className="aspect-square overflow-hidden rounded-md bg-[var(--ms-border)] hover:ring-2 hover:ring-accent/70"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -278,7 +278,7 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
                 type="button"
                 disabled={loadingMore}
                 onClick={() => void fetchPage(nextOffset, true)}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-md bg-[#1e1f22] px-3 py-2 text-sm font-medium text-[#dbdee1] hover:bg-[#232428] disabled:opacity-60"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-md bg-[var(--ms-border)] px-3 py-2 text-sm font-medium text-[var(--ms-text)] hover:bg-[var(--ms-elevated)] disabled:opacity-60"
               >
                 {loadingMore ? (
                   <>
