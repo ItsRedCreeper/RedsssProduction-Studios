@@ -32,8 +32,8 @@ export function DirtySaveButton({
   const canSave = dirty && !saving && !disabled;
   const sizeClass =
     size === "sm"
-      ? "rounded-md px-2.5 py-1.5 text-xs font-semibold"
-      : "rounded-md px-4 py-2 text-sm font-semibold";
+      ? "rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+      : "rounded-lg px-4 py-2 text-sm font-semibold";
 
   return (
     <button
@@ -44,7 +44,7 @@ export function DirtySaveButton({
       className={`${sizeClass} transition-colors ${
         canSave
           ? "bg-accent text-white hover:bg-accent-hover"
-          : "cursor-not-allowed bg-[#3f4147] text-[#949ba4]"
+          : "cursor-not-allowed bg-[#3f4147] text-[var(--ms-text-muted,#949ba4)]"
       } ${className}`}
     >
       {saving ? savingLabel : label}

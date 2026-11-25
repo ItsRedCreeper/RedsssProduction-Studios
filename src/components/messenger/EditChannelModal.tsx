@@ -269,7 +269,7 @@ export function EditChannelModal({
         aria-labelledby="edit-channel-title"
         className="relative z-10 flex max-h-[min(90dvh,42rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
-        <div className="flex items-start justify-between border-b border-black/30 px-5 py-4">
+        <div className="messenger-header flex items-start justify-between bg-[var(--ms-chat,#313338)] px-5 py-4">
           <div className="flex items-center gap-2">
             {channel.type === "voice" ? (
               <Volume2 className="h-5 w-5 text-accent" strokeWidth={1.75} />
@@ -296,7 +296,7 @@ export function EditChannelModal({
           </button>
         </div>
 
-        <div className="flex gap-1 border-b border-black/30 px-5">
+        <div className="flex gap-1 border-b border-[var(--ms-border,#1e1f22)] px-5">
           {(
             [
               ["overview", "Overview"],
@@ -318,7 +318,7 @@ export function EditChannelModal({
           ))}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:max-w-[45rem]">
           {error && (
             <p className="mb-3 rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">
               {error}

@@ -1730,16 +1730,16 @@ export function ServerSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="server-settings-title"
-        className="relative z-10 flex max-h-[min(90dvh,52rem)] w-full max-w-3xl overflow-hidden rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
+        className="messenger-shell relative z-10 flex max-h-[min(90dvh,52rem)] w-full max-w-4xl overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
-        <aside className="flex w-44 shrink-0 flex-col bg-[#2b2d31] p-3 sm:w-52">
+        <aside className="flex w-40 shrink-0 flex-col border-r border-[var(--ms-border)] bg-[var(--ms-sidebar)] p-3 sm:w-52">
           <p
             id="server-settings-title"
-            className="mb-3 truncate px-2 text-xs font-semibold uppercase tracking-wide text-[#949ba4]"
+            className="mb-3 truncate px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]"
           >
             {server.name}
           </p>
-          <nav className="space-y-1">
+          <nav className="space-y-0.5">
             {visibleTabs.map((item) => {
               const Icon = item.icon;
               const active = tab === item.id;
@@ -1748,9 +1748,9 @@ export function ServerSettingsModal({
                   key={item.id}
                   type="button"
                   onClick={() => setTab(item.id)}
-                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm ${
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm ${
                     active
-                      ? "bg-accent text-white"
+                      ? "bg-[var(--ms-active)] text-white shadow-[inset_2px_0_0_0_var(--accent)]"
                       : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
                   }`}
                 >
@@ -1763,22 +1763,22 @@ export function ServerSettingsModal({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-between border-b border-black/30 px-5 py-3">
-            <h2 className="text-base font-semibold text-white">
+          <div className="messenger-header flex items-center justify-between bg-[var(--ms-chat)] px-5 py-3">
+            <h2 className="text-base font-semibold tracking-tight text-white">
               {visibleTabs.find((item) => item.id === tab)?.label ??
                 TABS.find((item) => item.id === tab)?.label}
             </h2>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md p-1.5 text-muted hover:bg-white/10 hover:text-white"
+              className="rounded-lg p-1.5 text-[var(--ms-text-muted)] hover:bg-white/10 hover:text-white"
               aria-label="Close"
             >
               <X className="h-4 w-4" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:max-w-[45rem]">
             {error && (
               <p className="mb-3 rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">
                 {error}
@@ -1882,15 +1882,31 @@ export function ServerSettingsModal({
                     Make this server discoverable
                   </span>
                 </label>
-                <DirtySaveButton
-                  type="submit"
-                  dirty={overviewDirty}
-                  saving={saving}
-                  disabled={name.trim().length < 2}
-                  label="Save changes"
-                />
+                <div
+                  className={
+                    overviewDirty
+                      ? "sticky bottom-0 z-10 -mx-1 mt-2 rounded-xl border border-white/[0.08] bg-[var(--ms-elevated,#232428)] px-3 py-3 shadow-lg shadow-black/40"
+                      : undefined
+                  }
+                >
+                  {overviewDirty ? (
+                    <p className="mb-2 text-xs text-[var(--ms-text-muted,#949ba4)]">
+                      You have unsaved changes.
+                    </p>
+                  ) : null}
+                  <DirtySaveButton
+                    type="submit"
+                    dirty={overviewDirty}
+                    saving={saving}
+                    disabled={name.trim().length < 2}
+                    label="Save changes"
+                  />
+                </div>
                 {isOwner ? (
-                  <div className="space-y-2 border-t border-black/30 pt-4">
+                  <div className="space-y-2 border-t border-[var(--ms-danger)]/30 pt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-danger)]">
+                      Danger zone
+                    </p>
                     <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
                       Transfer ownership
                     </p>

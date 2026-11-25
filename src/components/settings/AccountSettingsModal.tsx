@@ -171,30 +171,41 @@ export function AccountSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="account-settings-title"
-        className="relative z-10 flex max-h-[min(90dvh,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[#1e1f22] bg-[#2b2d31] shadow-2xl shadow-black/60"
+        className="messenger-shell relative z-10 flex max-h-[min(90dvh,40rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/60 ring-1 ring-accent/15 sm:flex-row"
       >
-        <div className="flex items-center justify-between border-b border-black/30 px-5 py-4">
+        <aside className="hidden w-44 shrink-0 flex-col border-r border-[var(--ms-border)] bg-[var(--ms-sidebar)] p-3 sm:flex">
+          <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
+            User Settings
+          </p>
+          <nav className="space-y-0.5">
+            <span className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm text-white shadow-[inset_2px_0_0_0_var(--accent)] bg-[var(--ms-active)]">
+              My Account
+            </span>
+          </nav>
+        </aside>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="messenger-header flex items-center justify-between bg-[var(--ms-chat)] px-5 py-4">
           <h2
             id="account-settings-title"
-            className="text-lg font-semibold text-white"
+            className="text-lg font-semibold tracking-tight text-white"
           >
-            Account Settings
+            My Account
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-[#949ba4] hover:bg-white/5 hover:text-white"
+            className="rounded-lg p-1.5 text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-white"
             aria-label="Close"
           >
             <X className="h-4 w-4" strokeWidth={2} />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-5 py-5">
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-5 py-5 sm:max-w-[45rem]">
           <section className="space-y-3">
             <div>
               <h3 className="text-sm font-semibold text-white">Google</h3>
-              <p className="mt-1 text-xs text-[#949ba4]">
+              <p className="mt-1 text-xs text-[var(--ms-text-muted)]">
                 {googleConnected
                   ? "Google is connected to this account."
                   : "Connect Google to sign in with either method."}
@@ -298,6 +309,7 @@ export function AccountSettingsModal({
               {success}
             </p>
           )}
+        </div>
         </div>
       </div>
     </div>
