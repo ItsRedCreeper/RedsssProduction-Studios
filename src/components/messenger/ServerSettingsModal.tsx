@@ -410,8 +410,10 @@ export function ServerSettingsModal({
       setError("You can only edit roles below your highest role.");
       return;
     }
-    const trimmed = nextName.trim();
-    if (trimmed.length < ROLE_NAME_MIN) {
+    // Discord: @everyone name is fixed; Display separately is not offered.
+    const trimmed = role.is_default ? role.name : nextName.trim();
+    const hoistValue = role.is_default ? false : nextHoist;
+    if (!role.is_default && trimmed.length < ROLE_NAME_MIN) {
       setError(`Role name must be at least ${ROLE_NAME_MIN} characters.`);
       return;
     }
@@ -453,7 +455,7 @@ export function ServerSettingsModal({
         name: trimmed,
         color: nextColor,
         permissions: sanitized,
-        hoist: nextHoist,
+        hoist: hoistValue,
       })
       .eq("id", role.id)
       .select("*")
@@ -1108,10 +1110,6 @@ export function ServerSettingsModal({
 
             {tab === "roles" && (canManageRoles || isOwner) && (
               <div className="space-y-4">
-                <p className="text-xs text-muted">
-                  Use the arrows to reorder roles. Higher roles sit above lower
-                  ones, and Members is always at the bottom.
-                </p>
                 <ul className="space-y-2">
                   {roles.length === 0 && (
                     <li className="text-sm text-muted">No roles yet.</li>
@@ -1929,7 +1927,7 @@ function RoleRow({
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          disabled={!canEdit}
+          disabled={!canEdit || role.is_default}
           className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none focus:border-accent/40 disabled:opacity-50"
         />
         {role.is_default ? (
@@ -1995,22 +1993,24 @@ function RoleRow({
             />
           </label>
         </div>
-        <label
-          className={`flex items-start gap-2 text-xs text-[#dbdee1] ${
-            canEdit ? "" : "opacity-50"
-          }`}
-        >
-          <input
-            type="checkbox"
-            checked={hoist}
-            disabled={!canEdit}
-            onChange={(event) => setHoist(event.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5 accent-[var(--accent)]"
-          />
-          <span className="font-medium">
-            Display role members separately from online members
-          </span>
-        </label>
+        {!role.is_default ? (
+          <label
+            className={`flex items-start gap-2 text-xs text-[#dbdee1] ${
+              canEdit ? "" : "opacity-50"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={hoist}
+              disabled={!canEdit}
+              onChange={(event) => setHoist(event.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 accent-[var(--accent)]"
+            />
+            <span className="font-medium">
+              Display role members separately from online members
+            </span>
+          </label>
+        ) : null}
       </div>
 
       <div className="space-y-2 border-t border-black/25 pt-2">
