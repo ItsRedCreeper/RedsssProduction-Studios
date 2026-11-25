@@ -53,7 +53,7 @@ function classify(latencyMs: number | null): VoiceConnectionQuality {
     level: "poor",
     label: "Poor",
     latencyMs,
-    colorClass: "text-accent",
+      colorClass: "text-[#ed4245]",
     tip: `Poor — ${Math.round(latencyMs)}ms`,
   };
 }

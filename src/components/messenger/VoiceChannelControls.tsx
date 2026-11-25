@@ -184,7 +184,7 @@ function DevicePickerPanel({
               role="menuitemradio"
               aria-checked={selected}
               onClick={() => onSelect(option.deviceId)}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-white ${
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#404249] hover:text-white ${
                 selected ? "text-white" : "text-[#dbdee1]"
               }`}
             >
@@ -261,7 +261,7 @@ function SettingsPanel({
         type="button"
         role="menuitem"
         onClick={onOpenDevices}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-accent hover:text-white"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-[#404249] hover:text-white"
       >
         <span className="min-w-0 flex-1">
           <span className="block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
@@ -518,7 +518,7 @@ export function VoiceChannelControls({
           <button
             type="button"
             onClick={onLeave}
-            className="rounded-md p-1.5 text-[#b5bac1] hover:bg-accent/15 hover:text-accent"
+            className="rounded-md p-1.5 text-[#b5bac1] hover:bg-[#ed4245]/15 hover:text-[#ed4245]"
             aria-label="Disconnect"
           >
             <PhoneOff className="h-4 w-4" strokeWidth={2} />

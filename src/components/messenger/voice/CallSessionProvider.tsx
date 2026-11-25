@@ -27,6 +27,7 @@ export type CallConnection = {
   isGroup: boolean;
   peerUserIds: string[];
   participantIds: string[];
+  peerNames: Record<string, string>;
 };
 
 export type OpenCallInfo = {
@@ -81,6 +82,7 @@ type CallSessionContextValue = {
     conversationId: string;
     label: string;
     peerUserIds: string[];
+    peerNames?: Record<string, string>;
     isGroup?: boolean;
     withVideo?: boolean;
   }) => Promise<void>;
@@ -88,6 +90,7 @@ type CallSessionContextValue = {
     conversationId: string;
     label: string;
     peerUserIds: string[];
+    peerNames?: Record<string, string>;
     isGroup?: boolean;
   }) => Promise<void>;
   cancelOutgoing: () => Promise<void>;
@@ -337,6 +340,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       withVideo: boolean;
       isGroup: boolean;
       peerUserIds: string[];
+      peerNames?: Record<string, string>;
       /** Skip leave when caller already cleaned sessions (1:1 ring). */
       skipEnsure?: boolean;
     }) => {
@@ -392,6 +396,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
         isGroup: args.isGroup,
         peerUserIds: args.peerUserIds,
         participantIds: [user.id, ...args.peerUserIds],
+        peerNames: args.peerNames ?? {},
       });
       setStageExpanded(true);
       setOpenCalls((prev) => ({
@@ -418,6 +423,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       conversationId: string;
       label: string;
       peerUserIds: string[];
+      peerNames?: Record<string, string>;
       isGroup?: boolean;
       withVideo?: boolean;
     }) => {
@@ -439,6 +445,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
           withVideo: existing.with_video || withVideo,
           isGroup,
           peerUserIds: args.peerUserIds,
+          peerNames: args.peerNames,
         });
         return;
       }
@@ -450,6 +457,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
           withVideo,
           isGroup: true,
           peerUserIds: args.peerUserIds,
+          peerNames: args.peerNames,
         });
         return;
       }
@@ -471,6 +479,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
         withVideo,
         isGroup: false,
         peerUserIds: [peerUserId],
+        peerNames: args.peerNames,
         skipEnsure: true,
       });
       void broadcastCtrl(args.conversationId, {
@@ -489,7 +498,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
           await supabase.from("dm_messages").insert({
             conversation_id: args.conversationId,
             user_id: user.id,
-            content: `Missed call with ${args.label}.`,
+            content: withVideo ? "Missed video call." : "Missed voice call.",
             is_system: true,
             pinned: false,
           });
@@ -512,6 +521,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       conversationId: string;
       label: string;
       peerUserIds: string[];
+      peerNames?: Record<string, string>;
       isGroup?: boolean;
     }) => {
       const supabase = createClient();
@@ -526,6 +536,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
         withVideo: !!existing?.with_video,
         isGroup: !!args.isGroup,
         peerUserIds: args.peerUserIds,
+        peerNames: args.peerNames,
       });
     },
     [joinMesh],
@@ -556,6 +567,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       withVideo: invite.withVideo,
       isGroup: false,
       peerUserIds: [invite.fromUserId],
+      peerNames: { [invite.fromUserId]: invite.fromUsername },
     });
   }, [clearRingTimer, incoming, joinMesh, user]);
 
@@ -899,7 +911,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={() => void cancelOutgoing()}
-              className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover"
+              className="rounded-md bg-[#ed4245] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#c03537]"
             >
               Cancel
             </button>

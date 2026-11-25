@@ -129,7 +129,12 @@ export function CallOverlay() {
   }, [peers, peerNames]);
 
   function labelFor(peerId: string) {
-    return peerNames[peerId] || call.connection?.label || "Participant";
+    return (
+      call.connection?.peerNames[peerId] ||
+      peerNames[peerId] ||
+      call.connection?.label ||
+      "Participant"
+    );
   }
 
   if (!call.connection) return null;

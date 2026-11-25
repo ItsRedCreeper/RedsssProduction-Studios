@@ -4203,6 +4203,24 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               )
             }
             onSelectThread={selectThread}
+            onJoinCall={(threadId) => {
+              const thread = threads.find((item) => item.id === threadId);
+              if (!thread) return;
+              const name =
+                profileUi?.nicknameFor(thread.otherUserId) || thread.username;
+              void call.joinCall({
+                conversationId: thread.id,
+                label: thread.groupName || thread.username || "Direct Call",
+                peerUserIds: thread.isGroup
+                  ? thread.participantIds ?? []
+                  : [thread.otherUserId],
+                peerNames:
+                  !thread.isGroup && name
+                    ? { [thread.otherUserId]: name }
+                    : {},
+                isGroup: !!thread.isGroup,
+              });
+            }}
             onCloseThread={(threadId) => void closeThread(threadId)}
             onCreateGroup={() => {
               if (!user) return;
@@ -4444,6 +4462,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                       peerUserIds: activeThread.isGroup
                         ? activeThread.participantIds ?? []
                         : [activeThread.otherUserId],
+                      peerNames: activeThread.isGroup
+                        ? {}
+                        : {
+                            [activeThread.otherUserId]:
+                              profileUi?.nicknameFor(activeThread.otherUserId) ||
+                              activeThread.username,
+                          },
                       isGroup: !!activeThread.isGroup,
                     })
                 : undefined
@@ -4460,6 +4485,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                       peerUserIds: activeThread.isGroup
                         ? activeThread.participantIds ?? []
                         : [activeThread.otherUserId],
+                      peerNames: activeThread.isGroup
+                        ? {}
+                        : {
+                            [activeThread.otherUserId]:
+                              profileUi?.nicknameFor(activeThread.otherUserId) ||
+                              activeThread.username,
+                          },
                       isGroup: !!activeThread.isGroup,
                       withVideo: false,
                     })
@@ -4477,6 +4509,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                       peerUserIds: activeThread.isGroup
                         ? activeThread.participantIds ?? []
                         : [activeThread.otherUserId],
+                      peerNames: activeThread.isGroup
+                        ? {}
+                        : {
+                            [activeThread.otherUserId]:
+                              profileUi?.nicknameFor(activeThread.otherUserId) ||
+                              activeThread.username,
+                          },
                       isGroup: !!activeThread.isGroup,
                       withVideo: true,
                     })

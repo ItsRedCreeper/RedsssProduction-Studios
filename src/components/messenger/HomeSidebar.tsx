@@ -21,6 +21,7 @@ type HomeSidebarProps = {
   /** Conversation ids with an open joinable call. */
   openCallIds?: Set<string>;
   onSelectThread: (threadId: string) => void;
+  onJoinCall?: (threadId: string) => void;
   onCloseThread?: (threadId: string) => void;
   onCreateGroup?: () => void;
   footer?: ReactNode;
@@ -34,6 +35,7 @@ export function HomeSidebar({
   typingUserIdsKey = "",
   openCallIds,
   onSelectThread,
+  onJoinCall,
   onCloseThread,
   onCreateGroup,
   footer,
@@ -145,7 +147,21 @@ export function HomeSidebar({
                         </span>
                       </HoverTip>
                       {openCallIds?.has(thread.id) ? (
-                        <span className="block truncate text-[11px] font-medium text-[#23a559]">
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="block truncate text-left text-[11px] font-medium text-[#23a559] hover:underline"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onJoinCall?.(thread.id);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onJoinCall?.(thread.id);
+                          }}
+                        >
                           Call in progress — Join
                         </span>
                       ) : thread.isGroup ? (

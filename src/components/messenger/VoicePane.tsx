@@ -177,7 +177,7 @@ function VoiceTile({
 
         {(state.muted || state.deafened) && (
           <span
-            className={`absolute flex items-center justify-center rounded-full bg-[#1e1f22]/90 text-accent ring-2 ring-black/40 ${
+            className={`absolute flex items-center justify-center rounded-full bg-[#1e1f22]/90 text-[#ed4245] ring-2 ring-black/40 ${
               compact
                 ? "right-1.5 top-1.5 h-6 w-6"
                 : "right-3 top-3 h-8 w-8"
@@ -308,7 +308,7 @@ export function VoicePane({
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-[#1e1f22]/40 px-6 py-10">
         <div className="flex max-w-sm flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-accent">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-[#b5bac1]">
             <Volume2 className="h-7 w-7" strokeWidth={1.75} />
           </div>
           <h2 className="text-xl font-semibold text-white">{channelName}</h2>
@@ -352,7 +352,7 @@ export function VoicePane({
           <button
             type="button"
             onClick={onRejoin}
-            className="mt-6 inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover"
+            className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#23a559] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
           >
             <Volume2 className="h-4 w-4" strokeWidth={2} />
             Join Voice
@@ -364,7 +364,7 @@ export function VoicePane({
 
   const emptyStage = (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-accent">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#2b2d31] text-[#b5bac1]">
         <Volume2 className="h-7 w-7" strokeWidth={1.75} />
       </div>
       <h2 className="text-xl font-semibold text-white">{channelName}</h2>
@@ -478,7 +478,7 @@ export function VoicePane({
         <button
           type="button"
           onClick={onLeave}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+          className="inline-flex items-center gap-2 rounded-md bg-[#ed4245] px-3 py-2 text-sm font-semibold text-white hover:bg-[#c03537]"
         >
           <PhoneOff className="h-4 w-4" strokeWidth={2} />
           Disconnect
