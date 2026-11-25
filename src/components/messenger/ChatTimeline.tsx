@@ -135,6 +135,9 @@ export function ChatTimeline({
   const prevScrollHeightRef = useRef<number | null>(null);
   const prevMessageCountRef = useRef(messages.length);
   const loadOlderLockRef = useRef(false);
+  /** Ignore scroll events caused by programmatic jumps / layout resize. */
+  const ignoreScrollRef = useRef(false);
+  const ignoreScrollClearRef = useRef<number | null>(null);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
 
   // New channel/DM → always pin to latest until the user scrolls up.
@@ -151,7 +154,30 @@ export function ChatTimeline({
     stickToBottomRef.current = true;
   }, [scrollKey]);
 
+  useEffect(() => {
+    return () => {
+      if (ignoreScrollClearRef.current != null) {
+        cancelAnimationFrame(ignoreScrollClearRef.current);
+      }
+    };
+  }, []);
+
+  function beginIgnoreScroll() {
+    ignoreScrollRef.current = true;
+    if (ignoreScrollClearRef.current != null) {
+      cancelAnimationFrame(ignoreScrollClearRef.current);
+    }
+    // Two frames: resize/scroll events from layout often land after the jump.
+    ignoreScrollClearRef.current = requestAnimationFrame(() => {
+      ignoreScrollClearRef.current = requestAnimationFrame(() => {
+        ignoreScrollRef.current = false;
+        ignoreScrollClearRef.current = null;
+      });
+    });
+  }
+
   function syncAwayFromBottom(el: HTMLElement) {
+    if (ignoreScrollRef.current) return;
     const dist = distanceFromBottom(el);
     stickToBottomRef.current = dist < NEAR_BOTTOM_PX;
     setAwayFromBottom(
@@ -164,12 +190,20 @@ export function ChatTimeline({
     if (!el) return;
     stickToBottomRef.current = true;
     setAwayFromBottom(false);
+    beginIgnoreScroll();
     if (smooth) {
       el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      // Smooth scroll keeps firing scroll events — hold ignore until it settles.
+      window.setTimeout(() => {
+        ignoreScrollRef.current = false;
+        if (scrollerRef.current) {
+          const dist = distanceFromBottom(scrollerRef.current);
+          stickToBottomRef.current = dist < NEAR_BOTTOM_PX;
+        }
+      }, 320);
       return;
     }
     el.scrollTop = el.scrollHeight;
-    bottomRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
   }
 
   useEffect(() => {
@@ -187,6 +221,7 @@ export function ChatTimeline({
       !stickToBottomRef.current;
 
     if (el && grewUpward) {
+      beginIgnoreScroll();
       el.scrollTop = el.scrollHeight - prevHeight;
       prevScrollHeightRef.current = null;
     }
@@ -200,20 +235,52 @@ export function ChatTimeline({
       jumpToLatest(false);
       requestAnimationFrame(() => jumpToLatest(false));
     });
-    return () => cancelAnimationFrame(frame);
+    // Layout often settles a beat after paint when the window/messenger is scaled.
+    const settle = window.setTimeout(() => {
+      if (stickToBottomRef.current) jumpToLatest(false);
+    }, 100);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(settle);
+    };
   }, [scrollKey, loading, messages]);
 
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
+
+    let frame = 0;
+    const pinIfStuck = () => {
       if (!stickToBottomRef.current || loading) return;
-      jumpToLatest(false);
-    });
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        jumpToLatest(false);
+      });
+    };
+
+    const observer = new ResizeObserver(pinIfStuck);
     observer.observe(el);
     const content = el.firstElementChild;
     if (content) observer.observe(content);
-    return () => observer.disconnect();
+
+    // Window / zoom / sidebar drag: clientHeight can change without content resize
+    // alone being enough, and browsers often fire scroll mid-resize that would
+    // falsely clear stick-to-bottom without ignoreScroll.
+    const onViewportChange = () => {
+      if (!stickToBottomRef.current || loading) return;
+      beginIgnoreScroll();
+      pinIfStuck();
+    };
+    window.addEventListener("resize", onViewportChange);
+    window.visualViewport?.addEventListener("resize", onViewportChange);
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", onViewportChange);
+      window.visualViewport?.removeEventListener("resize", onViewportChange);
+    };
   }, [scrollKey, loading, messages.length]);
 
   function maybeLoadOlder() {
