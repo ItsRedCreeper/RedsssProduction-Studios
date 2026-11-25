@@ -383,7 +383,7 @@ export function VoicePane({
         <div
           className="flex w-full max-w-4xl flex-col gap-2"
           style={{
-            width: "min(100%, 56rem, calc((100vh - 14rem) * 16 / 9))",
+            width: "min(100%, 56rem, calc((100dvh - 14rem) * 16 / 9))",
           }}
         >
           <VoiceTile

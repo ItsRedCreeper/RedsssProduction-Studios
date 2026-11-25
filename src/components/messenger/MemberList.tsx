@@ -62,13 +62,11 @@ function MemberButton({
     <button
       type="button"
       onClick={(event) => onClick(event.currentTarget)}
-      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5 ${
-        online ? "" : "opacity-50"
-      }`}
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
     >
       <span className="relative shrink-0 overflow-visible">
         <UserAvatar
-          username={displayName}
+          username={displayName || "?"}
           avatarUrl={member.avatar_url}
           size="sm"
           className="!h-8 !w-8"
@@ -80,13 +78,13 @@ function MemberButton({
           ringClassName="ring-[#2b2d31]"
         />
       </span>
-      <span className="min-w-0 flex-1">
+      <span className={`min-w-0 flex-1 ${online ? "" : "opacity-50"}`}>
         <span className="flex items-center gap-1.5">
           <span
             className="truncate text-sm"
             style={{ color: nameColor ?? "#dbdee1" }}
           >
-            {displayName}
+            {displayName || "…"}
           </span>
           {owner && (
             <Crown
@@ -258,7 +256,7 @@ export function MemberList({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {members.length === 0 ? (
-          <p className="px-2 text-xs text-muted">No members loaded.</p>
+          <p className="px-2 text-xs text-[#6d6f78]">No members yet.</p>
         ) : (
           groups.map(renderGroup)
         )}

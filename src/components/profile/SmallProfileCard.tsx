@@ -138,7 +138,7 @@ export function SmallProfileCard({
     <div
       ref={cardRef}
       data-profile-popover
-      className="fixed z-[80] max-h-[calc(100vh-16px)] w-[300px] overflow-y-auto overflow-x-hidden rounded-lg border border-[#1e1f22] bg-[#111214] shadow-2xl shadow-black/60"
+      className="fixed z-[80] max-h-[calc(100dvh-16px)] w-[300px] overflow-y-auto overflow-x-hidden rounded-lg border border-[#1e1f22] bg-[#111214] shadow-2xl shadow-black/60"
       style={{
         top: pos.top,
         left: pos.left,

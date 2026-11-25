@@ -27,7 +27,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <PresenceController />
               <Suspense
                 fallback={
-                  <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-border bg-background/95 backdrop-blur-md" />
+                  <header className="z-30 h-14 shrink-0 border-b border-border bg-background/95 backdrop-blur-md" />
                 }
               >
                 <Navbar />

@@ -835,8 +835,8 @@ export function MessageComposer({
         )}
         <form
           onSubmit={handleSubmit}
-          className={`flex items-end gap-2 bg-[#383a40] px-3 py-3 sm:gap-3 sm:px-4 ${
-            dragging ? "ring-2 ring-accent/60" : ""
+          className={`flex flex-wrap items-end gap-2 bg-[#383a40] px-3 py-3 sm:flex-nowrap sm:gap-3 sm:px-4 ${
+            dragging ? "ring-2 ring-white/20" : ""
           } ${
             replying || pendingFiles.length > 0 ? "rounded-b-md" : "rounded-md"
           }`}

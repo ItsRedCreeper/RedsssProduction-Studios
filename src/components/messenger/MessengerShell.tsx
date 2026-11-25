@@ -48,6 +48,7 @@ import { CallOverlay } from "@/components/messenger/CallOverlay";
 import { ResizableSidebar } from "@/components/messenger/ResizableSidebar";
 import { ServerHeaderMenu } from "@/components/messenger/ServerHeaderMenu";
 import { ServerSettingsModal } from "@/components/messenger/ServerSettingsModal";
+import { UserPresenceBar } from "@/components/messenger/UserPresenceBar";
 import {
   useVoiceSession,
   VOICE_STALE_AFTER_MS,
@@ -303,7 +304,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [createChannelCategoryId, setCreateChannelCategoryId] = useState<string | null>(null);
   const [editChannelId, setEditChannelId] = useState<string | null>(null);
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
-  const [membersOpen, setMembersOpen] = useState(true);
+  const [membersOpen, setMembersOpen] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(min-width: 1024px)").matches
+      : true,
+  );
   /** Discord-style voice channel chat; closed by default. */
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -502,7 +507,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [scope]);
 
   const loadServers = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setServers([]);
+      setLoadingServers(false);
+      return;
+    }
     const request = ++serversRequest.current;
     setLoadingServers(true);
     const supabase = createClient();
@@ -599,62 +608,70 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [loadCustomEmojis, servers]);
 
   const refreshThreads = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!user) return;
+    if (!user) {
+      setThreads([]);
+      setLoadingThreads(false);
+      return;
+    }
     const silent = opts?.silent === true;
     // Only flash "Loading…" on the first/empty load — never when updating previews.
     if (!silent) setLoadingThreads(true);
-    const supabase = createClient();
-    const { data: mine, error: mineError } = await supabase
-      .from("dm_participants")
-      .select("conversation_id, hidden")
-      .eq("user_id", user.id)
-      .eq("hidden", false);
-    if (mineError) {
-      setError(mineError.message);
-      setThreads([]);
-      if (!silent) setLoadingThreads(false);
-      return;
-    }
-    const ids = (mine ?? []).map((row) => row.conversation_id);
-    if (ids.length === 0) {
-      setThreads([]);
-      if (!silent) setLoadingThreads(false);
-      return;
-    }
-    const { data: parts, error: partsError } = await supabase
-      .from("dm_participants")
-      .select("*")
-      .in("conversation_id", ids);
-    if (partsError || !parts) {
-      if (partsError) setError(partsError.message);
-      if (!silent) setLoadingThreads(false);
-      return;
-    }
-    const { data: convos } = await supabase
-      .from("dm_conversations")
-      .select("id, name, is_group")
-      .in("id", ids);
-    const convoById = new Map((convos ?? []).map((row) => [row.id, row]));
-    const others = parts.filter((row) => row.user_id !== user.id);
-    const profiles = await loadProfiles(others.map((row) => row.user_id));
-    const profileMap = new Map(profiles.map((item) => [item.id, item]));
-    const byConvo = new Map<string, typeof others>();
-    for (const part of others) {
-      const list = byConvo.get(part.conversation_id) ?? [];
-      list.push(part);
-      byConvo.set(part.conversation_id, list);
-    }
-    const fetched = await Promise.all(
-      ids.map(async (conversationId) => {
+    try {
+      const supabase = createClient();
+      const { data: mine, error: mineError } = await supabase
+        .from("dm_participants")
+        .select("conversation_id, hidden")
+        .eq("user_id", user.id)
+        .eq("hidden", false);
+      if (mineError) {
+        setError(mineError.message);
+        setThreads([]);
+        return;
+      }
+      const ids = (mine ?? []).map((row) => row.conversation_id);
+      if (ids.length === 0) {
+        setThreads([]);
+        return;
+      }
+      const { data: parts, error: partsError } = await supabase
+        .from("dm_participants")
+        .select("*")
+        .in("conversation_id", ids);
+      if (partsError || !parts) {
+        if (partsError) setError(partsError.message);
+        return;
+      }
+      const { data: convos } = await supabase
+        .from("dm_conversations")
+        .select("id, name, is_group")
+        .in("id", ids);
+      const convoById = new Map((convos ?? []).map((row) => [row.id, row]));
+      const others = parts.filter((row) => row.user_id !== user.id);
+      const profiles = await loadProfiles(others.map((row) => row.user_id));
+      const profileMap = new Map(profiles.map((item) => [item.id, item]));
+      const byConvo = new Map<string, typeof others>();
+      for (const part of others) {
+        const list = byConvo.get(part.conversation_id) ?? [];
+        list.push(part);
+        byConvo.set(part.conversation_id, list);
+      }
+      const lastRows = await Promise.all(
+        ids.map(async (conversationId) => {
+          const { data: last } = await supabase
+            .from("dm_messages")
+            .select("content, created_at")
+            .eq("conversation_id", conversationId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          return [conversationId, last] as const;
+        }),
+      );
+      const lastByConvo = new Map(lastRows);
+      const fetched = ids.map((conversationId) => {
         const convo = convoById.get(conversationId);
         const participants = byConvo.get(conversationId) ?? [];
-        const { data: last } = await supabase
-          .from("dm_messages")
-          .select("content, created_at")
-          .eq("conversation_id", conversationId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const last = lastByConvo.get(conversationId) ?? null;
         if (convo?.is_group) {
           const names = participants
             .map((part) => profileMap.get(part.user_id)?.username ?? "Unknown")
@@ -694,44 +711,47 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           previewAt: last?.created_at ?? null,
           isGroup: false,
         } satisfies DmThread;
-      }),
-    );
-    fetched.sort((a, b) => compareDmThreads(a, b));
-    // Reuse prior thread objects when unchanged so the sidebar doesn't remount rows.
-    setThreads((prev) => {
-      const prevById = new Map(prev.map((thread) => [thread.id, thread]));
-      return fetched.map((thread) => {
-        const old = prevById.get(thread.id);
-        if (
-          old &&
-          old.otherUserId === thread.otherUserId &&
-          old.username === thread.username &&
-          old.avatar_url === thread.avatar_url &&
-          old.preview === thread.preview &&
-          old.previewAt === thread.previewAt &&
-          old.status === thread.status &&
-          old.last_seen_at === thread.last_seen_at &&
-          old.status_text === thread.status_text &&
-          old.isGroup === thread.isGroup &&
-          old.groupName === thread.groupName
-        ) {
-          return old;
-        }
-        // Keep live presence fields from the existing row when only preview changed.
-        if (old && old.otherUserId === thread.otherUserId && !thread.isGroup) {
-          return {
-            ...thread,
-            status: old.status,
-            last_seen_at: old.last_seen_at,
-            status_text: old.status_text,
-            username: old.username || thread.username,
-            avatar_url: old.avatar_url ?? thread.avatar_url,
-          };
-        }
-        return thread;
       });
-    });
-    if (!silent) setLoadingThreads(false);
+      fetched.sort((a, b) => compareDmThreads(a, b));
+      // Reuse prior thread objects when unchanged so the sidebar doesn't remount rows.
+      setThreads((prev) => {
+        const prevById = new Map(prev.map((thread) => [thread.id, thread]));
+        return fetched.map((thread) => {
+          const old = prevById.get(thread.id);
+          if (
+            old &&
+            old.otherUserId === thread.otherUserId &&
+            old.username === thread.username &&
+            old.avatar_url === thread.avatar_url &&
+            old.preview === thread.preview &&
+            old.previewAt === thread.previewAt &&
+            old.status === thread.status &&
+            old.last_seen_at === thread.last_seen_at &&
+            old.status_text === thread.status_text &&
+            old.isGroup === thread.isGroup &&
+            old.groupName === thread.groupName
+          ) {
+            return old;
+          }
+          // Keep live presence fields from the existing row when only preview changed.
+          if (old && old.otherUserId === thread.otherUserId && !thread.isGroup) {
+            return {
+              ...thread,
+              status: old.status,
+              last_seen_at: old.last_seen_at,
+              status_text: old.status_text,
+              username: old.username || thread.username,
+              avatar_url: old.avatar_url ?? thread.avatar_url,
+            };
+          }
+          return thread;
+        });
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load DMs");
+    } finally {
+      if (!silent) setLoadingThreads(false);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -974,7 +994,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     // Discover → Preview remounts the shell; wait for auth + membership before
     // choosing preview RPC vs member RLS loads (avoids false "can't preview").
-    if (!user || (wantsPreview && loadingServers)) {
+    if (!user) {
+      setLoadingChannels(false);
+      return;
+    }
+    if (wantsPreview && loadingServers) {
       setLoadingChannels(true);
       return;
     }
@@ -1108,7 +1132,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           nickname: row.nickname,
           joined_at: row.joined_at,
           timed_out_until: row.timed_out_until ?? null,
-          username: "Unknown",
+          username: "",
           avatar_url: null as string | null,
           status: "offline",
           status_text: null as string | null,
@@ -3905,11 +3929,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       : activeChannel?.name ??
         (waitingForChannel || (pane === "server" && loadingServers) ? "Loading…" : "No channel");
   const headerIcon = dmMode || homeEmpty ? (
-    <MessagesSquare className="h-5 w-5 text-accent" strokeWidth={1.75} />
+    <MessagesSquare className="h-5 w-5 text-[#949ba4]" strokeWidth={1.75} />
   ) : activeChannel?.type === "voice" ? (
-    <Volume2 className="h-5 w-5 text-accent" strokeWidth={1.75} />
+    <Volume2 className="h-5 w-5 text-[#949ba4]" strokeWidth={1.75} />
   ) : (
-    <Hash className="h-5 w-5" strokeWidth={2.25} />
+    <Hash className="h-5 w-5 text-[#949ba4]" strokeWidth={2.25} />
   );
 
   const speakingUserIds = useMemo(() => {
@@ -3969,7 +3993,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   ) : call.connection ? (
     <VoiceConnectionBar
       channelName={call.connection.label}
-      serverName="Direct Call"
+      serverName="Direct call"
       muted={call.muted}
       deafened={call.deafened}
       quality={call.quality}
@@ -3985,10 +4009,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     />
   ) : null;
 
-  const sidebarFooter = voiceFooter;
+  const sidebarFooter = (
+    <>
+      {voiceFooter}
+      <UserPresenceBar />
+    </>
+  );
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden border-t border-black/40">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden border-t border-[#1e1f22]">
       <CallOverlay />
       <ServerRail
         servers={servers}
@@ -4262,7 +4291,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             membersOpen={membersOpen}
             chatOpen={voiceChatOpen}
             showSearch={(textMode || dmMode) && !channelPending}
-            showPins={textMode && !channelPending && !previewMode}
+            showPins={(textMode || dmMode) && !channelPending && !previewMode}
             showMembers={textMode && !!activeServer && !channelPending}
             showChat={voiceMode && !channelPending && !previewMode}
             showCall={
@@ -4385,10 +4414,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
                     thread.id === activeConversationId
                       ? "bg-[#404249] text-white"
-                      : "bg-[#2b2d31] text-muted"
+                      : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c]"
                   }`}
                 >
-                  {thread.username}
+                  {thread.isGroup
+                    ? thread.groupName?.trim() || thread.username
+                    : thread.username}
                 </button>
               ))}
             </div>
@@ -4754,18 +4785,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             onClick={() => setVoiceChatOpen(false)}
           />
         )}
-        <MemberList
-          members={visibleMembers}
-          roles={serverRoles}
-          ownerId={activeServer?.owner_id ?? null}
-          currentUserId={user?.id ?? null}
-          typingUserIds={typingUserIds}
-          typingUserIdsKey={typingUserIdsKey}
-          onMessage={startDm}
-          className={`${
-            textMode && membersOpen ? "flex" : "hidden"
-          } absolute inset-y-0 right-0 z-20 shadow-2xl shadow-black/40 lg:static lg:shadow-none`}
-        />
+        {textMode && membersOpen ? (
+          <MemberList
+            members={visibleMembers}
+            roles={serverRoles}
+            ownerId={activeServer?.owner_id ?? null}
+            currentUserId={user?.id ?? null}
+            typingUserIds={typingUserIds}
+            typingUserIdsKey={typingUserIdsKey}
+            onMessage={startDm}
+            className="absolute inset-y-0 right-0 z-20 flex shadow-2xl shadow-black/40 lg:static lg:shadow-none"
+          />
+        ) : null}
         {voiceMode && !channelPending && voiceChatOpen && (
           <aside
             className="absolute inset-y-0 right-0 z-20 flex flex-col border-l border-black/30 bg-[#2b2d31] shadow-2xl shadow-black/40 sm:relative sm:z-auto sm:shadow-none"

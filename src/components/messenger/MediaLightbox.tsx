@@ -246,7 +246,7 @@ export function MediaLightbox({
 
       <div className="relative z-10 flex h-full w-full max-w-[100vw] flex-col items-center justify-center px-2 py-14 sm:px-4">
         <div
-          className="relative flex h-full max-h-[92vh] w-full max-w-[96vw] items-center justify-center overflow-hidden"
+          className="relative flex h-full max-h-[92dvh] w-full max-w-[96vw] items-center justify-center overflow-hidden"
           onWheel={onWheel}
         >
           {hasMany && !zoomed && (

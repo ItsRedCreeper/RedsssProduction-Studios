@@ -106,11 +106,14 @@ function ChannelButton({
       >
         {voice ? (
           <Volume2
-            className={`h-4 w-4 shrink-0 ${active ? "text-accent" : "opacity-70"}`}
+            className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-[#949ba4]"}`}
             strokeWidth={2}
           />
         ) : (
-          <Hash className="h-4 w-4 shrink-0 opacity-70" strokeWidth={2.25} />
+          <Hash
+            className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-[#949ba4]"}`}
+            strokeWidth={2.25}
+          />
         )}
         <span className="min-w-0 flex-1 truncate">{channel.name}</span>
         {privateChannel ? (

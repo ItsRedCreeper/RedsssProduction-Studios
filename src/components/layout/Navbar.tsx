@@ -45,9 +45,13 @@ export function Navbar() {
     return () => window.clearTimeout(id);
   }, [toast]);
 
-  const handleMessage = useCallback((_friend: FriendListItem) => {
-    profileUi.closeFriends();
-  }, [profileUi]);
+  const handleMessage = useCallback(
+    (_friend: FriendListItem) => {
+      profileUi.closeFriends();
+      router.push("/messenger/channels/@me");
+    },
+    [profileUi, router],
+  );
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -60,7 +64,7 @@ export function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 shrink-0 overflow-x-hidden border-b border-border bg-background/95 backdrop-blur-md">
+      <header className="z-30 shrink-0 overflow-x-hidden border-b border-border bg-background/95 backdrop-blur-md">
         <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-2 px-2 sm:gap-3 sm:px-5">
           <Link
             href="/"
@@ -207,16 +211,25 @@ export function Navbar() {
                   {displayName}
                 </button>
               </HoverTip>
-              <HoverTip label="Log Out" delayMs={40}>
-                <button
-                  type="button"
-                  onClick={() => void handleSignOut()}
-                  className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
-                  aria-label="Sign out"
+              {user ? (
+                <HoverTip label="Log Out" delayMs={40}>
+                  <button
+                    type="button"
+                    onClick={() => void handleSignOut()}
+                    className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                    aria-label="Sign out"
+                  >
+                    <LogOut className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                </HoverTip>
+              ) : (
+                <Link
+                  href={`/login?next=${encodeURIComponent(pathname || "/")}`}
+                  className="rounded-md px-2.5 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
                 >
-                  <LogOut className="h-4 w-4" strokeWidth={2} />
-                </button>
-              </HoverTip>
+                  Sign in
+                </Link>
+              )}
             </div>
           </div>
         </div>

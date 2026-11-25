@@ -250,10 +250,10 @@ export function DiscoverPane({
 
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#313338]">
         <div className="relative shrink-0 overflow-hidden border-b border-black/30">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(220,38,38,0.35),_transparent_55%),linear-gradient(135deg,#1e1f22_0%,#2b2d31_45%,#111214_100%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(35,165,89,0.18),_transparent_55%),linear-gradient(135deg,#1e1f22_0%,#2b2d31_45%,#111214_100%)]" />
           <div className="relative px-5 py-6 sm:px-8 sm:py-8">
             <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-accent text-white shadow-lg shadow-accent/30">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[#23a559] text-white shadow-lg shadow-black/40">
                 <Compass className="h-5 w-5" strokeWidth={2} />
               </div>
               <div className="min-w-0">
@@ -289,7 +289,9 @@ export function DiscoverPane({
                 type="button"
                 onClick={() => setCategory(item.id)}
                 className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
-                  active ? "bg-accent text-white" : "bg-[#2b2d31] text-muted"
+                  active
+                    ? "bg-[#404249] text-white"
+                    : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c]"
                 }`}
               >
                 {item.label}

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { Eye, Maximize2, Minimize2, MonitorUp, PhoneOff } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Eye, Maximize2, Minimize2, PhoneOff } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
 import { useCallSession } from "@/components/messenger/voice/CallSessionProvider";
 import { HoverTip } from "@/components/ui/HoverTip";
+import { createClient } from "@/lib/supabase/client";
 
 function VideoTile({
   stream,
@@ -38,7 +39,7 @@ function VideoTile({
     <div
       className={`relative min-h-[9rem] overflow-hidden rounded-md bg-[#1e1f22] ${
         speaking ? "ring-2 ring-[#23a559]" : "ring-1 ring-black/40"
-      } ${watching ? "ring-2 ring-accent" : ""}`}
+      } $      {watching ? "ring-2 ring-[#00a8fc]" : ""}`}
     >
       {stream ? (
         <video
@@ -60,7 +61,7 @@ function VideoTile({
         <span className="truncate text-[11px] font-medium text-white">
           {label}
           {live ? (
-            <span className="ml-1 rounded bg-accent px-1 py-0.5 text-[9px] font-bold uppercase">
+            <span className="ml-1 rounded bg-[#ed4245] px-1 py-0.5 text-[9px] font-bold uppercase">
               Live
             </span>
           ) : null}
@@ -82,6 +83,7 @@ function VideoTile({
 
 export function CallOverlay() {
   const call = useCallSession();
+  const [peerNames, setPeerNames] = useState<Record<string, string>>({});
   const peers = useMemo(() => {
     if (!call.connection) return [] as string[];
     const ids = new Set<string>([
@@ -91,7 +93,46 @@ export function CallOverlay() {
     return [...ids].filter(Boolean);
   }, [call.connection, call.remoteMedia]);
 
+  const connectedPeers = useMemo(
+    () => peers.filter((id) => !!call.remoteMedia[id]),
+    [peers, call.remoteMedia],
+  );
+
+  useEffect(() => {
+    if (peers.length === 0) return;
+    let cancelled = false;
+    const missing = peers.filter((id) => !peerNames[id]);
+    if (missing.length === 0) return;
+    void (async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .in("id", missing);
+      if (cancelled || !data) return;
+      setPeerNames((prev) => {
+        const next = { ...prev };
+        for (const row of data) {
+          if (row.username) next[row.id] = row.username;
+        }
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [peers, peerNames]);
+
+  function labelFor(peerId: string) {
+    return peerNames[peerId] || call.connection?.label || "Participant";
+  }
+
   if (!call.connection) return null;
+
+  const statusLabel = call.connection.withVideo
+    ? "Video Connected"
+    : "Voice Connected";
+  const inCallCount = 1 + (call.outgoing ? connectedPeers.length : peers.length);
 
   const focused =
     call.watchingPeerId && call.remoteMedia[call.watchingPeerId]
@@ -101,11 +142,11 @@ export function CallOverlay() {
 
   if (!call.stageExpanded) {
     return (
-      <div className="absolute bottom-3 left-3 z-40 w-[min(100%-1.5rem,18rem)] overflow-hidden rounded-md border border-[#1e1f22] bg-[#232428] shadow-xl shadow-black/50">
+      <div className="absolute bottom-16 left-3 z-40 w-[min(100%-1.5rem,18rem)] overflow-hidden rounded-md border border-[#1e1f22] bg-[#232428] shadow-xl shadow-black/50 sm:bottom-3">
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold text-[#23a559]">
-              Voice Connected
+              {statusLabel}
             </p>
             <p className="truncate text-xs text-[#dbdee1]">
               {call.connection.label}
@@ -167,13 +208,14 @@ export function CallOverlay() {
       <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-black/40 px-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#23a559]">
-            Voice Connected
-            {call.connection.withVideo ? " · Video" : ""}
+            {statusLabel}
           </p>
           <p className="truncate text-sm font-semibold text-white">
             {call.connection.label}
             <span className="ml-2 text-xs font-normal text-[#949ba4]">
-              {1 + peers.length} in call
+              {call.outgoing && connectedPeers.length === 0
+                ? "Ringing…"
+                : `${inCallCount} in call`}
             </span>
           </p>
         </div>
@@ -221,7 +263,7 @@ export function CallOverlay() {
                 <VideoTile
                   key={peerId}
                   stream={stream}
-                  label={`User ${peerId.slice(0, 4)}`}
+                  label={labelFor(peerId)}
                   cameraOff={!stream}
                   live={hasScreen}
                   speaking={call.speakingPeerIds.has(peerId)}
@@ -247,7 +289,8 @@ export function CallOverlay() {
             cameraOff={!call.cameraOn}
             live={call.screenSharing}
           />
-          {peers.length === 0 ? (
+          {peers.length === 0 ||
+          (call.outgoing && connectedPeers.length === 0) ? (
             <VideoTile
               stream={null}
               label={
@@ -267,7 +310,7 @@ export function CallOverlay() {
                 <VideoTile
                   key={peerId}
                   stream={stream}
-                  label={`User ${peerId.slice(0, 4)}`}
+                  label={labelFor(peerId)}
                   cameraOff={!stream}
                   live={hasScreen}
                   speaking={call.speakingPeerIds.has(peerId)}
@@ -301,29 +344,11 @@ export function CallOverlay() {
           onToggleCamera={() => void call.toggleCamera()}
           onToggleScreenShare={() => void call.toggleScreenShare()}
         />
-        <HoverTip
-          label={
-            call.screenSharing ? "Stop Streaming" : "Share Your Screen"
-          }
-        >
-          <button
-            type="button"
-            onClick={() => void call.toggleScreenShare()}
-            className={`rounded-md p-2 ${
-              call.screenSharing
-                ? "bg-accent/20 text-accent"
-                : "text-[#b5bac1] hover:bg-white/10 hover:text-white"
-            }`}
-            aria-label="Share your screen"
-          >
-            <MonitorUp className="h-5 w-5" strokeWidth={1.75} />
-          </button>
-        </HoverTip>
         <HoverTip label="Disconnect">
           <button
             type="button"
             onClick={() => void call.leaveCall()}
-            className="rounded-md bg-accent p-2 text-white hover:bg-accent-hover"
+            className="rounded-md bg-[#ed4245] p-2 text-white hover:bg-[#c03537]"
             aria-label="Disconnect"
           >
             <PhoneOff className="h-5 w-5" strokeWidth={1.75} />

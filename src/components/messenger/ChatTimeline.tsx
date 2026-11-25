@@ -325,7 +325,17 @@ export function ChatTimeline({
         className="min-h-0 flex-1 overflow-y-auto pb-4 pt-4"
       >
         {loading ? (
-          <p className="px-4 text-sm text-muted">Loading messages…</p>
+          <div className="space-y-3 px-4 py-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex gap-3">
+                <span className="mt-0.5 h-10 w-10 shrink-0 animate-pulse rounded-full bg-white/5" />
+                <div className="min-w-0 flex-1 space-y-2 pt-1">
+                  <span className="block h-3 w-28 animate-pulse rounded bg-white/5" />
+                  <span className="block h-3 w-full max-w-md animate-pulse rounded bg-white/5" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div
             className={

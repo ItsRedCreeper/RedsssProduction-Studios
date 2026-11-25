@@ -46,7 +46,7 @@ export function ResizableSidebar({
           handleSide === "right" ? "-right-1" : "-left-1"
         }`}
       >
-        <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
+        <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-[#23a559] group-active:bg-[#23a559]" />
       </div>
     </div>
   );

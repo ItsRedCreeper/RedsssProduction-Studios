@@ -3007,7 +3007,7 @@ export function ServerSettingsModal({
                           onChange={(event) =>
                             setEmojiName(sanitizeEmojiName(event.target.value))
                           }
-                          placeholder="creeper_wave"
+                          placeholder="wave_hello"
                           maxLength={32}
                           className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
                         />
@@ -3116,7 +3116,7 @@ export function ServerSettingsModal({
                             sanitizeEmojiName(event.target.value),
                           )
                         }
-                        placeholder="party_blob"
+                        placeholder="celebrate"
                         maxLength={32}
                         className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
                       />
@@ -3228,7 +3228,7 @@ export function ServerSettingsModal({
                         onChange={(event) =>
                           setAutomodKeywords(event.target.value)
                         }
-                        placeholder="discord.gg, free nitro"
+                        placeholder="spam-link.example, click here"
                         className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
                       />
                     </label>

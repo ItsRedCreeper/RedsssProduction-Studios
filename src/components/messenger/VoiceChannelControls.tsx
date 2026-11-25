@@ -369,7 +369,9 @@ export function VoiceChannelControls({
             type="button"
             onClick={onToggleMute}
             className={`relative rounded-l-md p-1.5 ${
-              muted ? "bg-accent/20 text-accent" : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
+              muted
+                ? "bg-[#ed4245]/20 text-[#ed4245]"
+                : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
             }`}
             aria-label={muted ? "Unmute" : "Mute"}
           >
@@ -401,7 +403,9 @@ export function VoiceChannelControls({
               data-voice-device-trigger
               onClick={() => togglePanel("input")}
               className={`rounded-r-md p-1 ${
-                muted ? "bg-accent/20 text-accent" : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
+                muted
+                  ? "bg-[#ed4245]/20 text-[#ed4245]"
+                  : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
               }`}
               aria-label="Input settings"
               aria-expanded={panelOpen === "input" || devicePicker === "input"}
@@ -427,7 +431,7 @@ export function VoiceChannelControls({
             onClick={onToggleDeafen}
             className={`rounded-l-md p-1.5 ${
               deafened
-                ? "bg-accent/20 text-accent"
+                ? "bg-[#ed4245]/20 text-[#ed4245]"
                 : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
             }`}
             aria-label={deafened ? "Undeafen" : "Deafen"}
@@ -448,7 +452,7 @@ export function VoiceChannelControls({
               onClick={() => togglePanel("output")}
               className={`rounded-r-md p-1 ${
                 deafened
-                  ? "bg-accent/20 text-accent"
+                  ? "bg-[#ed4245]/20 text-[#ed4245]"
                   : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
               }`}
               aria-label="Output settings"
@@ -499,7 +503,7 @@ export function VoiceChannelControls({
             onClick={onToggleScreenShare}
             className={`rounded-md p-1.5 ${
               screenSharing
-                ? "bg-accent/20 text-accent"
+                ? "bg-[#ed4245]/20 text-[#ed4245]"
                 : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
             }`}
             aria-label={screenSharing ? "Stop screen share" : "Share screen"}
