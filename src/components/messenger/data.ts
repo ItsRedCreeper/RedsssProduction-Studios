@@ -299,23 +299,87 @@ export type PublicServerPreview = {
   member_count: number;
 };
 
+function parseRpcJson(data: unknown): unknown {
+  if (typeof data === "string") {
+    try {
+      return JSON.parse(data) as unknown;
+    } catch {
+      return null;
+    }
+  }
+  return data;
+}
+
+function asPreviewPayload(data: unknown): Record<string, unknown> | null {
+  const parsed = parseRpcJson(data);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  return parsed as Record<string, unknown>;
+}
+
 export async function loadPublicServerPreview(serverId: string) {
   const supabase = createClient();
-  const { data, error } = await supabase.rpc("get_public_server_preview", {
-    p_server_id: serverId,
-  });
+  // Fresh shell mounts (Discover → Preview) can race ahead of session hydrate.
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    return {
+      preview: null as PublicServerPreview | null,
+      error: "Not authenticated",
+    };
+  }
+
+  async function fetchOnce() {
+    return supabase.rpc("get_public_server_preview", {
+      p_server_id: serverId,
+    });
+  }
+
+  let { data, error } = await fetchOnce();
+  // One retry: first paint after navigation sometimes hits a cold auth/RPC race.
+  if (!error && (data == null || !asPreviewPayload(data)?.server)) {
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    ({ data, error } = await fetchOnce());
+  }
+
   if (error) {
     return { preview: null as PublicServerPreview | null, error: error.message };
   }
-  if (!data || typeof data !== "object") {
-    return {
-      preview: null as PublicServerPreview | null,
-      error: "This server is not available for preview.",
-    };
-  }
-  const raw = data as Record<string, unknown>;
-  const server = raw.server as Tables<"servers"> | null;
-  if (!server?.id) {
+  const raw = asPreviewPayload(data);
+  const server = (raw?.server as Tables<"servers"> | null | undefined) ?? null;
+  if (!raw || !server?.id) {
+    // Confirm whether the server is actually undiscoverable vs a transient miss.
+    const { data: publicRow } = await supabase
+      .from("servers")
+      .select("id")
+      .eq("id", serverId)
+      .eq("is_public", true)
+      .maybeSingle();
+    if (publicRow?.id) {
+      ({ data, error } = await fetchOnce());
+      if (error) {
+        return {
+          preview: null as PublicServerPreview | null,
+          error: error.message,
+        };
+      }
+      const retried = asPreviewPayload(data);
+      const retriedServer =
+        (retried?.server as Tables<"servers"> | null | undefined) ?? null;
+      if (retried && retriedServer?.id) {
+        return {
+          preview: {
+            server: retriedServer,
+            channels: (retried.channels as Tables<"channels">[]) ?? [],
+            categories:
+              (retried.categories as Tables<"channel_categories">[]) ?? [],
+            members: (retried.members as PublicPreviewMember[]) ?? [],
+            member_count: Number(retried.member_count) || 0,
+          } satisfies PublicServerPreview,
+          error: null as string | null,
+        };
+      }
+    }
     return {
       preview: null as PublicServerPreview | null,
       error: "This server is not available for preview.",
@@ -353,6 +417,14 @@ export async function loadPublicChannelMessages(
 ) {
   const supabase = createClient();
   const limit = opts?.limit ?? CHANNEL_MESSAGE_PAGE_SIZE;
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) {
+    return {
+      messages: [] as ChatMessage[],
+      hasMore: false,
+      error: "Not authenticated",
+    };
+  }
   const { data, error } = await supabase.rpc("get_public_channel_messages", {
     p_channel_id: channelId,
     p_limit: limit,
@@ -365,7 +437,10 @@ export async function loadPublicChannelMessages(
       error: error.message,
     };
   }
-  const rows = (Array.isArray(data) ? data : []) as PublicPreviewMessageRow[];
+  const parsed = parseRpcJson(data);
+  const rows = (
+    Array.isArray(parsed) ? parsed : []
+  ) as PublicPreviewMessageRow[];
   const messages: ChatMessage[] = rows.map((row) => {
     const { profiles, ...message } = row;
     return {

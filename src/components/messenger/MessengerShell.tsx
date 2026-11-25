@@ -326,7 +326,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const isMemberOfActiveServer =
     !!activeServerId && servers.some((server) => server.id === activeServerId);
-  /** Look-only mode for public servers you haven't joined yet. */
+  /**
+   * Look-only mode for public servers you haven't joined yet.
+   * While membership is still loading, treat ?preview=1 as preview so we don't
+   * kick non-members home or hit member-only RLS loads.
+   */
   const previewMode =
     wantsPreview &&
     pane === "server" &&
@@ -334,6 +338,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     (loadingServers || !isMemberOfActiveServer);
   const previewModeRef = useRef(previewMode);
   previewModeRef.current = previewMode;
+  /** Ready to fetch preview chrome (auth + membership known, not a member). */
+  const previewLoadReady =
+    !!user &&
+    wantsPreview &&
+    pane === "server" &&
+    !!activeServerId &&
+    !loadingServers &&
+    !isMemberOfActiveServer;
   const activeServer =
     servers.find((server) => server.id === activeServerId) ??
     (previewMode && previewServer?.id === activeServerId ? previewServer : null);
@@ -461,11 +473,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
 
     const serverIds = (memberships ?? []).map((row) => row.server_id);
+    const previewInUrl =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("preview") === "1";
     if (serverIds.length === 0) {
       setServers([]);
       setLoadingServers(false);
       // Discover preview uses the real server URL without membership.
-      if (paneRef.current === "server" && !previewModeRef.current) {
+      if (
+        paneRef.current === "server" &&
+        !previewModeRef.current &&
+        !previewInUrl
+      ) {
         router.replace(messengerHomePath());
       }
       return;
@@ -488,7 +507,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         paneRef.current === "server" &&
         routeServerRef.current &&
         !next.some((server) => server.id === routeServerRef.current) &&
-        !previewModeRef.current
+        !previewModeRef.current &&
+        !previewInUrl
       ) {
         router.replace(messengerHomePath());
       }
@@ -859,6 +879,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setLoadingChannels(false);
       return;
     }
+
+    // Discover → Preview remounts the shell; wait for auth + membership before
+    // choosing preview RPC vs member RLS loads (avoids false "can't preview").
+    if (!user || (wantsPreview && loadingServers)) {
+      setLoadingChannels(true);
+      return;
+    }
+
     const serverId = activeServerId;
     const supabase = createClient();
     let cancelled = false;
@@ -867,6 +895,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setLoadingChannels(true);
 
     async function loadPreview() {
+      setError(null);
       const { preview, error: previewError } =
         await loadPublicServerPreview(serverId);
       if (cancelled) return;
@@ -879,9 +908,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setServerRoles([]);
         setLoadedServerId(null);
         setLoadingChannels(false);
-        router.replace(messengerDiscoverPath());
+        // Stay on the preview URL so a transient miss isn't a hard bounce;
+        // user can leave via Discover / server rail.
         return;
       }
+      setError(null);
       setPreviewServer(preview.server);
       setChannels(preview.channels);
       setCategories(preview.categories);
@@ -978,15 +1009,25 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setLoadingChannels(false);
     }
 
-    if (previewMode) {
+    if (previewLoadReady) {
       void loadPreview();
-    } else {
+    } else if (!wantsPreview || isMemberOfActiveServer) {
       void load();
+    } else {
+      setLoadingChannels(true);
     }
     return () => {
       cancelled = true;
     };
-  }, [activeServerId, previewMode, router]);
+  }, [
+    activeServerId,
+    previewLoadReady,
+    wantsPreview,
+    loadingServers,
+    isMemberOfActiveServer,
+    user,
+    router,
+  ]);
 
   // Live presence for members + DM partners (profiles must be in supabase_realtime).
   useEffect(() => {
