@@ -280,7 +280,7 @@ export function DiscoverPane({
           </div>
         </div>
 
-        <div className="flex gap-1 overflow-x-auto border-b border-black/20 px-3 py-2 sm:hidden">
+        <div className="flex gap-1 overflow-x-auto border-b border-black/20 px-3 py-2 [scrollbar-width:none] sm:hidden [&::-webkit-scrollbar]:hidden">
           {CATEGORIES.map((item) => {
             const active = category === item.id;
             return (

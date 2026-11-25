@@ -153,6 +153,7 @@ export function MessageComposer({
   const [emojiSuggestIndex, setEmojiSuggestIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [pickerStyle, setPickerStyle] = useState<CSSProperties | null>(null);
@@ -835,7 +836,7 @@ export function MessageComposer({
         )}
         <form
           onSubmit={handleSubmit}
-          className={`flex flex-wrap items-end gap-2 bg-[#383a40] px-3 py-3 sm:flex-nowrap sm:gap-3 sm:px-4 ${
+          className={`relative flex flex-nowrap items-end gap-1.5 bg-[#383a40] px-2 py-3 sm:gap-3 sm:px-4 ${
             dragging ? "ring-2 ring-white/20" : ""
           } ${
             replying || pendingFiles.length > 0 ? "rounded-b-md" : "rounded-md"
@@ -862,12 +863,82 @@ export function MessageComposer({
                     sending ||
                     pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE
                   }
-                  className="mb-0.5 shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
+                  className="mb-0.5 hidden shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40 sm:inline-flex"
                   aria-label="Attach file"
                 >
                   <Plus className="h-5 w-5" strokeWidth={2.25} />
                 </button>
               </HoverTip>
+              <div className="relative sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => setAttachMenuOpen((open) => !open)}
+                  disabled={
+                    disabled ||
+                    sending ||
+                    pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE
+                  }
+                  className="mb-0.5 inline-flex shrink-0 rounded-full bg-[#4e5058] p-1 text-[#dbdee1] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
+                  aria-label="More composer actions"
+                  aria-expanded={attachMenuOpen}
+                >
+                  <Plus className="h-5 w-5" strokeWidth={2.25} />
+                </button>
+                {attachMenuOpen ? (
+                  <div className="absolute bottom-full left-0 z-30 mb-2 w-44 overflow-hidden rounded-md border border-[#1e1f22] bg-[#111214] py-1 shadow-xl shadow-black/50">
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#404249]"
+                      onClick={() => {
+                        setAttachMenuOpen(false);
+                        fileRef.current?.click();
+                      }}
+                    >
+                      Upload a File
+                    </button>
+                    {onPickGif ? (
+                      <button
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#404249]"
+                        onClick={() => {
+                          setAttachMenuOpen(false);
+                          setGifOpen(true);
+                          setEmojiOpen(false);
+                          setStickerOpen(false);
+                        }}
+                      >
+                        GIF
+                      </button>
+                    ) : null}
+                    {onOpenPoll ? (
+                      <button
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#404249]"
+                        onClick={() => {
+                          setAttachMenuOpen(false);
+                          onOpenPoll();
+                        }}
+                      >
+                        Poll
+                      </button>
+                    ) : null}
+                    {onPickSticker && stickers.length > 0 ? (
+                      <button
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#404249]"
+                        onClick={() => {
+                          setAttachMenuOpen(false);
+                          setStickerOpen(true);
+                          setEmojiOpen(false);
+                          setGifOpen(false);
+                        }}
+                      >
+                        Stickers
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </>
           )}
           <div className="relative min-h-[24px] min-w-0 flex-1">
@@ -1051,7 +1122,7 @@ export function MessageComposer({
                   setEmojiOpen(false);
                   setStickerOpen(false);
                 }}
-                className={`mb-0.5 shrink-0 rounded-md px-1.5 py-1 text-xs font-bold tracking-wide text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 ${
+                className={`mb-0.5 hidden shrink-0 rounded-md px-1.5 py-1 text-xs font-bold tracking-wide text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 sm:inline ${
                   gifOpen ? "bg-white/10 text-white" : ""
                 }`}
                 aria-label="GIF picker"
@@ -1071,7 +1142,7 @@ export function MessageComposer({
                   setEmojiOpen(false);
                   setGifOpen(false);
                 }}
-                className={`mb-0.5 shrink-0 rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 ${
+                className={`mb-0.5 hidden shrink-0 rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 sm:inline-flex ${
                   stickerOpen ? "bg-white/10 text-white" : ""
                 }`}
                 aria-label="Sticker picker"
@@ -1086,7 +1157,7 @@ export function MessageComposer({
                 type="button"
                 disabled={disabled || sending}
                 onClick={onOpenPoll}
-                className="mb-0.5 shrink-0 rounded-md px-1.5 py-1 text-xs font-semibold text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40"
+                className="mb-0.5 hidden shrink-0 rounded-md px-1.5 py-1 text-xs font-semibold text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 sm:inline"
                 aria-label="Create poll"
               >
                 Poll

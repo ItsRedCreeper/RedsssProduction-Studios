@@ -399,7 +399,7 @@ export function VoicePane({
             onSelect={() => setFocusedUserId(null)}
           />
           {stripStates.length > 0 && (
-            <ul className="flex w-full justify-center gap-2 overflow-x-auto">
+            <ul className="flex w-full justify-center gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]">
               {stripStates.map((state) => (
                 <li
                   key={state.user_id}
@@ -448,7 +448,7 @@ export function VoicePane({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#1e1f22]/40">
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6">
+      <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 py-5 sm:px-6">
         {stage}
       </div>
 

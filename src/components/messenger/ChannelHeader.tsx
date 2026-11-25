@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { MessageSquare, Phone, Pin, Search, Users, Video } from "lucide-react";
+import { Menu, MessageSquare, Phone, Pin, Search, Users, Video } from "lucide-react";
 import { HoverTip } from "@/components/ui/HoverTip";
 
 type ChannelHeaderProps = {
@@ -27,6 +27,7 @@ type ChannelHeaderProps = {
   onStartCall?: () => void;
   onStartVideoCall?: () => void;
   onJoinCall?: () => void;
+  onOpenList?: () => void;
 };
 
 function toolClass(active: boolean) {
@@ -59,9 +60,20 @@ export function ChannelHeader({
   onStartCall,
   onStartVideoCall,
   onJoinCall,
+  onOpenList,
 }: ChannelHeaderProps) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1f2023] px-4">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1f2023] px-2 sm:px-4">
+      {onOpenList ? (
+        <button
+          type="button"
+          onClick={onOpenList}
+          className="rounded-md p-1.5 text-[#b5bac1] hover:bg-[#404249] hover:text-white sm:hidden"
+          aria-label="Open channel list"
+        >
+          <Menu className="h-5 w-5" strokeWidth={1.75} />
+        </button>
+      ) : null}
       <span className="shrink-0 text-[#949ba4]">{icon}</span>
       <HoverTip label={title} onlyIfTruncated delayMs={40} className="min-w-0 shrink">
         <h1 className="truncate text-base font-semibold text-white">{title}</h1>

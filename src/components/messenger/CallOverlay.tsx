@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Eye, Maximize2, Minimize2, PhoneOff } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
@@ -149,7 +150,7 @@ export function CallOverlay() {
 
   if (!call.stageExpanded) {
     return (
-      <div className="absolute bottom-16 left-3 z-40 w-[min(100%-1.5rem,18rem)] overflow-hidden rounded-md border border-[#1e1f22] bg-[#232428] shadow-xl shadow-black/50 sm:bottom-3">
+      <div className="absolute bottom-24 left-[4.25rem] z-40 w-[min(100%-5.5rem,18rem)] overflow-hidden rounded-md border border-[#1e1f22] bg-[#232428] shadow-xl shadow-black/50 sm:bottom-3 sm:left-3 sm:w-[min(100%-1.5rem,18rem)]">
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold text-[#23a559]">
@@ -210,8 +211,8 @@ export function CallOverlay() {
         ? "grid-cols-2"
         : "grid-cols-2 lg:grid-cols-3";
 
-  return (
-    <div className="absolute inset-0 z-40 flex flex-col bg-[#111214]/95 backdrop-blur-sm">
+  const stage = (
+    <div className="fixed inset-x-0 bottom-0 top-14 z-[45] flex flex-col bg-[#111214]">
       <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-black/40 px-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#23a559]">
@@ -363,4 +364,7 @@ export function CallOverlay() {
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return stage;
+  return createPortal(stage, document.body);
 }

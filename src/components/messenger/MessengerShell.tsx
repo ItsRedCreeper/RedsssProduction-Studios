@@ -333,6 +333,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [dmHasMore, setDmHasMore] = useState(false);
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [authTimedOut, setAuthTimedOut] = useState(false);
+  const [mobileListOpen, setMobileListOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -494,6 +495,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   useEffect(() => {
     rememberMessengerPath(pathname);
   }, [pathname]);
+
+  useEffect(() => {
+    setMobileListOpen(false);
+  }, [pathname, activeChannelId, activeConversationId]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -4035,7 +4040,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   );
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden border-t border-[#1e1f22]">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
       <CallOverlay />
       <ServerRail
         servers={servers}
@@ -4089,6 +4094,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         width={sidebarWidth}
         onResizeStart={beginResize}
         label="Resize channel sidebar"
+        mobileOpen={mobileListOpen}
+        onMobileClose={() => setMobileListOpen(false)}
       >
         {pane === "home" ? (
           <HomeSidebar
@@ -4330,6 +4337,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             onTogglePins={() => setPinsOpen((open) => !open)}
             onToggleMembers={() => setMembersOpen((open) => !open)}
             onToggleChat={() => setVoiceChatOpen((open) => !open)}
+            onOpenList={() => setMobileListOpen(true)}
             onJoinCall={
               dmMode && activeThread && activeConversationId
                 ? () =>
@@ -4413,8 +4421,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             </div>
           )}
 
-          {pane === "server" && !channelPending && (
-            <div className="flex gap-1 overflow-x-auto border-b border-black/20 px-2 py-2 sm:hidden">
+          {pane === "server" && !channelPending && !needsSignIn && (
+            <div className="flex gap-1 overflow-x-auto border-b border-black/20 px-2 py-2 [scrollbar-width:none] sm:hidden [&::-webkit-scrollbar]:hidden">
               {channels.map((channel) => {
                 const active = channel.id === activeChannelId;
                 return (
@@ -4423,7 +4431,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     type="button"
                     onClick={() => selectChannel(channel.id)}
                     className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
-                      active ? "bg-[#404249] text-white" : "bg-[#2b2d31] text-muted"
+                      active
+                        ? "bg-[#404249] text-white"
+                        : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]"
                     }`}
                   >
                     {channel.type === "text" ? (
@@ -4438,9 +4448,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             </div>
           )}
 
-          {pane === "home" && (
-            <div className="flex gap-1 overflow-x-auto border-b border-black/20 px-2 py-2 sm:hidden">
-              {visibleThreads.map((thread) => (
+          {pane === "home" && !needsSignIn && (
+            <div className="flex gap-1 overflow-x-auto border-b border-black/20 px-2 py-2 [scrollbar-width:none] sm:hidden [&::-webkit-scrollbar]:hidden">
+              {visibleThreads.map((thread) => {
+                const chipName = thread.isGroup
+                  ? thread.groupName?.trim() ||
+                    thread.username ||
+                    "Group DM"
+                  : profileUi?.nicknameFor(thread.otherUserId) || thread.username;
+                return (
                 <button
                   key={thread.id}
                   type="button"
@@ -4448,14 +4464,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
                     thread.id === activeConversationId
                       ? "bg-[#404249] text-white"
-                      : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c]"
+                      : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c] hover:text-[#dbdee1]"
                   }`}
                 >
-                  {thread.isGroup
-                    ? thread.groupName?.trim() || thread.username
-                    : thread.username}
+                  {chipName}
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
 
