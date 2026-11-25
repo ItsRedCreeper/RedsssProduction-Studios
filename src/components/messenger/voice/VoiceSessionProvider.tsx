@@ -610,6 +610,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       cancelPendingLeave();
       const userId = userIdRef.current;
       if (!userId) return;
+      // Discord: leave DM/call session before joining server voice.
+      window.dispatchEvent(new Event("redsss-leave-dm-call"));
       // Intentional joins clear the persisted leave skip for this channel.
       skipAutoJoinRef.current.delete(args.channelId);
       writeSkipChannels(skipAutoJoinRef.current);

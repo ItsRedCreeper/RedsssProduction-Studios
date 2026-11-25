@@ -415,6 +415,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   useEffect(() => {
     watchConversation(dmMode ? activeConversationId : null);
   }, [dmMode, activeConversationId, watchConversation]);
+
+  const refreshOpenCalls = call.refreshOpenCalls;
+  useEffect(() => {
+    const ids = threads.map((thread) => thread.id);
+    void refreshOpenCalls(ids);
+  }, [threads, refreshOpenCalls]);
   const { width: sidebarWidth, beginResize } = useMessengerSidebarWidth();
   const {
     width: voiceChatWidth,
@@ -4044,6 +4050,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             loadingThreads={loadingThreads}
             typingUserIds={dmSidebarTypingIds}
             typingUserIdsKey={typingUserIdsKey}
+            openCallIds={
+              new Set(
+                Object.keys(call.openCalls).filter(
+                  (id) => call.connection?.conversationId !== id,
+                ),
+              )
+            }
             onSelectThread={selectThread}
             onCloseThread={(threadId) => void closeThread(threadId)}
             onCreateGroup={() => {
@@ -4252,12 +4265,38 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             showPins={textMode && !channelPending && !previewMode}
             showMembers={textMode && !!activeServer && !channelPending}
             showChat={voiceMode && !channelPending && !previewMode}
-            showCall={dmMode && !channelPending && !!activeThread}
+            showCall={
+              dmMode &&
+              !channelPending &&
+              !!activeThread &&
+              call.connection?.conversationId !== activeConversationId
+            }
+            joinCallAvailable={
+              !!activeConversationId &&
+              !!call.openCalls[activeConversationId] &&
+              call.connection?.conversationId !== activeConversationId
+            }
             pinCount={pinList.length}
             onToggleSearch={() => setSearchOpen((open) => !open)}
             onTogglePins={() => setPinsOpen((open) => !open)}
             onToggleMembers={() => setMembersOpen((open) => !open)}
             onToggleChat={() => setVoiceChatOpen((open) => !open)}
+            onJoinCall={
+              dmMode && activeThread && activeConversationId
+                ? () =>
+                    void call.joinCall({
+                      conversationId: activeConversationId,
+                      label:
+                        activeThread.groupName ||
+                        activeThread.username ||
+                        "Direct Call",
+                      peerUserIds: activeThread.isGroup
+                        ? activeThread.participantIds ?? []
+                        : [activeThread.otherUserId],
+                      isGroup: !!activeThread.isGroup,
+                    })
+                : undefined
+            }
             onStartCall={
               dmMode && activeThread && activeConversationId
                 ? () =>
@@ -4270,6 +4309,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                       peerUserIds: activeThread.isGroup
                         ? activeThread.participantIds ?? []
                         : [activeThread.otherUserId],
+                      isGroup: !!activeThread.isGroup,
                       withVideo: false,
                     })
                 : undefined
@@ -4286,6 +4326,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                       peerUserIds: activeThread.isGroup
                         ? activeThread.participantIds ?? []
                         : [activeThread.otherUserId],
+                      isGroup: !!activeThread.isGroup,
                       withVideo: true,
                     })
                 : undefined

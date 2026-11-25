@@ -125,6 +125,42 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["channel_threads"]["Insert"]>
         Relationships: []
       }
+      dm_call_sessions: {
+        Row: {
+          conversation_id: string
+          started_by: string
+          with_video: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          conversation_id: string
+          started_by: string
+          with_video?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["dm_call_sessions"]["Insert"]>
+        Relationships: []
+      }
+      dm_call_participants: {
+        Row: {
+          conversation_id: string
+          user_id: string
+          camera_on: boolean
+          screen_on: boolean
+          joined_at: string
+        }
+        Insert: {
+          conversation_id: string
+          user_id: string
+          camera_on?: boolean
+          screen_on?: boolean
+          joined_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["dm_call_participants"]["Insert"]>
+        Relationships: []
+      }
       server_stickers: {
         Row: {
           id: string

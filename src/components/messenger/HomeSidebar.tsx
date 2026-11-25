@@ -18,6 +18,8 @@ type HomeSidebarProps = {
   typingUserIds?: Set<string>;
   /** Forces re-render when typing membership changes. */
   typingUserIdsKey?: string;
+  /** Conversation ids with an open joinable call. */
+  openCallIds?: Set<string>;
   onSelectThread: (threadId: string) => void;
   onCloseThread?: (threadId: string) => void;
   onCreateGroup?: () => void;
@@ -30,6 +32,7 @@ export function HomeSidebar({
   loadingThreads,
   typingUserIds,
   typingUserIdsKey = "",
+  openCallIds,
   onSelectThread,
   onCloseThread,
   onCreateGroup,
@@ -131,7 +134,11 @@ export function HomeSidebar({
                           {name}
                         </span>
                       </HoverTip>
-                      {thread.isGroup ? (
+                      {openCallIds?.has(thread.id) ? (
+                        <span className="block truncate text-[11px] font-medium text-[#23a559]">
+                          Call in progress — Join
+                        </span>
+                      ) : thread.isGroup ? (
                         <span className="block truncate text-[11px] text-[#6d6f78]">
                           {(thread.participantIds?.length ?? 0) + 1} members
                         </span>

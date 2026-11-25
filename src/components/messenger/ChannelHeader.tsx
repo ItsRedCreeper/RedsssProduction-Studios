@@ -17,6 +17,8 @@ type ChannelHeaderProps = {
   showMembers?: boolean;
   showChat?: boolean;
   showCall?: boolean;
+  /** Open call already exists — show Join instead of Start. */
+  joinCallAvailable?: boolean;
   pinCount?: number;
   onToggleSearch: () => void;
   onTogglePins: () => void;
@@ -24,6 +26,7 @@ type ChannelHeaderProps = {
   onToggleChat?: () => void;
   onStartCall?: () => void;
   onStartVideoCall?: () => void;
+  onJoinCall?: () => void;
 };
 
 function toolClass(active: boolean) {
@@ -47,6 +50,7 @@ export function ChannelHeader({
   showMembers = true,
   showChat = false,
   showCall = false,
+  joinCallAvailable = false,
   pinCount = 0,
   onToggleSearch,
   onTogglePins,
@@ -54,6 +58,7 @@ export function ChannelHeader({
   onToggleChat,
   onStartCall,
   onStartVideoCall,
+  onJoinCall,
 }: ChannelHeaderProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/30 px-4 shadow-sm shadow-black/20">
@@ -77,7 +82,19 @@ export function ChannelHeader({
         <span className="flex-1" />
       )}
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
-        {showCall && onStartCall && (
+        {showCall && joinCallAvailable && onJoinCall ? (
+          <HoverTip label="Join Call" delayMs={40}>
+            <button
+              type="button"
+              className="rounded-md bg-[#23a559]/20 px-2.5 py-1.5 text-xs font-semibold text-[#23a559] hover:bg-[#23a559]/30"
+              aria-label="Join call"
+              onClick={onJoinCall}
+            >
+              Join Call
+            </button>
+          </HoverTip>
+        ) : null}
+        {showCall && !joinCallAvailable && onStartCall && (
           <HoverTip label="Start Voice Call" delayMs={40}>
             <button
               type="button"
@@ -89,7 +106,7 @@ export function ChannelHeader({
             </button>
           </HoverTip>
         )}
-        {showCall && onStartVideoCall && (
+        {showCall && !joinCallAvailable && onStartVideoCall && (
           <HoverTip label="Start Video Call" delayMs={40}>
             <button
               type="button"
