@@ -630,6 +630,23 @@ export function ServerSettingsModal({
       setError(insertError.message);
       return;
     }
+
+    // Discord: @everyone / default Member is additive forever — assigning Admin
+    // must never replace it. Re-attach if a stale client somehow dropped it.
+    const defaultRole = roles.find((role) => role.is_default);
+    const nextRoleIds = new Set([...(member?.roleIds ?? []), roleId]);
+    if (defaultRole && !nextRoleIds.has(defaultRole.id)) {
+      const { error: defaultError } = await supabase.from("member_roles").insert({
+        server_id: server.id,
+        user_id: memberId,
+        role_id: defaultRole.id,
+      });
+      if (!defaultError || /duplicate|unique/i.test(defaultError.message)) {
+        nextRoleIds.add(defaultRole.id);
+      }
+    }
+
+    // Legacy single-column hint only — real roles live in member_roles.
     await supabase
       .from("server_members")
       .update({ role_id: roleId })
@@ -639,7 +656,7 @@ export function ServerSettingsModal({
     onMembersChanged(
       members.map((item) =>
         item.user_id === memberId
-          ? { ...item, roleIds: [...new Set([...item.roleIds, roleId])] }
+          ? { ...item, roleIds: [...nextRoleIds] }
           : item,
       ),
     );

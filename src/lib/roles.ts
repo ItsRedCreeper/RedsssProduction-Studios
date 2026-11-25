@@ -112,8 +112,10 @@ export function memberListGroupRole(
 
 /**
  * Roles to show as pills on profiles (highest first).
- * Prefer non-default roles; if the member only has the default Member role,
- * still show it when its color was customized so recoloring Member is visible.
+ * Like Discord: hide the default Member / @everyone pill when the person has
+ * any other role — they still *have* Member for permissions, it just isn't
+ * shown as a badge. If they only have Member, show it when its color was
+ * customized so recoloring Member is visible.
  */
 export function displayRolesForMember(
   roles: Role[],
