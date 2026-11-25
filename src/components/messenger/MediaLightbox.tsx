@@ -188,7 +188,7 @@ export function MediaLightbox({
         </button>
       </div>
 
-      <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-white/10 bg-black/70 p-1 shadow-lg backdrop-blur-sm">
+      <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-white/10 bg-black/75 p-1 shadow-lg ring-1 ring-accent/20 backdrop-blur-sm">
         {image && (
           <>
             <button

@@ -4394,15 +4394,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           )}
 
           {previewMode && activeServer && (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1e1f22] bg-[#2b2d31] px-4 py-2">
-              <p className="text-xs font-medium text-[#f23f43] sm:text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-accent/30 bg-accent/10 px-4 py-2">
+              <p className="text-xs font-medium text-accent sm:text-sm">
                 Previewing <span className="text-white">{activeServer.name}</span>
               </p>
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
                   onClick={selectDiscover}
-                  className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-[#dbdee1] hover:bg-white/5"
+                  className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#dbdee1] hover:bg-white/5"
                 >
                   Back to Discover
                 </button>
@@ -4410,7 +4410,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   type="button"
                   disabled={joiningPreview}
                   onClick={() => void joinPreviewServer()}
-                  className="rounded-md bg-[#23a559] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-60"
+                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                 >
                   {joiningPreview ? "Joining…" : "Join Server"}
                 </button>
