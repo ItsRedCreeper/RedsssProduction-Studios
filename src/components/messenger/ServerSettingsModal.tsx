@@ -395,6 +395,7 @@ export function ServerSettingsModal({
     nextName: string,
     nextColor: string,
     nextPermissions: Record<string, boolean>,
+    nextHoist: boolean,
   ) {
     if (
       !canManageRoleTarget(roles, actorRoleIds, role, { isOwner })
@@ -445,6 +446,7 @@ export function ServerSettingsModal({
         name: trimmed,
         color: nextColor,
         permissions: sanitized,
+        hoist: nextHoist,
       })
       .eq("id", role.id)
       .select("*")
@@ -460,83 +462,18 @@ export function ServerSettingsModal({
     onRolesChanged?.(next);
   }
 
-  async function setDefaultRole(roleId: string) {
-    const target = roles.find((role) => role.id === roleId);
-    if (!target || target.is_default) return;
-    setError(null);
-    const supabase = createClient();
-    const previous = roles.find((role) => role.is_default);
-
-    // Only one default per server — clear others, then mark this one.
-    const { error: clearError } = await supabase
-      .from("roles")
-      .update({ is_default: false })
-      .eq("server_id", server.id)
-      .eq("is_default", true);
-    if (clearError) {
-      setError(clearError.message);
-      return;
-    }
-    const { data, error: setErrorMsg } = await supabase
-      .from("roles")
-      .update({ is_default: true })
-      .eq("id", roleId)
-      .select("*")
-      .single();
-    if (setErrorMsg || !data) {
-      setError(setErrorMsg?.message ?? "Could not set default role.");
-      return;
-    }
-
-    // Everyone gets the new default (like Discord @everyone — always present).
-    const missing = members.filter((member) => !member.roleIds.includes(roleId));
-    if (missing.length > 0) {
-      const { error: assignError } = await supabase.from("member_roles").insert(
-        missing.map((member) => ({
-          server_id: server.id,
-          user_id: member.user_id,
-          role_id: roleId,
-        })),
-      );
-      // Unique conflicts are fine if some already had it.
-      if (assignError && !/duplicate|unique/i.test(assignError.message)) {
-        setError(assignError.message);
-        return;
-      }
-      onMembersChanged(
-        members.map((member) =>
-          member.roleIds.includes(roleId)
-            ? member
-            : {
-                ...member,
-                roleIds: [...member.roleIds, roleId],
-              },
-        ),
-      );
-    }
-
-    const next = roles
-      .map((role) => {
-        if (role.id === roleId) return { ...data, is_default: true };
-        if (previous && role.id === previous.id)
-          return { ...role, is_default: false };
-        return { ...role, is_default: false };
-      })
-      .sort(compareRolePositionDesc);
-    setRoles(next);
-    onRolesChanged?.(next);
-  }
-
   async function moveRole(roleId: string, direction: -1 | 1) {
     // Display is highest-first; direction -1 = move up in list = higher position.
+    // Discord: @everyone / default Member stays pinned at the bottom.
     const ordered = [...roles].sort(compareRolePositionDesc);
     const index = ordered.findIndex((role) => role.id === roleId);
     if (index < 0) return;
+    const current = ordered[index];
+    if (!current || current.is_default) return;
     const swapIndex = index + direction;
     if (swapIndex < 0 || swapIndex >= ordered.length) return;
-    const current = ordered[index];
     const other = ordered[swapIndex];
-    if (!current || !other) return;
+    if (!other || other.is_default) return;
     setError(null);
     const supabase = createClient();
     const aPos = current.position;
@@ -1134,13 +1071,25 @@ export function ServerSettingsModal({
 
             {tab === "roles" && (canManageRoles || isOwner) && (
               <div className="space-y-4">
-                <p className="text-xs text-muted">
-                  Higher roles appear first in the member list and win for
-                  username color. Every role (including the default) gets its
-                  own member-list section. Like Discord’s @everyone, every
-                  server always has one default role that every member keeps —
-                  you can’t remove it from people or leave a server with none.
-                </p>
+                <div className="space-y-1.5 rounded-md border border-[#3f4147] bg-[#1e1f22]/60 px-3 py-2.5 text-xs leading-relaxed text-[#b5bac1]">
+                  <p>
+                    <span className="font-semibold text-[#dbdee1]">Hierarchy:</span>{" "}
+                    list is top → bottom. Higher roles win username color and
+                    can only manage people/roles below them.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#dbdee1]">Member list:</span>{" "}
+                    turn on “Display role members separately” on a role to give
+                    it its own section. People show under their{" "}
+                    <em>highest</em> displayed role; everyone else is Online /
+                    Offline.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#dbdee1]">Default Member:</span>{" "}
+                    like Discord’s @everyone — every member always has it, it
+                    stays at the bottom, and it can’t be removed.
+                  </p>
+                </div>
                 <ul className="space-y-2">
                   {roles.length === 0 && (
                     <li className="text-sm text-muted">No roles yet.</li>
@@ -1152,6 +1101,9 @@ export function ServerSettingsModal({
                       role,
                       { isOwner },
                     );
+                    const belowIsDefault =
+                      index < roles.length - 1 &&
+                      Boolean(roles[index + 1]?.is_default);
                     return (
                     <RoleRow
                       key={role.id}
@@ -1159,13 +1111,17 @@ export function ServerSettingsModal({
                       confirm={confirmRoleId === role.id}
                       canEdit={canEdit}
                       canDelete={!role.is_default && canEdit}
-                      canMoveUp={index > 0 && (isOwner || canEdit)}
+                      canMoveUp={
+                        !role.is_default && index > 0 && (isOwner || canEdit)
+                      }
                       canMoveDown={
-                        index < roles.length - 1 && (isOwner || canEdit)
+                        !role.is_default &&
+                        !belowIsDefault &&
+                        index < roles.length - 1 &&
+                        (isOwner || canEdit)
                       }
                       onMoveUp={() => void moveRole(role.id, -1)}
                       onMoveDown={() => void moveRole(role.id, 1)}
-                      onSetDefault={() => void setDefaultRole(role.id)}
                       onSave={saveRole}
                       onAskDelete={() => setConfirmRoleId(role.id)}
                       onCancelDelete={() => setConfirmRoleId(null)}
@@ -1720,7 +1676,6 @@ function RoleRow({
   canMoveDown = false,
   onMoveUp,
   onMoveDown,
-  onSetDefault,
   onSave,
   onAskDelete,
   onCancelDelete,
@@ -1734,12 +1689,12 @@ function RoleRow({
   canMoveDown?: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
-  onSetDefault: () => void;
   onSave: (
     role: Role,
     name: string,
     color: string,
     permissions: Record<string, boolean>,
+    hoist: boolean,
   ) => void;
   onAskDelete: () => void;
   onCancelDelete: () => void;
@@ -1747,6 +1702,7 @@ function RoleRow({
 }) {
   const [name, setName] = useState(role.name);
   const [color, setColor] = useState(role.color || "#dc2626");
+  const [hoist, setHoist] = useState(Boolean(role.hoist));
   const [perms, setPerms] = useState<Record<string, boolean>>(() => {
     const raw = role.permissions;
     return raw && typeof raw === "object" && !Array.isArray(raw)
@@ -1757,13 +1713,14 @@ function RoleRow({
   useEffect(() => {
     setName(role.name);
     setColor(role.color || "#dc2626");
+    setHoist(Boolean(role.hoist));
     const raw = role.permissions;
     setPerms(
       raw && typeof raw === "object" && !Array.isArray(raw)
         ? (raw as Record<string, boolean>)
         : {},
     );
-  }, [role.name, role.color, role.permissions]);
+  }, [role.name, role.color, role.hoist, role.permissions]);
 
   const baselinePerms =
     role.permissions &&
@@ -1775,12 +1732,13 @@ function RoleRow({
     name.trim() !== role.name ||
     (color || "#dc2626").toLowerCase() !==
       (role.color || "#dc2626").toLowerCase() ||
+    hoist !== Boolean(role.hoist) ||
     ROLE_PERM_OPTIONS.some(
       (option) => Boolean(perms[option.key]) !== Boolean(baselinePerms[option.key]),
     );
 
   return (
-    <li className="space-y-2 rounded-md bg-[#2b2d31] px-2 py-2">
+    <li className="space-y-3 rounded-md bg-[#2b2d31] px-3 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-col gap-0.5">
           <button
@@ -1788,7 +1746,8 @@ function RoleRow({
             onClick={onMoveUp}
             disabled={!canMoveUp}
             className="rounded p-0.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-30"
-            aria-label={`Move ${role.name} up`}
+            aria-label={`Move ${role.name} higher in hierarchy`}
+            title="Higher in hierarchy"
           >
             <ChevronUp className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
@@ -1797,46 +1756,22 @@ function RoleRow({
             onClick={onMoveDown}
             disabled={!canMoveDown}
             className="rounded p-0.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-30"
-            aria-label={`Move ${role.name} down`}
+            aria-label={`Move ${role.name} lower in hierarchy`}
+            title="Lower in hierarchy"
           >
             <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
         </div>
         <input
-          type="color"
-          value={color}
-          onChange={(event) => setColor(event.target.value)}
-          aria-label={`${role.name} color`}
-          disabled={!canEdit}
-          className="h-8 w-10 cursor-pointer rounded-md border border-border bg-transparent disabled:opacity-50"
-        />
-        <input
           value={name}
           onChange={(event) => setName(event.target.value)}
           disabled={!canEdit}
-          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-white outline-none focus:border-accent/40 disabled:opacity-50"
+          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold text-white outline-none focus:border-accent/40 disabled:opacity-50"
         />
-        {canEdit && (
-          <DirtySaveButton
-            size="sm"
-            dirty={dirty}
-            disabled={!name.trim()}
-            label="Save"
-            onClick={() => onSave(role, name, color, perms)}
-          />
-        )}
         {role.is_default ? (
           <span className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
-            Default
+            @everyone
           </span>
-        ) : canEdit ? (
-          <button
-            type="button"
-            onClick={onSetDefault}
-            className="rounded-md px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#b5bac1] hover:bg-white/10 hover:text-white"
-          >
-            Make default
-          </button>
         ) : null}
         {!canEdit ? (
           <span className="rounded-md px-2 py-1 text-[10px] font-medium text-[#949ba4]">
@@ -1868,30 +1803,85 @@ function RoleRow({
             Delete
           </button>
         ) : null}
+        {canEdit && (
+          <DirtySaveButton
+            size="sm"
+            dirty={dirty}
+            disabled={!name.trim()}
+            label="Save Changes"
+            onClick={() => onSave(role, name, color, perms, hoist)}
+          />
+        )}
       </div>
-      <div className="grid grid-cols-2 gap-1.5 px-1 pb-1 sm:grid-cols-3">
-        {ROLE_PERM_OPTIONS.map((option) => (
-          <label
-            key={option.key}
-            className={`flex items-center gap-1.5 text-[11px] text-[#dbdee1] ${
-              canEdit ? "" : "opacity-50"
-            }`}
-          >
+
+      <div className="space-y-2 border-t border-black/25 pt-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+          Display
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-[#dbdee1]">
+            <span className="text-[#949ba4]">Role color</span>
             <input
-              type="checkbox"
-              checked={Boolean(perms[option.key])}
+              type="color"
+              value={color}
+              onChange={(event) => setColor(event.target.value)}
+              aria-label={`${role.name} color`}
               disabled={!canEdit}
-              onChange={(event) =>
-                setPerms((current) => ({
-                  ...current,
-                  [option.key]: event.target.checked,
-                }))
-              }
-              className="h-3.5 w-3.5 accent-[var(--accent)]"
+              className="h-8 w-10 cursor-pointer rounded-md border border-border bg-transparent disabled:opacity-50"
             />
-            {option.label}
           </label>
-        ))}
+        </div>
+        <label
+          className={`flex items-start gap-2 text-xs text-[#dbdee1] ${
+            canEdit ? "" : "opacity-50"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={hoist}
+            disabled={!canEdit}
+            onChange={(event) => setHoist(event.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5 accent-[var(--accent)]"
+          />
+          <span>
+            <span className="font-medium">Display role members separately</span>
+            <span className="mt-0.5 block text-[11px] text-[#949ba4]">
+              Shows this role as its own section in the member list (online
+              members only). People with several displayed roles appear under
+              the highest one.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <div className="space-y-2 border-t border-black/25 pt-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#949ba4]">
+          Permissions
+        </p>
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+          {ROLE_PERM_OPTIONS.map((option) => (
+            <label
+              key={option.key}
+              className={`flex items-center gap-1.5 text-[11px] text-[#dbdee1] ${
+                canEdit ? "" : "opacity-50"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(perms[option.key])}
+                disabled={!canEdit}
+                onChange={(event) =>
+                  setPerms((current) => ({
+                    ...current,
+                    [option.key]: event.target.checked,
+                  }))
+                }
+                className="h-3.5 w-3.5 accent-[var(--accent)]"
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
       </div>
     </li>
   );

@@ -97,17 +97,23 @@ export function roleColorForMember(
 }
 
 /**
- * Role used for member-list grouping: highest role by position.
- * Every role counts the same (including the default Member role).
- * If the member has no role ids, fall back to the server default role.
+ * Discord member-list section: highest role the member has that is hoisted
+ * ("Display role members separately from online members").
+ * Non-hoisted roles never create a section — those people sit in Online/Offline.
  */
+export function memberListHoistRole(
+  roles: Role[],
+  roleIds: string[],
+): Role | null {
+  return rolesForMember(roles, roleIds).find((role) => role.hoist) ?? null;
+}
+
+/** @deprecated Use memberListHoistRole — Discord only sections hoisted roles. */
 export function memberListGroupRole(
   roles: Role[],
   roleIds: string[],
 ): Role | null {
-  const highest = highestRole(roles, roleIds);
-  if (highest) return highest;
-  return roles.find((role) => role.is_default) ?? null;
+  return memberListHoistRole(roles, roleIds);
 }
 
 /**

@@ -11,7 +11,7 @@ import { useOptionalPresenceFeed } from "@/components/presence/PresenceFeed";
 import { resolveDisplayStatus } from "@/lib/presence";
 import {
   compareRolePositionDesc,
-  memberListGroupRole,
+  memberListHoistRole,
   roleColorForMember,
 } from "@/lib/roles";
 
@@ -33,10 +33,7 @@ type MemberGroup = {
   title: string;
   /** People currently listed under this header. */
   members: MemberView[];
-  /**
-   * Header count. For role sections this is everyone who belongs to the role
-   * (online + offline) so the section stays visible when the group is offline.
-   */
+  /** Header count (online people in this section). */
   count: number;
 };
 
@@ -158,33 +155,36 @@ export function MemberList({
         return displayNameOf(a).localeCompare(displayNameOf(b));
       });
 
-    // Role sections: online members under their highest role. Offline members
-    // go to Offline — but the role header stays as long as anyone belongs to
-    // that role (count includes offline), so sections don't vanish when the
-    // whole group goes offline.
+    // Discord: only hoisted roles ("Display separately") get member-list
+    // sections. A member appears under their highest hoisted role. Everyone
+    // else is Online or Offline. Empty / all-offline hoist sections are hidden.
     const result: MemberGroup[] = [];
-    const orderedRoles = [...roles].sort(compareRolePositionDesc);
-    const assigned = new Set<string>();
+    const hoistedRoles = [...roles]
+      .filter((role) => role.hoist)
+      .sort(compareRolePositionDesc);
+    const inHoistSection = new Set<string>();
 
-    for (const role of orderedRoles) {
+    for (const role of hoistedRoles) {
       const belonging = members.filter((member) => {
-        const group = memberListGroupRole(roles, member.roleIds);
-        return group?.id === role.id;
+        if (!isOnline(member)) return false;
+        return memberListHoistRole(roles, member.roleIds)?.id === role.id;
       });
       if (belonging.length === 0) continue;
-      for (const row of belonging) assigned.add(row.user_id);
-      const onlineInRole = sortMembers(belonging.filter(isOnline));
+      for (const row of belonging) inHoistSection.add(row.user_id);
+      const onlineInRole = sortMembers(belonging);
       result.push({
         key: role.id,
         title: role.name,
         members: onlineInRole,
-        count: belonging.length,
+        count: onlineInRole.length,
       });
     }
 
-    // Online with no role group (rare) + everyone offline.
-    const remainder = members.filter((member) => !assigned.has(member.user_id));
-    const online = sortMembers(remainder.filter(isOnline));
+    const online = sortMembers(
+      members.filter(
+        (member) => isOnline(member) && !inHoistSection.has(member.user_id),
+      ),
+    );
     const offline = sortMembers(members.filter((member) => !isOnline(member)));
     if (online.length > 0) {
       result.push({
