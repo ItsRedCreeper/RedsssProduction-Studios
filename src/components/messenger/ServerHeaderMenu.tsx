@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   ChevronDown,
   Eye,
@@ -36,19 +37,36 @@ export function ServerHeaderMenu({
   onViewAsRole,
   onLeave,
 }: ServerHeaderMenuProps) {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [viewAsOpen, setViewAsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setOpen(false);
+    setViewAsOpen(false);
+  }, [serverName, pathname]);
 
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false);
+        setViewAsOpen(false);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        setViewAsOpen(false);
       }
     }
     window.addEventListener("mousedown", onPointerDown);
-    return () => window.removeEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [open]);
 
   return (

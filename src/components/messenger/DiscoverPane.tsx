@@ -234,7 +234,7 @@ export function DiscoverPane({
                       }`}
                     >
                       <Icon
-                        className={`h-4 w-4 shrink-0 ${active ? "text-accent" : ""}`}
+                        className={`h-4 w-4 shrink-0 ${active ? "text-[#23a559]" : ""}`}
                         strokeWidth={1.75}
                       />
                       {item.label}
@@ -350,9 +350,9 @@ export function DiscoverPane({
                 return (
                   <li
                     key={server.id}
-                    className="flex flex-col overflow-hidden rounded-md border border-[#3f4147] bg-[#2b2d31] transition-colors hover:border-accent/50"
+                    className="flex flex-col overflow-hidden rounded-md border border-[#3f4147] bg-[#2b2d31] transition-colors hover:border-[#23a559]/40"
                   >
-                    <div className="h-24 bg-[linear-gradient(135deg,rgba(220,38,38,0.55),#1e1f22_55%,#111214)]" />
+                    <div className="h-24 bg-[linear-gradient(135deg,rgba(35,165,89,0.35),#1e1f22_55%,#111214)]" />
                     <div className="relative flex flex-1 flex-col px-4 pb-4 pt-0">
                       <div className="-mt-7 mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-[1rem] bg-[#313338] text-sm font-bold text-white ring-4 ring-[#2b2d31]">
                         {server.icon_url ? (
@@ -409,7 +409,7 @@ export function DiscoverPane({
                             type="button"
                             disabled={joiningId === server.id}
                             onClick={() => void joinServer(server.id)}
-                            className="inline-flex flex-1 items-center justify-center rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+                            className="inline-flex flex-1 items-center justify-center rounded-md bg-[#23a559] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1a7f45] disabled:opacity-60"
                           >
                             {joiningId === server.id ? "Joining…" : "Join Server"}
                           </button>

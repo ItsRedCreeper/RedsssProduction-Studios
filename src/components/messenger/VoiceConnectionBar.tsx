@@ -67,16 +67,20 @@ export function VoiceConnectionBar({
   onToggleScreenShare,
 }: VoiceConnectionBarProps) {
   return (
-    <div className="shrink-0 border-t border-black/40 bg-[#232428] px-2 py-2">
+    <div className="shrink-0 border-t border-[#1f2023] bg-[#232428] px-2 py-2">
       <div className="mb-1 px-1">
-        <p className={`text-xs font-semibold ${quality.colorClass}`}>
-          Voice Connected
-        </p>
-        {micError ? (
-          <HoverTip label={micError} onlyIfTruncated delayMs={40} className="block max-w-full">
-            <p className="truncate text-[11px] text-accent">{micError}</p>
-          </HoverTip>
-        ) : null}
+        <HoverTip
+          label={micError || "Voice Connected"}
+          delayMs={40}
+          className="block max-w-full"
+        >
+          <p className={`truncate text-xs font-semibold ${quality.colorClass}`}>
+            Voice Connected
+            {micError ? (
+              <span className="font-normal text-[#f0b232]"> · Mic issue</span>
+            ) : null}
+          </p>
+        </HoverTip>
         {onOpenChannel ? (
           <HoverTip
             label={serverName ? `${channelName} / ${serverName}` : channelName}
