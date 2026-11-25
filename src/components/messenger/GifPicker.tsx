@@ -256,16 +256,19 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
                   key={gif.id}
                   type="button"
                   onClick={() => onPick(gif)}
-                  className="aspect-square overflow-hidden rounded-md bg-[var(--ms-border)] hover:ring-2 hover:ring-accent/70"
+                  className="relative aspect-square overflow-hidden rounded-md bg-[var(--ms-border)] hover:ring-2 hover:ring-accent/70"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={gif.previewUrl}
                     alt=""
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                     loading="lazy"
                     decoding="async"
-                    referrerPolicy="no-referrer"
+                    onError={(event) => {
+                      // Hide broken thumbs — square cell stays as a muted tile.
+                      event.currentTarget.style.visibility = "hidden";
+                    }}
                   />
                 </button>
               ))}
