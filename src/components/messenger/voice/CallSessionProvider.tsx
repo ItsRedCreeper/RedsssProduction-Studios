@@ -135,21 +135,6 @@ async function broadcastCtrl(conversationId: string, payload: CtrlPayload) {
   void supabase.removeChannel(channel);
 }
 
-async function postMissedCall(
-  conversationId: string,
-  userId: string,
-  targetName: string,
-) {
-  const supabase = createClient();
-  await supabase.from("dm_messages").insert({
-    conversation_id: conversationId,
-    user_id: userId,
-    content: `Missed call from ${targetName}.`,
-    is_system: true,
-    pinned: false,
-  });
-}
-
 export function CallSessionProvider({ children }: { children: ReactNode }) {
   const { user, profile } = useCurrentProfile();
   const voice = useOptionalVoiceSession();
