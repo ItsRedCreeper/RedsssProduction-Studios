@@ -1071,25 +1071,10 @@ export function ServerSettingsModal({
 
             {tab === "roles" && (canManageRoles || isOwner) && (
               <div className="space-y-4">
-                <div className="space-y-1.5 rounded-md border border-[#3f4147] bg-[#1e1f22]/60 px-3 py-2.5 text-xs leading-relaxed text-[#b5bac1]">
-                  <p>
-                    <span className="font-semibold text-[#dbdee1]">Hierarchy:</span>{" "}
-                    list is top → bottom. Higher roles win username color and
-                    can only manage people/roles below them.
-                  </p>
-                  <p>
-                    <span className="font-semibold text-[#dbdee1]">Member list:</span>{" "}
-                    turn on “Display role members separately” on a role to give
-                    it its own section. People show under their{" "}
-                    <em>highest</em> displayed role; everyone else is Online /
-                    Offline.
-                  </p>
-                  <p>
-                    <span className="font-semibold text-[#dbdee1]">Default Member:</span>{" "}
-                    like Discord’s @everyone — every member always has it, it
-                    stays at the bottom, and it can’t be removed.
-                  </p>
-                </div>
+                <p className="text-xs text-muted">
+                  Use the arrows to reorder roles. Higher roles sit above lower
+                  ones, and Members is always at the bottom.
+                </p>
                 <ul className="space-y-2">
                   {roles.length === 0 && (
                     <li className="text-sm text-muted">No roles yet.</li>
@@ -1843,13 +1828,8 @@ function RoleRow({
             onChange={(event) => setHoist(event.target.checked)}
             className="mt-0.5 h-3.5 w-3.5 accent-[var(--accent)]"
           />
-          <span>
-            <span className="font-medium">Display role members separately</span>
-            <span className="mt-0.5 block text-[11px] text-[#949ba4]">
-              Shows this role as its own section in the member list (online
-              members only). People with several displayed roles appear under
-              the highest one.
-            </span>
+          <span className="font-medium">
+            Display role members separately from online members
           </span>
         </label>
       </div>
