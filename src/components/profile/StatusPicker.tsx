@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { statusDotClass, statusLabel } from "@/components/messenger/data";
 import {
   CUSTOM_STATUS_CLEAR_AFTER_DEFAULT,
@@ -19,6 +20,7 @@ import {
 import { STATUS_TEXT_MAX } from "@/lib/field-limits";
 
 const STATUSES: ManualStatus[] = ["online", "idle", "dnd", "offline"];
+const PANEL_WIDTH = 288; // w-72
 
 type StatusPickerBase = {
   open: boolean;
@@ -58,13 +60,7 @@ function parseClearAfter(raw: string): StatusClearAfter {
   return Number(raw);
 }
 
-function panelClass(placement: "above" | "below") {
-  return `absolute z-50 w-72 overflow-visible rounded-md border border-[#1e1f22] bg-[#111214] py-2 shadow-xl shadow-black/50 ${
-    placement === "above"
-      ? "bottom-full left-0 mb-2"
-      : "top-full right-0 mt-2"
-  }`;
-}
+type PanelPos = { top: number; left: number };
 
 export function StatusPicker({
   open,
@@ -78,7 +74,9 @@ export function StatusPicker({
   onSaved,
   placement = "above",
 }: StatusPickerProps) {
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<PanelPos | null>(null);
   const [draftStatus, setDraftStatus] = useState<ManualStatus>("online");
   const [draftText, setDraftText] = useState("");
   /** After picking Idle/DND/Offline — ask how long before applying. */
@@ -110,6 +108,44 @@ export function StatusPicker({
     setNowTick(Date.now());
   }, [open, status, manualStatus, statusText, mode]);
 
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    function place() {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const gap = 8;
+      const left = Math.min(
+        Math.max(8, rect.right - PANEL_WIDTH),
+        window.innerWidth - PANEL_WIDTH - 8,
+      );
+      let top =
+        placement === "above" ? rect.top - gap : rect.bottom + gap;
+      // Measure after paint if panel exists; otherwise estimate.
+      const panelH = rootRef.current?.offsetHeight ?? 280;
+      if (placement === "above") {
+        top = rect.top - gap - panelH;
+        if (top < 8) top = rect.bottom + gap;
+      } else if (top + panelH > window.innerHeight - 8) {
+        top = Math.max(8, rect.top - gap - panelH);
+      }
+      setPos({ top, left });
+    }
+    place();
+    // Re-measure once panel mounts (height known for above placement).
+    const id = window.requestAnimationFrame(place);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.cancelAnimationFrame(id);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, placement, mode, pendingPresence]);
+
   useEffect(() => {
     if (!open) return;
     const id = window.setInterval(() => setNowTick(Date.now()), 30_000);
@@ -119,7 +155,12 @@ export function StatusPicker({
   useEffect(() => {
     if (!open) return;
     function onPointer(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) onClose();
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      // Keep open when clicking the local trigger (anchor's parent button area).
+      const trigger = anchorRef.current?.parentElement;
+      if (trigger?.contains(target)) return;
+      onClose();
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -138,8 +179,6 @@ export function StatusPicker({
       window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose, pendingPresence]);
-
-  if (!open) return null;
 
   const customMinutes = clearAfterToMinutes(customClearAfter);
   const currentPresence = (manualStatus ?? status ?? "online").toLowerCase();
@@ -254,141 +293,126 @@ export function StatusPicker({
     onClose();
   }
 
-  if (mode === "presence") {
-    return (
-      <div
-        ref={rootRef}
-        className={panelClass(placement)}
-        role="dialog"
-        aria-label="Set online status"
-      >
-        {pendingPresence ? (
-          <div className="px-3 pb-1 pt-1">
-            <p className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-              How long?
-            </p>
-            <div className="mb-2 flex items-center gap-2 rounded-md bg-[#1e1f22] px-2.5 py-2">
-              <span
-                className={`h-3 w-3 shrink-0 rounded-full ${statusDotClass(pendingPresence)}`}
-              />
-              <span className="text-sm font-medium text-white">
-                {statusLabel(pendingPresence)}
-              </span>
-            </div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-              Clear status after
-            </label>
-            <select
-              value={clearAfterSelectValue(presenceClearAfter)}
-              disabled={busy}
-              onChange={(event) =>
-                setPresenceClearAfter(parseClearAfter(event.target.value))
-              }
-              className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] focus:ring-accent"
-            >
-              {PRESENCE_CLEAR_AFTER_OPTIONS.map((opt) => (
-                <option
-                  key={opt.label}
-                  value={
-                    opt.minutes === null
-                      ? "none"
-                      : typeof opt.minutes === "string"
-                        ? opt.minutes
-                        : String(opt.minutes)
-                  }
-                >
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-2 text-[11px] leading-snug text-[#b5bac1]">
-              {presencePreview}
-            </p>
-            <div className="mt-3 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={cancelPresencePrompt}
-                className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-[#949ba4] hover:bg-white/5 hover:text-white disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void savePresence(pendingPresence, presenceClearAfter)
-                }
-                className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
-              >
-                {busy ? "Saving…" : "Confirm"}
-              </button>
-            </div>
-            {error && <p className="mt-2 text-xs text-accent">{error}</p>}
+  const panelBody = !open
+    ? null
+    : mode === "presence" ? (
+      pendingPresence ? (
+        <div className="px-3 pb-1 pt-1">
+          <p className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+            How long?
+          </p>
+          <div className="mb-2 flex items-center gap-2 rounded-md bg-[#1e1f22] px-2.5 py-2">
+            <span
+              className={`h-3 w-3 shrink-0 rounded-full ${statusDotClass(pendingPresence)}`}
+            />
+            <span className="text-sm font-medium text-white">
+              {statusLabel(pendingPresence)}
+            </span>
           </div>
-        ) : (
-          <>
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
-              Online status
-            </p>
-            {savedPresenceClear && currentPresence !== "online" && (
-              <div className="mx-3 mb-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5">
-                <p className="text-[11px] font-medium text-[#dbdee1]">
-                  {statusLabel(currentPresence)} · {savedPresenceClear}
-                </p>
-              </div>
-            )}
-            <ul>
-              {STATUSES.map((value) => {
-                const active = draftStatus === value;
-                const activeClear =
-                  active && value !== "online" ? savedPresenceClear : null;
-                return (
-                  <li key={value}>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => onPickPresence(value)}
-                      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm ${
-                        active
-                          ? "bg-accent/15 text-white"
-                          : "text-[#dbdee1] hover:bg-white/5"
-                      }`}
-                    >
-                      <span
-                        className={`h-3 w-3 shrink-0 rounded-full ${statusDotClass(value)}`}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium">
-                          {statusLabel(value)}
-                        </span>
-                        {activeClear ? (
-                          <span className="mt-0.5 block text-[11px] font-normal text-[#949ba4]">
-                            {activeClear}
-                          </span>
-                        ) : null}
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+            Clear status after
+          </label>
+          <select
+            value={clearAfterSelectValue(presenceClearAfter)}
+            disabled={busy}
+            onChange={(event) =>
+              setPresenceClearAfter(parseClearAfter(event.target.value))
+            }
+            className="w-full rounded-md bg-[#1e1f22] px-2.5 py-2 text-sm text-white outline-none ring-1 ring-[#3f4147] focus:ring-accent"
+          >
+            {PRESENCE_CLEAR_AFTER_OPTIONS.map((opt) => (
+              <option
+                key={opt.label}
+                value={
+                  opt.minutes === null
+                    ? "none"
+                    : typeof opt.minutes === "string"
+                      ? opt.minutes
+                      : String(opt.minutes)
+                }
+              >
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-[11px] leading-snug text-[#b5bac1]">
+            {presencePreview}
+          </p>
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={cancelPresencePrompt}
+              className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-[#949ba4] hover:bg-white/5 hover:text-white disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void savePresence(pendingPresence, presenceClearAfter)
+              }
+              className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+            >
+              {busy ? "Saving…" : "Confirm"}
+            </button>
+          </div>
+          {error && <p className="mt-2 text-xs text-accent">{error}</p>}
+        </div>
+      ) : (
+        <>
+          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+            Online status
+          </p>
+          {savedPresenceClear && currentPresence !== "online" && (
+            <div className="mx-3 mb-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5">
+              <p className="text-[11px] font-medium text-[#dbdee1]">
+                {statusLabel(currentPresence)} · {savedPresenceClear}
+              </p>
+            </div>
+          )}
+          <ul>
+            {STATUSES.map((value) => {
+              const active = draftStatus === value;
+              const activeClear =
+                active && value !== "online" ? savedPresenceClear : null;
+              return (
+                <li key={value}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onPickPresence(value)}
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm ${
+                      active
+                        ? "bg-accent/15 text-white"
+                        : "text-[#dbdee1] hover:bg-white/5"
+                    }`}
+                  >
+                    <span
+                      className={`h-3 w-3 shrink-0 rounded-full ${statusDotClass(value)}`}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">
+                        {statusLabel(value)}
                       </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {error && (
-              <p className="px-3 pb-1 text-xs text-accent">{error}</p>
-            )}
-          </>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={rootRef}
-      className={panelClass(placement)}
-      role="dialog"
-      aria-label="Set custom status"
-    >
+                      {activeClear ? (
+                        <span className="mt-0.5 block text-[11px] font-normal text-[#949ba4]">
+                          {activeClear}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {error && (
+            <p className="px-3 pb-1 text-xs text-accent">{error}</p>
+          )}
+        </>
+      )
+    ) : (
       <div className="px-3 pb-2 pt-1">
         <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
           Custom status
@@ -464,6 +488,37 @@ export function StatusPicker({
         </div>
         {error && <p className="mt-2 text-xs text-accent">{error}</p>}
       </div>
-    </div>
+    );
+
+  return (
+    <>
+      <span
+        ref={anchorRef}
+        className="pointer-events-none absolute inset-0"
+        aria-hidden
+      />
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={rootRef}
+              role="dialog"
+              aria-label={
+                mode === "presence" ? "Set online status" : "Set custom status"
+              }
+              style={{
+                position: "fixed",
+                top: pos?.top ?? -9999,
+                left: pos?.left ?? -9999,
+                width: PANEL_WIDTH,
+                visibility: pos ? "visible" : "hidden",
+              }}
+              className="z-[100] overflow-visible rounded-md border border-[#1e1f22] bg-[#111214] py-2 shadow-xl shadow-black/50"
+            >
+              {panelBody}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }

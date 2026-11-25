@@ -11,7 +11,10 @@ import {
   type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import {
+  PROFILE_UPDATED_EVENT,
+  useCurrentProfile,
+} from "@/hooks/useCurrentProfile";
 import {
   formatActivityLabel,
   loadActivitiesFor,
@@ -332,8 +335,18 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
       if (ids.length) void fetchUsers(ids);
     }, POLL_MS);
 
+    // StatusPicker / heartbeats notify here — refresh self immediately so dots
+    // don't keep a stale feed status until the next poll/realtime event.
+    const selfId = user.id;
+    function onProfileUpdated() {
+      watchedRef.current.add(selfId);
+      void fetchUsers([selfId]);
+    }
+    window.addEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
+
     return () => {
       window.clearInterval(poll);
+      window.removeEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
       void supabase.removeChannel(channel);
     };
   }, [user?.id, upsert, fetchUsers]);

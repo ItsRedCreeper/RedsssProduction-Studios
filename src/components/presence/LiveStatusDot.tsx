@@ -32,15 +32,27 @@ export function LiveStatusDot({
 
   const propSeen = lastSeenAt ? Date.parse(lastSeenAt) : Number.NaN;
   const liveSeen = live?.lastSeenAt ? Date.parse(live.lastSeenAt) : Number.NaN;
-  const propsNewer =
-    status != null &&
+  const propStatus = status?.toLowerCase() ?? null;
+  const liveStatus = live?.status?.toLowerCase() ?? null;
+  // Heartbeat can bump last_seen without the feed having the new manual status
+  // yet. Prefer an explicit prop status on mismatch unless live is clearly newer.
+  const statusMismatch =
+    propStatus != null && liveStatus != null && propStatus !== liveStatus;
+  const liveClearlyNewer =
     !Number.isNaN(propSeen) &&
-    (Number.isNaN(liveSeen) || propSeen >= liveSeen);
+    !Number.isNaN(liveSeen) &&
+    liveSeen > propSeen + 4_000;
+  const preferProps =
+    status != null &&
+    (statusMismatch
+      ? !liveClearlyNewer
+      : !Number.isNaN(propSeen) &&
+        (Number.isNaN(liveSeen) || propSeen >= liveSeen));
 
-  const mergedStatus = propsNewer
+  const mergedStatus = preferProps
     ? status
     : (live?.status ?? status ?? null);
-  const mergedLastSeen = propsNewer
+  const mergedLastSeen = preferProps
     ? (lastSeenAt ?? live?.lastSeenAt ?? null)
     : (live?.lastSeenAt ?? lastSeenAt ?? null);
 

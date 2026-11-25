@@ -55,8 +55,17 @@ export function UserPresenceBar({
   if (!user || !profile) return null;
 
   const name = profile.username;
-  const mergedStatus = live?.status ?? profile.status;
-  const mergedLastSeen = live?.lastSeenAt ?? profile.last_seen_at;
+  // Own profile is authoritative right after StatusPicker saves; feed can lag a beat.
+  const liveMismatch =
+    live?.status != null &&
+    profile.status != null &&
+    live.status.toLowerCase() !== profile.status.toLowerCase();
+  const mergedStatus = liveMismatch
+    ? profile.status
+    : (live?.status ?? profile.status);
+  const mergedLastSeen = liveMismatch
+    ? (profile.last_seen_at ?? live?.lastSeenAt ?? null)
+    : (live?.lastSeenAt ?? profile.last_seen_at);
   const custom =
     (live?.statusText !== undefined ? live.statusText : profile.status_text)?.trim() ||
     null;
@@ -91,7 +100,7 @@ export function UserPresenceBar({
           userId={user.id}
           status={mergedStatus}
           lastSeenAt={mergedLastSeen}
-          ringClassName="ring-background"
+          ringClassName="ring-[var(--ms-rail,#1a1b1e)]"
         />
       </button>
       <button

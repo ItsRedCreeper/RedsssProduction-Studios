@@ -71,7 +71,7 @@ export function Navbar() {
 
   return (
     <>
-      <header className="relative z-30 shrink-0 overflow-x-hidden border-b border-[var(--ms-border,#1e1f22)] bg-[var(--ms-rail,#1a1b1e)]/95 backdrop-blur-md">
+      <header className="relative z-30 shrink-0 overflow-visible border-b border-[var(--ms-border,#1e1f22)] bg-[var(--ms-rail,#1a1b1e)]/95 backdrop-blur-md">
         <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-2 px-2 sm:gap-3 sm:px-5">
           <button
             type="button"

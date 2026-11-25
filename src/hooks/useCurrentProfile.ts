@@ -7,7 +7,7 @@ import type { Tables } from "@/lib/supabase/database.types";
 
 export type CurrentProfile = Tables<"profiles">;
 
-const PROFILE_UPDATED_EVENT = "redsss-profile-updated";
+export const PROFILE_UPDATED_EVENT = "redsss-profile-updated";
 
 export function notifyProfileUpdated() {
   if (typeof window === "undefined") return;

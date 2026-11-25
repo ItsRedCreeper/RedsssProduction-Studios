@@ -3,6 +3,7 @@
 **Last updated:** 2026-11-25 16:00
 
 ## Completed this batch
+- **Status bugs** — StatusPicker portals (no longer clipped by navbar overflow); presence feed refreshes on profile-updated; LiveStatusDot / own chip prefer fresh manual status over stale feed.
 - **Critical GUI redesign** — profile out of Discord-style bottom-left bar into top-nav `UserPresenceBar` chip (avatar + name + status picker). Sidebar footer is voice-only when connected.
 - Shell polish: server rail `w-16` / icon buttons, channel/server headers `h-11`, softer messenger-header accent stub, HomeSidebar Friends row denser, CallOverlay offset for rail, MessageComposer tighter safe padding, Navbar messenger chrome uses `--ms-rail`.
 - Presence chip cleaned (no duplicate settings gear; Account settings stays in Navbar). Status picker opens below.
