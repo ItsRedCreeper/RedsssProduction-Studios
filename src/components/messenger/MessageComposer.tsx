@@ -103,10 +103,19 @@ type MessageComposerProps = {
   onLimitReached?: (message: string) => void;
 };
 
+const TEXTAREA_MIN_PX = 24;
+const TEXTAREA_MAX_PX = 160;
+
 function resizeTextarea(el: HTMLTextAreaElement | null) {
   if (!el) return;
-  el.style.height = "0px";
-  el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  // `auto` (not 0) so min-height / flex parents don't keep a stale scrollHeight
+  // after delete or after the voice-chat panel is widened again.
+  el.style.height = "auto";
+  const next = Math.min(
+    Math.max(el.scrollHeight, TEXTAREA_MIN_PX),
+    TEXTAREA_MAX_PX,
+  );
+  el.style.height = `${next}px`;
 }
 
 export function MessageComposer({
@@ -346,9 +355,20 @@ export function MessageComposer({
     }
   }, [draft]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     resizeTextarea(inputRef.current);
   }, [draft]);
+
+  // Voice-chat (and other) side panels resize width → wrap changes → reflow height.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      resizeTextarea(el);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!emojiOpen && !gifOpen && !stickerOpen) return;
