@@ -897,9 +897,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     let cancelled = false;
     // Keep previous server chrome visible until the new one is fully ready,
     // then swap channels + members + roles in one paint.
-    // Do NOT clear messages here — same-server membership/chrome refreshes used
-    // to wipe the timeline without re-triggering the channel message effect.
-    setLoadingChannels(true);
+    // Soft-refresh of the same server must not blank the chat to "Loading…".
+    if (loadedServerId !== serverId) {
+      setLoadingChannels(true);
+    }
 
     async function loadPreview() {
       setError(null);
@@ -961,21 +962,30 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (cancelled) return;
       if (channelResult.error) setError(channelResult.error.message);
       const nextChannels = channelResult.data ?? [];
-      const profiles = await loadProfiles(
-        (memberResult.data ?? []).map((row) => row.user_id),
-      );
-      if (cancelled) return;
-      const profileMap = new Map(profiles.map((item) => [item.id, item]));
       const rolesByUser = new Map<string, string[]>();
       for (const row of roleResult.data ?? []) {
         const list = rolesByUser.get(row.user_id) ?? [];
         list.push(row.role_id);
         rolesByUser.set(row.user_id, list);
       }
-      const nextMembers = (memberResult.data ?? []).map((row) => {
-        const memberProfile = profileMap.get(row.user_id);
+
+      // Unlock the chat pane as soon as channel chrome is ready — don't wait
+      // on member profile hydration (that was a major open-channel delay).
+      setPreviewServer(null);
+      setChannels(nextChannels);
+      setCategories(categoryResult.data ?? []);
+      setServerRoles((rolesTable.data as Role[] | null) ?? []);
+      setChannelServerMap((prev) => {
+        const next = { ...prev };
+        for (const channel of nextChannels) next[channel.id] = serverId;
+        return next;
+      });
+      setLoadedServerId(serverId);
+      setLoadingChannels(false);
+
+      const memberRows = memberResult.data ?? [];
+      const stubMembers = memberRows.map((row) => {
         const fromJunction = rolesByUser.get(row.user_id) ?? [];
-        // Union junction + legacy server_members.role_id so neither path is dropped.
         const roleIds = [
           ...new Set([
             ...fromJunction,
@@ -986,30 +996,38 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           user_id: row.user_id,
           nickname: row.nickname,
           joined_at: row.joined_at,
-          username: memberProfile?.username ?? "Unknown",
-          avatar_url: memberProfile?.avatar_url ?? null,
-          status: memberProfile?.status ?? "offline",
-          status_text: memberProfile?.status_text ?? null,
-          last_seen_at: memberProfile?.last_seen_at ?? null,
-          bio: memberProfile?.bio ?? null,
-          banner_url: memberProfile?.banner_url ?? null,
-          banner_color: memberProfile?.banner_color ?? null,
+          username: "Unknown",
+          avatar_url: null as string | null,
+          status: "offline",
+          status_text: null as string | null,
+          last_seen_at: null as string | null,
+          bio: null as string | null,
+          banner_url: null as string | null,
+          banner_color: null as string | null,
           roleIds,
         };
       });
+      setMembers(stubMembers);
 
-      setPreviewServer(null);
-      setChannels(nextChannels);
-      setCategories(categoryResult.data ?? []);
-      setServerRoles((rolesTable.data as Role[] | null) ?? []);
-      setMembers(nextMembers);
-      setChannelServerMap((prev) => {
-        const next = { ...prev };
-        for (const channel of nextChannels) next[channel.id] = serverId;
-        return next;
-      });
-      setLoadedServerId(serverId);
-      setLoadingChannels(false);
+      const profiles = await loadProfiles(memberRows.map((row) => row.user_id));
+      if (cancelled) return;
+      const profileMap = new Map(profiles.map((item) => [item.id, item]));
+      setMembers(
+        stubMembers.map((row) => {
+          const memberProfile = profileMap.get(row.user_id);
+          return {
+            ...row,
+            username: memberProfile?.username ?? "Unknown",
+            avatar_url: memberProfile?.avatar_url ?? null,
+            status: memberProfile?.status ?? "offline",
+            status_text: memberProfile?.status_text ?? null,
+            last_seen_at: memberProfile?.last_seen_at ?? null,
+            bio: memberProfile?.bio ?? null,
+            banner_url: memberProfile?.banner_url ?? null,
+            banner_color: memberProfile?.banner_color ?? null,
+          };
+        }),
+      );
     }
 
     if (previewLoadReady) {
@@ -1364,19 +1382,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [activeServerId, previewMode]);
 
   useEffect(() => {
-    if (!activeChannelId || !activeChannel) return;
-    // Wait for server channel list — opening mid-chrome-refresh used to cancel
-    // the in-flight fetch and leave an empty timeline that never reloaded.
+    if (!activeChannelId) return;
+    // Don't block on server chrome — messages load in parallel with members/roles.
+    // Skip only when we already know this isn't a text/voice chat channel.
     if (
-      pane === "server" &&
-      activeServerId &&
-      (loadingChannels || loadedServerId !== activeServerId)
+      activeChannel &&
+      activeChannel.type !== "text" &&
+      activeChannel.type !== "voice"
     ) {
-      setLoadingChannelMessages(true);
       return;
     }
 
-    // Voice channels keep their own text chat (Discord voice chat sidebar).
     const channelId = activeChannelId;
     const supabase = createClient();
     const requestId = ++messagesRequest.current;
@@ -1413,17 +1429,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
 
     async function loadPreviewMessages() {
-      let result = await loadPublicChannelMessages(channelId);
+      const result = await loadPublicChannelMessages(channelId);
       if (!stillCurrent()) return;
       if (result.error) {
-        await new Promise((resolve) => setTimeout(resolve, 150));
-        if (!stillCurrent()) return;
-        result = await loadPublicChannelMessages(channelId);
-        if (!stillCurrent()) return;
-      }
-      if (result.error) {
         setError(result.error);
-        // Keep any already-visible messages for this channel; only blank on switch.
         if (channelChanged) {
           setMessages([]);
           setReactions([]);
@@ -1436,14 +1445,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
 
     async function load() {
-      let result = await loadChannelMessages(channelId);
+      const result = await loadChannelMessages(channelId);
       if (!stillCurrent()) return;
-      if (result.error) {
-        await new Promise((resolve) => setTimeout(resolve, 150));
-        if (!stillCurrent()) return;
-        result = await loadChannelMessages(channelId);
-        if (!stillCurrent()) return;
-      }
       if (result.error) {
         setError(result.error);
         if (channelChanged) {
@@ -1454,17 +1457,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setLoadingChannelMessages(false);
         return;
       }
-      const ids = result.messages
-        .map((message) => message.id)
-        .filter((id) => !id.startsWith("temp-"));
-      const { data: reactionRows } =
-        ids.length > 0
-          ? await supabase
-              .from("message_reactions")
-              .select("*")
-              .in("message_id", ids)
-          : { data: [] as Tables<"message_reactions">[] };
-      await applyMessages(result.messages, reactionRows ?? [], result.hasMore);
+      await applyMessages(
+        result.messages,
+        result.reactions ?? [],
+        result.hasMore,
+      );
     }
 
     if (previewMode) {
@@ -1561,15 +1558,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [
-    activeChannelId,
-    activeChannel?.type,
-    previewMode,
-    pane,
-    activeServerId,
-    loadingChannels,
-    loadedServerId,
-  ]);
+  }, [activeChannelId, activeChannel?.type, previewMode]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -2285,26 +2274,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setLoadingOlderMessages(false);
       return;
     }
-    const ids = result.messages
-      .map((message) => message.id)
-      .filter((id) => !id.startsWith("temp-"));
-    const supabase = createClient();
-    const { data: reactionRows } =
-      ids.length > 0
-        ? await supabase
-            .from("message_reactions")
-            .select("*")
-            .in("message_id", ids)
-        : { data: [] as Tables<"message_reactions">[] };
     setMessages((prev) => {
       const seen = new Set(prev.map((message) => message.id));
       const older = result.messages.filter((message) => !seen.has(message.id));
       return [...older, ...prev];
     });
-    if (reactionRows?.length) {
+    if (result.reactions?.length) {
       setReactions((prev) => {
         let next = prev;
-        for (const row of reactionRows) {
+        for (const row of result.reactions) {
           next = upsertReaction(next, row);
         }
         return next;

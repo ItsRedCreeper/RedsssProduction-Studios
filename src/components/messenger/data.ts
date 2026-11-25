@@ -219,7 +219,51 @@ export function hydrateMessages(
 }
 
 /** Newest messages loaded per channel/DM open; scroll-up fetches the next page. */
-export const CHANNEL_MESSAGE_PAGE_SIZE = 100;
+export const CHANNEL_MESSAGE_PAGE_SIZE = 50;
+
+type ChannelMessageRpcRow = Tables<"messages"> & {
+  profiles?: { username: string; avatar_url: string | null } | null;
+  reply_to?: ReplyPreview | null;
+};
+
+type ChannelMessagesPayload = {
+  messages: ChannelMessageRpcRow[];
+  reactions: Tables<"message_reactions">[];
+};
+
+function parseChannelMessagesPayload(data: unknown): ChannelMessagesPayload {
+  const parsed = parseRpcJson(data);
+  if (Array.isArray(parsed)) {
+    return {
+      messages: parsed as ChannelMessageRpcRow[],
+      reactions: [],
+    };
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return { messages: [], reactions: [] };
+  }
+  const raw = parsed as Record<string, unknown>;
+  const messages = Array.isArray(raw.messages)
+    ? (raw.messages as ChannelMessageRpcRow[])
+    : [];
+  const reactions = Array.isArray(raw.reactions)
+    ? (raw.reactions as Tables<"message_reactions">[])
+    : [];
+  return { messages, reactions };
+}
+
+function mapChannelMessageRows(rows: ChannelMessageRpcRow[]): ChatMessage[] {
+  return rows.map((row) => {
+    const { profiles, reply_to, ...message } = row;
+    return {
+      ...message,
+      profiles: profiles
+        ? { username: profiles.username, avatar_url: profiles.avatar_url }
+        : null,
+      reply_to: reply_to ?? null,
+    };
+  });
+}
 
 async function hydrateMessageRows(
   rowsNewestFirst: Tables<"messages">[],
@@ -235,44 +279,69 @@ async function hydrateMessageRows(
   ];
 
   const supabase = createClient();
-  let parents: Tables<"messages">[] = [];
-  if (missingParentIds.length > 0) {
-    const parentResult = await supabase
-      .from("messages")
-      .select("*")
-      .in("id", missingParentIds);
-    parents = parentResult.data ?? [];
-  }
+  const parentsPromise =
+    missingParentIds.length > 0
+      ? supabase.from("messages").select("*").in("id", missingParentIds)
+      : Promise.resolve({ data: [] as Tables<"messages">[] });
 
-  const profiles = await loadProfiles([
-    ...rows.map((row) => row.user_id),
-    ...parents.map((row) => row.user_id),
+  // Start author profiles in parallel with parent-message fetch.
+  const authorIds = rows.map((row) => row.user_id);
+  const [parentResult, authorProfiles] = await Promise.all([
+    parentsPromise,
+    loadProfiles(authorIds),
   ]);
-  return hydrateMessages(rows, profiles, parents);
+  const parents = parentResult.data ?? [];
+  const missingAuthorIds = parents
+    .map((row) => row.user_id)
+    .filter((id) => !authorIds.includes(id));
+  const extraProfiles =
+    missingAuthorIds.length > 0 ? await loadProfiles(missingAuthorIds) : [];
+  return hydrateMessages(rows, [...authorProfiles, ...extraProfiles], parents);
 }
 
-export async function loadChannelMessages(channelId: string) {
+export async function loadChannelMessages(
+  channelId: string,
+  opts?: { limit?: number; before?: string | null },
+) {
   const supabase = createClient();
-  // Newest N first, then reverse so the timeline stays chronological.
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("channel_id", channelId)
-    .order("created_at", { ascending: false })
-    .limit(CHANNEL_MESSAGE_PAGE_SIZE);
+  const limit = opts?.limit ?? CHANNEL_MESSAGE_PAGE_SIZE;
+  // One RPC: messages + author/reply profiles + reactions for this page.
+  const { data, error } = await supabase.rpc("get_channel_messages", {
+    p_channel_id: channelId,
+    p_limit: limit,
+    p_before: opts?.before ?? null,
+  });
 
-  if (error || !data) {
+  if (error) {
+    // Fallback for older deployments / transient RPC issues.
+    const { data: rows, error: tableError } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("channel_id", channelId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (tableError || !rows) {
+      return {
+        messages: [] as ChatMessage[],
+        reactions: [] as Tables<"message_reactions">[],
+        hasMore: false,
+        error: error.message,
+      };
+    }
+    const messages = await hydrateMessageRows(rows);
     return {
-      messages: [] as ChatMessage[],
-      hasMore: false,
-      error: error?.message ?? "Failed to load messages",
+      messages,
+      reactions: [] as Tables<"message_reactions">[],
+      hasMore: rows.length >= limit,
+      error: null as string | null,
     };
   }
 
-  const messages = await hydrateMessageRows(data);
+  const payload = parseChannelMessagesPayload(data);
   return {
-    messages,
-    hasMore: data.length >= CHANNEL_MESSAGE_PAGE_SIZE,
+    messages: mapChannelMessageRows(payload.messages),
+    reactions: payload.reactions,
+    hasMore: payload.messages.length >= limit,
     error: null as string | null,
   };
 }
@@ -320,14 +389,6 @@ function asPreviewPayload(data: unknown): Record<string, unknown> | null {
 
 export async function loadPublicServerPreview(serverId: string) {
   const supabase = createClient();
-  // Fresh shell mounts (Discover → Preview) can race ahead of session hydrate.
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) {
-    return {
-      preview: null as PublicServerPreview | null,
-      error: "Not authenticated",
-    };
-  }
 
   async function fetchOnce() {
     return supabase.rpc("get_public_server_preview", {
@@ -338,7 +399,7 @@ export async function loadPublicServerPreview(serverId: string) {
   let { data, error } = await fetchOnce();
   // One retry: first paint after navigation sometimes hits a cold auth/RPC race.
   if (!error && (data == null || !asPreviewPayload(data)?.server)) {
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 80));
     ({ data, error } = await fetchOnce());
   }
 
@@ -417,14 +478,6 @@ export async function loadPublicChannelMessages(
 ) {
   const supabase = createClient();
   const limit = opts?.limit ?? CHANNEL_MESSAGE_PAGE_SIZE;
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) {
-    return {
-      messages: [] as ChatMessage[],
-      hasMore: false,
-      error: "Not authenticated",
-    };
-  }
   const { data, error } = await supabase.rpc("get_public_channel_messages", {
     p_channel_id: channelId,
     p_limit: limit,
@@ -441,7 +494,11 @@ export async function loadPublicChannelMessages(
   const rows = (
     Array.isArray(parsed) ? parsed : []
   ) as PublicPreviewMessageRow[];
-  const messages: ChatMessage[] = rows.map((row) => {
+  // Public RPC returns oldest→newest already.
+  const chronological = [...rows].sort(
+    (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
+  );
+  const messages: ChatMessage[] = chronological.map((row) => {
     const { profiles, ...message } = row;
     return {
       ...message,
@@ -463,29 +520,10 @@ export async function loadOlderChannelMessages(
   channelId: string,
   beforeCreatedAt: string,
 ) {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("channel_id", channelId)
-    .lt("created_at", beforeCreatedAt)
-    .order("created_at", { ascending: false })
-    .limit(CHANNEL_MESSAGE_PAGE_SIZE);
-
-  if (error || !data) {
-    return {
-      messages: [] as ChatMessage[],
-      hasMore: false,
-      error: error?.message ?? "Failed to load older messages",
-    };
-  }
-
-  const messages = await hydrateMessageRows(data);
-  return {
-    messages,
-    hasMore: data.length >= CHANNEL_MESSAGE_PAGE_SIZE,
-    error: null as string | null,
-  };
+  return loadChannelMessages(channelId, {
+    before: beforeCreatedAt,
+    limit: CHANNEL_MESSAGE_PAGE_SIZE,
+  });
 }
 
 export async function loadOlderDmMessages(

@@ -442,6 +442,14 @@ export type Database = {
         }
         Returns: Json
       }
+      get_channel_messages: {
+        Args: {
+          p_channel_id: string
+          p_limit?: number
+          p_before?: string | null
+        }
+        Returns: Json
+      }
       heartbeat_presence: {
         Args: {
           p_status: string
