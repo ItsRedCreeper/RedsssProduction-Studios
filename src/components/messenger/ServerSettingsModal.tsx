@@ -41,6 +41,7 @@ import {
   SERVER_NAME_MIN,
 } from "@/lib/field-limits";
 import { sanitizeEmojiName, type ServerEmoji } from "@/lib/emoji";
+import type { AutomodRule } from "@/lib/automod";
 import {
   DEFAULT_MEMBER_PERMISSIONS,
   PERMISSIONS,
@@ -68,6 +69,17 @@ const ROLE_PERM_OPTIONS = ROLE_PERMISSION_OPTIONS.map((option) => ({
   label: option.label,
 }));
 
+type ServerSticker = {
+  id: string;
+  server_id: string;
+  name: string;
+  url: string;
+  created_by: string;
+  created_at: string;
+};
+
+type AutomodRuleRow = AutomodRule & { name: string; server_id: string };
+
 const TABS: { id: SettingsTab; label: string; icon: typeof Shield }[] = [
   { id: "overview", label: "Overview", icon: Shield },
   { id: "roles", label: "Roles", icon: Shield },
@@ -75,6 +87,9 @@ const TABS: { id: SettingsTab; label: string; icon: typeof Shield }[] = [
   { id: "invites", label: "Invites", icon: Link2 },
   { id: "channels", label: "Channels", icon: Hash },
   { id: "emojis", label: "Emojis", icon: Smile },
+  { id: "stickers", label: "Stickers", icon: Upload },
+  { id: "automod", label: "AutoMod", icon: Shield },
+  { id: "safety", label: "Safety", icon: Shield },
 ];
 
 type ServerSettingsModalProps = {
@@ -101,6 +116,7 @@ type ServerSettingsModalProps = {
   onMembersChanged: (members: MemberView[]) => void;
   onRolesChanged?: (roles: Role[]) => void;
   onEmojisChanged?: () => void;
+  onAutomodChanged?: () => void;
 };
 
 export function ServerSettingsModal({
@@ -126,6 +142,7 @@ export function ServerSettingsModal({
   onMembersChanged,
   onRolesChanged,
   onEmojisChanged,
+  onAutomodChanged,
 }: ServerSettingsModalProps) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [name, setName] = useState(server.name);
@@ -162,6 +179,17 @@ export function ServerSettingsModal({
   const [editChannelName, setEditChannelName] = useState("");
   const [newChannelPrivate, setNewChannelPrivate] = useState(false);
   const [permsChannelId, setPermsChannelId] = useState<string | null>(null);
+  const [permsCategoryId, setPermsCategoryId] = useState<string | null>(null);
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
+  const [serverStickers, setServerStickers] = useState<ServerSticker[]>([]);
+  const [stickerName, setStickerName] = useState("");
+  const [stickerFile, setStickerFile] = useState<File | null>(null);
+  const [stickerBusy, setStickerBusy] = useState(false);
+  const stickerFileRef = useRef<HTMLInputElement | null>(null);
+  const [automodRules, setAutomodRules] = useState<AutomodRuleRow[]>([]);
+  const [automodRuleName, setAutomodRuleName] = useState("");
+  const [automodKeywords, setAutomodKeywords] = useState("");
+  const [automodBusy, setAutomodBusy] = useState(false);
   const [banMemberId, setBanMemberId] = useState<string | null>(null);
   const [banReason, setBanReason] = useState("");
   const [banDeleteDays, setBanDeleteDays] = useState(0);
@@ -200,6 +228,12 @@ export function ServerSettingsModal({
         return canManageChannels || isOwner;
       case "emojis":
         return canManageEmojis || isOwner;
+      case "stickers":
+        return canManageEmojis || isOwner;
+      case "automod":
+        return canManageServer || isOwner;
+      case "safety":
+        return canManageServer || isOwner;
       default:
         return false;
     }
@@ -224,6 +258,11 @@ export function ServerSettingsModal({
     setEditingChannelId(null);
     setEmojiName("");
     setEmojiFile(null);
+    setStickerName("");
+    setStickerFile(null);
+    setAutomodRuleName("");
+    setAutomodKeywords("");
+    setPermsCategoryId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -233,8 +272,14 @@ export function ServerSettingsModal({
     let cancelled = false;
 
     async function load() {
-      const [rolesResult, invitesResult, emojiResult, bansResult] =
-        await Promise.all([
+      const [
+        rolesResult,
+        invitesResult,
+        emojiResult,
+        bansResult,
+        stickersResult,
+        automodResult,
+      ] = await Promise.all([
           supabase
             .from("roles")
             .select("*")
@@ -255,6 +300,16 @@ export function ServerSettingsModal({
             .select("user_id, reason, expires_at, created_at")
             .eq("server_id", server.id)
             .order("created_at", { ascending: false }),
+          supabase
+            .from("server_stickers")
+            .select("*")
+            .eq("server_id", server.id)
+            .order("name", { ascending: true }),
+          supabase
+            .from("server_automod_rules")
+            .select("*")
+            .eq("server_id", server.id)
+            .order("created_at", { ascending: true }),
         ]);
       if (cancelled) return;
       if (rolesResult.error) setError(rolesResult.error.message);
@@ -266,6 +321,10 @@ export function ServerSettingsModal({
       if (invitesResult.error) setError(invitesResult.error.message);
       if (emojiResult.error) setError(emojiResult.error.message);
       else setServerEmojis((emojiResult.data as ServerEmoji[]) ?? []);
+      if (stickersResult.error) setError(stickersResult.error.message);
+      else setServerStickers((stickersResult.data as ServerSticker[]) ?? []);
+      if (automodResult.error) setError(automodResult.error.message);
+      else setAutomodRules((automodResult.data as AutomodRuleRow[]) ?? []);
       if (!bansResult.error) {
         const rows = bansResult.data ?? [];
         const ids = rows.map((row) => row.user_id);
@@ -345,7 +404,19 @@ export function ServerSettingsModal({
     }
   }, [categories, channelCategoryId]);
 
+  useEffect(() => {
+    if (!open || roles.length === 0) return;
+    setSelectedRoleId((current) => {
+      if (current && roles.some((role) => role.id === current)) return current;
+      const defaultRole = roles.find((role) => role.is_default);
+      return defaultRole?.id ?? roles[0]?.id ?? null;
+    });
+  }, [open, roles]);
+
   if (!open) return null;
+
+  const safetyVerificationDirty =
+    verificationLevel !== (server.verification_level ?? 0);
 
   const overviewDirty =
     name.trim() !== server.name ||
@@ -381,6 +452,25 @@ export function ServerSettingsModal({
     setSaving(false);
     if (updateError || !data) {
       setError(updateError?.message ?? "Could not save server.");
+      return;
+    }
+    onServerUpdated(data);
+  }
+
+  async function saveSafetyVerification() {
+    if (!canManageServer && !isOwner) return;
+    setSaving(true);
+    setError(null);
+    const supabase = createClient();
+    const { data, error: updateError } = await supabase
+      .from("servers")
+      .update({ verification_level: verificationLevel })
+      .eq("id", server.id)
+      .select("*")
+      .single();
+    setSaving(false);
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not save verification level.");
       return;
     }
     onServerUpdated(data);
@@ -619,6 +709,7 @@ export function ServerSettingsModal({
     setRoles(next);
     onRolesChanged?.(next);
     setRoleName("");
+    setSelectedRoleId(data.id);
   }
 
   async function saveRole(
@@ -1229,6 +1320,30 @@ export function ServerSettingsModal({
     if (newChannelPrivate) setPermsChannelId(data.id);
   }
 
+  async function saveCategoryOverrides(
+    category: Category,
+    nextOverrides: ReturnType<typeof setChannelPrivate>,
+  ) {
+    setSaving(true);
+    setError(null);
+    const supabase = createClient();
+    const { data, error: updateError } = await supabase
+      .from("channel_categories")
+      .update({ permission_overrides: nextOverrides })
+      .eq("id", category.id)
+      .select("*")
+      .single();
+    setSaving(false);
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not update category permissions.");
+      return;
+    }
+    onChannelsChanged(
+      channels,
+      categories.map((item) => (item.id === category.id ? data : item)).sort(byPosition),
+    );
+  }
+
   async function saveChannelOverrides(
     channel: Channel,
     nextOverrides: ReturnType<typeof setChannelPrivate>,
@@ -1397,6 +1512,205 @@ export function ServerSettingsModal({
     setServerEmojis((prev) => prev.filter((row) => row.id !== emoji.id));
     setEmojiBusy(false);
     onEmojisChanged?.();
+  }
+
+  async function uploadServerSticker(event: FormEvent) {
+    event.preventDefault();
+    if (!canManageEmojis && !isOwner) {
+      setError("You don't have permission to manage stickers.");
+      return;
+    }
+    if (!stickerFile) {
+      setError("Choose an image first.");
+      return;
+    }
+    const stickerLabel = sanitizeEmojiName(
+      stickerName || stickerFile.name.replace(/\.[^.]+$/, ""),
+    );
+    if (stickerLabel.length < 2) {
+      setError("Sticker name must be at least 2 characters.");
+      return;
+    }
+    if (stickerFile.size > 512 * 1024) {
+      setError("Sticker must be 512 KB or smaller.");
+      return;
+    }
+    setStickerBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const ext =
+      stickerFile.type === "image/gif"
+        ? "gif"
+        : stickerFile.type === "image/webp"
+          ? "webp"
+          : stickerFile.type === "image/png"
+            ? "png"
+            : "jpg";
+    const id = crypto.randomUUID();
+    let bucket = "server-stickers";
+    let path = `${server.id}/${id}.${ext}`;
+    let uploadError = (
+      await supabase.storage.from(bucket).upload(path, stickerFile, {
+        contentType: stickerFile.type || "image/png",
+        upsert: false,
+      })
+    ).error;
+    if (uploadError) {
+      // Fallback: use server-emojis bucket with stickers/ path prefix
+      bucket = "server-emojis";
+      path = `stickers/${server.id}/${id}.${ext}`;
+      uploadError = (
+        await supabase.storage.from(bucket).upload(path, stickerFile, {
+          contentType: stickerFile.type || "image/png",
+          upsert: false,
+        })
+      ).error;
+    }
+    if (uploadError) {
+      setStickerBusy(false);
+      setError(uploadError.message);
+      return;
+    }
+    const { data: publicUrl } = supabase.storage.from(bucket).getPublicUrl(path);
+    const { data, error: insertError } = await supabase
+      .from("server_stickers")
+      .insert({
+        id,
+        server_id: server.id,
+        name: stickerLabel,
+        url: publicUrl.publicUrl,
+        created_by: userId,
+      })
+      .select("*")
+      .single();
+    setStickerBusy(false);
+    if (insertError || !data) {
+      setError(insertError?.message ?? "Could not save sticker.");
+      return;
+    }
+    setServerStickers((prev) =>
+      [...prev, data as ServerSticker].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+    );
+    setStickerName("");
+    setStickerFile(null);
+    if (stickerFileRef.current) stickerFileRef.current.value = "";
+    onEmojisChanged?.();
+  }
+
+  async function deleteServerSticker(sticker: ServerSticker) {
+    if (!canManageEmojis && !isOwner) {
+      setError("You don't have permission to manage stickers.");
+      return;
+    }
+    setStickerBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: deleteError } = await supabase
+      .from("server_stickers")
+      .delete()
+      .eq("id", sticker.id);
+    if (deleteError) {
+      setStickerBusy(false);
+      setError(deleteError.message);
+      return;
+    }
+    const stickersMatch = sticker.url.match(/server-stickers\/(.+)$/);
+    const emojiStickersMatch = sticker.url.match(/server-emojis\/(.+)$/);
+    if (stickersMatch?.[1]) {
+      void supabase.storage
+        .from("server-stickers")
+        .remove([decodeURIComponent(stickersMatch[1])]);
+    } else if (emojiStickersMatch?.[1]) {
+      void supabase.storage
+        .from("server-emojis")
+        .remove([decodeURIComponent(emojiStickersMatch[1])]);
+    }
+    setServerStickers((prev) => prev.filter((row) => row.id !== sticker.id));
+    setStickerBusy(false);
+    onEmojisChanged?.();
+  }
+
+  async function createAutomodRule(event: FormEvent) {
+    event.preventDefault();
+    if (!canManageServer && !isOwner) return;
+    const name = automodRuleName.trim();
+    if (name.length < 2) {
+      setError("Rule name must be at least 2 characters.");
+      return;
+    }
+    const keywords = automodKeywords
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (keywords.length === 0) {
+      setError("Add at least one keyword (comma-separated).");
+      return;
+    }
+    setAutomodBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const { data, error: insertError } = await supabase
+      .from("server_automod_rules")
+      .insert({
+        server_id: server.id,
+        name,
+        enabled: true,
+        keywords,
+        action: "block",
+      })
+      .select("*")
+      .single();
+    setAutomodBusy(false);
+    if (insertError || !data) {
+      setError(insertError?.message ?? "Could not create AutoMod rule.");
+      return;
+    }
+    setAutomodRules((prev) => [...prev, data as AutomodRuleRow]);
+    setAutomodRuleName("");
+    setAutomodKeywords("");
+    onAutomodChanged?.();
+  }
+
+  async function setAutomodRuleEnabled(ruleId: string, enabled: boolean) {
+    if (!canManageServer && !isOwner) return;
+    setAutomodBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const { data, error: updateError } = await supabase
+      .from("server_automod_rules")
+      .update({ enabled })
+      .eq("id", ruleId)
+      .select("*")
+      .single();
+    setAutomodBusy(false);
+    if (updateError || !data) {
+      setError(updateError?.message ?? "Could not update rule.");
+      return;
+    }
+    setAutomodRules((prev) =>
+      prev.map((rule) => (rule.id === ruleId ? (data as AutomodRuleRow) : rule)),
+    );
+    onAutomodChanged?.();
+  }
+
+  async function deleteAutomodRule(ruleId: string) {
+    if (!canManageServer && !isOwner) return;
+    setAutomodBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: deleteError } = await supabase
+      .from("server_automod_rules")
+      .delete()
+      .eq("id", ruleId);
+    setAutomodBusy(false);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    setAutomodRules((prev) => prev.filter((rule) => rule.id !== ruleId));
+    onAutomodChanged?.();
   }
 
   const roleById = new Map(roles.map((role) => [role.id, role]));
@@ -1610,75 +1924,108 @@ export function ServerSettingsModal({
             )}
 
             {tab === "roles" && (canManageRoles || isOwner) && (
-              <div className="space-y-4">
-                <ul className="space-y-2">
-                  {roles.length === 0 && (
-                    <li className="text-sm text-muted">No roles yet.</li>
-                  )}
-                  {roles.map((role, index) => {
-                    const canEdit = canManageRoleTarget(
-                      roles,
-                      actorRoleIds,
-                      role,
-                      { isOwner },
-                    );
-                    const belowIsDefault =
-                      index < roles.length - 1 &&
-                      Boolean(roles[index + 1]?.is_default);
-                    return (
-                    <RoleRow
-                      key={role.id}
-                      role={role}
-                      confirm={confirmRoleId === role.id}
-                      canEdit={canEdit}
-                      canDelete={!role.is_default && canEdit}
-                      canMoveUp={
-                        !role.is_default && index > 0 && (isOwner || canEdit)
-                      }
-                      canMoveDown={
-                        !role.is_default &&
-                        !belowIsDefault &&
-                        index < roles.length - 1 &&
-                        (isOwner || canEdit)
-                      }
-                      onMoveUp={() => void moveRole(role.id, -1)}
-                      onMoveDown={() => void moveRole(role.id, 1)}
-                      onSave={saveRole}
-                      onAskDelete={() => setConfirmRoleId(role.id)}
-                      onCancelDelete={() => setConfirmRoleId(null)}
-                      onDelete={() => void deleteRole(role.id)}
-                    />
-                    );
-                  })}
-                </ul>
-                <form onSubmit={createRole} className="flex flex-wrap items-end gap-2 border-t border-black/30 pt-4">
-                  <label className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      New role
-                    </span>
+              <div className="flex min-h-[20rem] gap-3">
+                <form
+                  onSubmit={createRole}
+                  className="flex w-40 shrink-0 flex-col rounded-md border border-[#3f4147] bg-[#2b2d31]"
+                >
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {roles.length === 0 ? (
+                      <p className="px-2 py-3 text-sm text-muted">No roles yet.</p>
+                    ) : (
+                      <ul className="space-y-0.5">
+                        {roles.map((role) => (
+                          <li key={role.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRoleId(role.id)}
+                              className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm ${
+                                selectedRoleId === role.id
+                                  ? "bg-[#404249] text-white"
+                                  : "text-[#dbdee1] hover:bg-white/5"
+                              }`}
+                            >
+                              <span
+                                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                style={{
+                                  backgroundColor: role.color || "#99aab5",
+                                }}
+                              />
+                              <span className="min-w-0 truncate">{role.name}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="space-y-2 border-t border-[#3f4147] p-2">
                     <input
                       value={roleName}
                       onChange={(event) => setRoleName(event.target.value)}
                       placeholder="Role name"
                       maxLength={ROLE_NAME_MAX}
-                      className="block w-48 rounded-md border border-border bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/50"
+                      className="w-full rounded-md border border-border bg-[#1e1f22] px-2 py-1.5 text-sm outline-none focus:border-accent/50"
                     />
-                  </label>
-                  <input
-                    type="color"
-                    value={roleColor}
-                    onChange={(event) => setRoleColor(event.target.value)}
-                    aria-label="Role color"
-                    className="h-9 w-12 cursor-pointer rounded-md border border-border bg-[#1e1f22]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={saving || !roleName.trim()}
-                    className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
-                  >
-                    Add role
-                  </button>
+                    <input
+                      type="color"
+                      value={roleColor}
+                      onChange={(event) => setRoleColor(event.target.value)}
+                      aria-label="New role color"
+                      className="h-9 w-full cursor-pointer rounded-md border border-border bg-[#1e1f22]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={saving || !roleName.trim()}
+                      className="flex w-full items-center justify-center gap-1 rounded-md bg-[#3f4147] px-2 py-1.5 text-sm font-medium text-white hover:bg-[#4e5058] disabled:opacity-50"
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2} />
+                      New Role
+                    </button>
+                  </div>
                 </form>
+                <div className="min-w-0 flex-1 overflow-y-auto">
+                  {selectedRoleId && roles.some((r) => r.id === selectedRoleId) ? (
+                    (() => {
+                      const role = roles.find((r) => r.id === selectedRoleId)!;
+                      const index = roles.findIndex((r) => r.id === selectedRoleId);
+                      const canEdit = canManageRoleTarget(
+                        roles,
+                        actorRoleIds,
+                        role,
+                        { isOwner },
+                      );
+                      const belowIsDefault =
+                        index < roles.length - 1 &&
+                        Boolean(roles[index + 1]?.is_default);
+                      return (
+                        <RoleRow
+                          key={role.id}
+                          role={role}
+                          confirm={confirmRoleId === role.id}
+                          canEdit={canEdit}
+                          canDelete={!role.is_default && canEdit}
+                          canMoveUp={
+                            !role.is_default && index > 0 && (isOwner || canEdit)
+                          }
+                          canMoveDown={
+                            !role.is_default &&
+                            !belowIsDefault &&
+                            index < roles.length - 1 &&
+                            (isOwner || canEdit)
+                          }
+                          onMoveUp={() => void moveRole(role.id, -1)}
+                          onMoveDown={() => void moveRole(role.id, 1)}
+                          onSave={saveRole}
+                          onAskDelete={() => setConfirmRoleId(role.id)}
+                          onCancelDelete={() => setConfirmRoleId(null)}
+                          onDelete={() => void deleteRole(role.id)}
+                        />
+                      );
+                    })()
+                  ) : (
+                    <p className="text-sm text-muted">Select a role to edit.</p>
+                  )}
+                </div>
               </div>
             )}
 
@@ -2216,18 +2563,120 @@ export function ServerSettingsModal({
                   </button>
                 </form>
 
-                <ul className="space-y-1">
+                <ul className="space-y-2">
                   {sortedCategories.length === 0 ? (
                     <li className="text-sm text-muted">No categories yet.</li>
                   ) : (
-                    sortedCategories.map((category) => (
-                      <CategoryRow
-                        key={category.id}
-                        category={category}
-                        onSave={(name) => void renameCategory(category, name)}
-                        onDelete={() => void deleteCategory(category.id)}
-                      />
-                    ))
+                    sortedCategories.map((category) => {
+                      const privateCategory = isPrivateChannel(
+                        category.permission_overrides,
+                      );
+                      const permsOpen = permsCategoryId === category.id;
+                      const grantableRoles = roles
+                        .filter((role) => !role.is_default)
+                        .sort(compareRolePositionDesc);
+                      return (
+                        <li
+                          key={category.id}
+                          className="rounded-md px-2 py-2 text-sm text-[#dbdee1] hover:bg-white/5"
+                        >
+                          <CategoryRow
+                            category={category}
+                            privateCategory={privateCategory}
+                            onSave={(name) => void renameCategory(category, name)}
+                            onDelete={() => void deleteCategory(category.id)}
+                            onTogglePerms={() =>
+                              setPermsCategoryId(
+                                permsOpen ? null : category.id,
+                              )
+                            }
+                          />
+                          {permsOpen ? (
+                            <div className="mt-3 space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                              <label className="flex cursor-pointer items-start gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={privateCategory}
+                                  disabled={saving}
+                                  onChange={(event) =>
+                                    void saveCategoryOverrides(
+                                      category,
+                                      setChannelPrivate(
+                                        category.permission_overrides,
+                                        event.target.checked,
+                                      ),
+                                    )
+                                  }
+                                  className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                                />
+                                <span>
+                                  <span className="block text-sm font-medium text-white">
+                                    Private Category
+                                  </span>
+                                  <span className="mt-0.5 block text-xs text-[#949ba4]">
+                                    Only selected roles can view channels in this
+                                    category (until synced per channel).
+                                  </span>
+                                </span>
+                              </label>
+                              {privateCategory ? (
+                                <div className="space-y-2 border-t border-[#3f4147] pt-3">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                                    Who can access
+                                  </p>
+                                  {grantableRoles.length === 0 ? (
+                                    <p className="text-xs text-[#949ba4]">
+                                      Create a role first, then grant access here.
+                                    </p>
+                                  ) : (
+                                    <ul className="space-y-1">
+                                      {grantableRoles.map((role) => {
+                                        const allowed = roleCanViewChannel(
+                                          category.permission_overrides,
+                                          role.id,
+                                        );
+                                        return (
+                                          <li key={role.id}>
+                                            <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/5">
+                                              <input
+                                                type="checkbox"
+                                                checked={allowed}
+                                                disabled={saving}
+                                                onChange={(event) =>
+                                                  void saveCategoryOverrides(
+                                                    category,
+                                                    setRoleChannelView(
+                                                      category.permission_overrides,
+                                                      role.id,
+                                                      event.target.checked,
+                                                    ),
+                                                  )
+                                                }
+                                                className="h-4 w-4 rounded border-border accent-accent"
+                                              />
+                                              <span
+                                                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                style={{
+                                                  backgroundColor:
+                                                    role.color || "#99aab5",
+                                                }}
+                                              />
+                                              <span className="text-sm text-[#dbdee1]">
+                                                {role.name}
+                                              </span>
+                                            </label>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })
                   )}
                 </ul>
 
@@ -2646,6 +3095,270 @@ export function ServerSettingsModal({
                 </ul>
               </div>
             )}
+
+            {tab === "stickers" && (canManageEmojis || isOwner) && (
+              <div className="space-y-5">
+                <p className="text-sm text-[#b5bac1]">
+                  Upload custom stickers for this server. Images appear in the
+                  sticker picker when members send messages.
+                </p>
+                <form
+                  onSubmit={(event) => void uploadServerSticker(event)}
+                  className="space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3"
+                >
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label className="min-w-[10rem] flex-1 space-y-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                      Name
+                      <input
+                        value={stickerName}
+                        onChange={(event) =>
+                          setStickerName(
+                            sanitizeEmojiName(event.target.value),
+                          )
+                        }
+                        placeholder="party_blob"
+                        maxLength={32}
+                        className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
+                      />
+                    </label>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                        Image
+                      </p>
+                      <input
+                        ref={stickerFileRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/gif,image/webp"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null;
+                          setStickerFile(file);
+                          if (file && !stickerName) {
+                            setStickerName(
+                              sanitizeEmojiName(
+                                file.name.replace(/\.[^.]+$/, ""),
+                              ),
+                            );
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => stickerFileRef.current?.click()}
+                        className="inline-flex items-center gap-2 rounded-md bg-[#3f4147] px-3 py-2 text-sm text-[#dbdee1] hover:bg-[#4e5058]"
+                      >
+                        <Upload className="h-4 w-4" strokeWidth={1.75} />
+                        {stickerFile ? stickerFile.name : "Choose file"}
+                      </button>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={stickerBusy || !stickerFile}
+                      className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                    >
+                      {stickerBusy ? "Uploading…" : "Upload"}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[#949ba4]">
+                    PNG, JPG, GIF, or WebP · max 512 KB
+                  </p>
+                </form>
+                <ul className="space-y-1">
+                  {serverStickers.length === 0 && (
+                    <li className="text-sm text-muted">No stickers yet.</li>
+                  )}
+                  {serverStickers.map((sticker) => (
+                    <li
+                      key={sticker.id}
+                      className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-white/5"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={sticker.url}
+                        alt=""
+                        className="h-14 w-14 rounded-md object-contain"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[#dbdee1]">
+                          {sticker.name}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={stickerBusy}
+                        onClick={() => void deleteServerSticker(sticker)}
+                        className="rounded-md p-1.5 text-accent hover:bg-accent-muted disabled:opacity-50"
+                        aria-label={`Delete ${sticker.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {tab === "automod" && (canManageServer || isOwner) && (
+              <div className="space-y-5">
+                <p className="text-sm text-[#b5bac1]">
+                  Block messages that contain configured keywords. Rules run when
+                  members send messages in this server.
+                </p>
+                <form
+                  onSubmit={(event) => void createAutomodRule(event)}
+                  className="space-y-3 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3"
+                >
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label className="min-w-[8rem] flex-1 space-y-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                      Rule name
+                      <input
+                        value={automodRuleName}
+                        onChange={(event) =>
+                          setAutomodRuleName(event.target.value)
+                        }
+                        placeholder="No spam links"
+                        maxLength={64}
+                        className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
+                      />
+                    </label>
+                    <label className="min-w-[12rem] flex-[2] space-y-1 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                      Keywords (comma-separated)
+                      <input
+                        value={automodKeywords}
+                        onChange={(event) =>
+                          setAutomodKeywords(event.target.value)
+                        }
+                        placeholder="discord.gg, free nitro"
+                        className="mt-1 w-full rounded-md border border-border bg-[#111214] px-3 py-2 text-sm font-normal normal-case tracking-normal text-[#dbdee1] outline-none focus:border-accent/50"
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      disabled={automodBusy || !automodRuleName.trim()}
+                      className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                    >
+                      Add rule
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[#949ba4]">
+                    Action: block message · new rules start enabled
+                  </p>
+                </form>
+                <ul className="space-y-2">
+                  {automodRules.length === 0 && (
+                    <li className="text-sm text-[#949ba4]">No AutoMod rules yet.</li>
+                  )}
+                  {automodRules.map((rule) => (
+                    <li
+                      key={rule.id}
+                      className="rounded-md bg-[#2b2d31] px-3 py-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#dbdee1]">
+                          {rule.name}
+                        </span>
+                        <label className="flex items-center gap-2 text-xs text-[#949ba4]">
+                          <input
+                            type="checkbox"
+                            checked={rule.enabled}
+                            disabled={automodBusy}
+                            onChange={(event) =>
+                              void setAutomodRuleEnabled(
+                                rule.id,
+                                event.target.checked,
+                              )
+                            }
+                            className="h-4 w-4 accent-accent"
+                          />
+                          Enabled
+                        </label>
+                        <button
+                          type="button"
+                          disabled={automodBusy}
+                          onClick={() => void deleteAutomodRule(rule.id)}
+                          className="rounded-md p-1 text-accent hover:bg-accent-muted disabled:opacity-50"
+                          aria-label={`Delete ${rule.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        </button>
+                      </div>
+                      <p className="mt-2 text-xs text-[#949ba4]">
+                        {rule.keywords.join(", ") || "No keywords"}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {tab === "safety" && (canManageServer || isOwner) && (
+              <div className="space-y-5">
+                <p className="text-sm text-[#b5bac1]">
+                  Control who can join and how new members are verified. Keyword
+                  blocking is configured in the{" "}
+                  <button
+                    type="button"
+                    onClick={() => setTab("automod")}
+                    className="text-accent hover:underline"
+                  >
+                    AutoMod
+                  </button>{" "}
+                  tab.
+                </p>
+                <div className="space-y-4 rounded-md border border-[#3f4147] bg-[#1e1f22] p-3">
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[#949ba4]">
+                      Verification level
+                    </span>
+                    <select
+                      value={verificationLevel}
+                      onChange={(event) =>
+                        setVerificationLevel(Number(event.target.value))
+                      }
+                      className="w-full rounded-md border border-border bg-[#111214] px-3 py-2.5 text-sm text-[#dbdee1] outline-none focus:border-accent/50"
+                    >
+                      <option value={0}>None</option>
+                      <option value={1}>Low — verified account age</option>
+                      <option value={2}>Medium — account older than 5 minutes</option>
+                      <option value={3}>
+                        High — member of server for 10+ minutes
+                      </option>
+                      <option value={4}>
+                        Highest — member of server for 10+ minutes
+                      </option>
+                    </select>
+                  </label>
+                  <DirtySaveButton
+                    type="button"
+                    dirty={safetyVerificationDirty}
+                    saving={saving}
+                    onClick={() => void saveSafetyVerification()}
+                    label="Save verification"
+                  />
+                  <label className="flex cursor-pointer items-start gap-2 border-t border-[#3f4147] pt-3">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(server.invites_paused)}
+                      onChange={() => void toggleInvitesPaused()}
+                      className="mt-0.5 h-4 w-4 rounded border-border accent-accent"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-white">
+                        Pause invites
+                      </span>
+                      <span className="mt-0.5 block text-xs text-[#949ba4]">
+                        Temporarily stop new members from joining with invite
+                        links.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+                <p className="text-xs text-[#949ba4]">
+                  Overview also includes verification when you save server
+                  details there — both use the same setting.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2724,7 +3437,7 @@ function RoleRow({
     );
 
   return (
-    <li className="space-y-3 rounded-md bg-[#2b2d31] px-3 py-3">
+    <div className="space-y-3 rounded-md bg-[#2b2d31] px-3 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-col gap-0.5">
           <button
@@ -2866,18 +3579,22 @@ function RoleRow({
           ))}
         </div>
       </div>
-    </li>
+    </div>
   );
 }
 
 function CategoryRow({
   category,
+  privateCategory,
   onSave,
   onDelete,
+  onTogglePerms,
 }: {
   category: Category;
+  privateCategory?: boolean;
   onSave: (name: string) => void;
   onDelete: () => void;
+  onTogglePerms?: () => void;
 }) {
   const [name, setName] = useState(category.name);
   const [confirm, setConfirm] = useState(false);
@@ -2889,10 +3606,17 @@ function CategoryRow({
   const dirty = name.trim() !== category.name && name.trim().length > 0;
 
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded-md bg-[#2b2d31] px-2 py-2">
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-[#2b2d31] px-2 py-2">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
         Category
       </span>
+      {privateCategory ? (
+        <Lock
+          className="h-3.5 w-3.5 text-[#949ba4]"
+          strokeWidth={2}
+          aria-label="Private"
+        />
+      ) : null}
       <input
         value={name}
         onChange={(event) => setName(event.target.value)}
@@ -2905,6 +3629,15 @@ function CategoryRow({
         label="Save"
         onClick={() => onSave(name)}
       />
+      {onTogglePerms ? (
+        <button
+          type="button"
+          onClick={onTogglePerms}
+          className="rounded-md px-2 py-1 text-xs text-[#dbdee1] hover:bg-white/10"
+        >
+          Permissions
+        </button>
+      ) : null}
       {confirm ? (
         <>
           <button
@@ -2931,6 +3664,6 @@ function CategoryRow({
           Delete
         </button>
       )}
-    </li>
+    </div>
   );
 }

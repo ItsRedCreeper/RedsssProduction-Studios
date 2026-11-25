@@ -54,6 +54,9 @@ type ChannelSidebarProps = {
   onRenameCategory?: (categoryId: string, name: string) => Promise<boolean>;
   /** Discord: Edit Channel (Manage Channels). */
   onEditChannel?: (channelId: string) => void;
+  /** Discord: View Server As Role (Manage Roles / Admin). */
+  viewAsRoles?: { id: string; name: string; color: string | null }[];
+  onViewAsRole?: (roleId: string) => void;
   onLeave?: () => void;
   footer?: ReactNode;
 };
@@ -147,6 +150,8 @@ export function ChannelSidebar({
   onCreateCategory,
   onRenameCategory,
   onEditChannel,
+  viewAsRoles,
+  onViewAsRole,
   onLeave,
   footer,
 }: ChannelSidebarProps) {
@@ -331,6 +336,10 @@ export function ChannelSidebar({
           !previewMode && canManageChannels && onCreateCategory
             ? onCreateCategory
             : undefined
+        }
+        roles={viewAsRoles}
+        onViewAsRole={
+          !previewMode && onViewAsRole ? onViewAsRole : undefined
         }
         onLeave={!previewMode && canLeave ? onLeave : undefined}
       />

@@ -84,9 +84,103 @@ export type Database = {
         Relationships: []
       }
       dm_conversations: {
-        Row: { id: string; created_at: string }
-        Insert: { id?: string; created_at?: string }
-        Update: { id?: string; created_at?: string }
+        Row: {
+          id: string
+          created_at: string
+          name: string | null
+          is_group: boolean
+          owner_id: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          name?: string | null
+          is_group?: boolean
+          owner_id?: string | null
+        }
+        Update: Partial<Database["public"]["Tables"]["dm_conversations"]["Insert"]>
+        Relationships: []
+      }
+      channel_threads: {
+        Row: {
+          id: string
+          channel_id: string
+          server_id: string
+          starter_message_id: string | null
+          name: string
+          creator_id: string | null
+          archived: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          channel_id: string
+          server_id: string
+          starter_message_id?: string | null
+          name: string
+          creator_id?: string | null
+          archived?: boolean
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["channel_threads"]["Insert"]>
+        Relationships: []
+      }
+      server_stickers: {
+        Row: {
+          id: string
+          server_id: string
+          name: string
+          url: string
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          server_id: string
+          name: string
+          url: string
+          created_by: string
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["server_stickers"]["Insert"]>
+        Relationships: []
+      }
+      server_automod_rules: {
+        Row: {
+          id: string
+          server_id: string
+          name: string
+          enabled: boolean
+          keywords: string[]
+          action: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          server_id: string
+          name?: string
+          enabled?: boolean
+          keywords?: string[]
+          action?: string
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["server_automod_rules"]["Insert"]>
+        Relationships: []
+      }
+      poll_votes: {
+        Row: {
+          message_id: string
+          user_id: string
+          option_index: number
+          created_at: string
+        }
+        Insert: {
+          message_id: string
+          user_id: string
+          option_index: number
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["poll_votes"]["Insert"]>
         Relationships: []
       }
       dm_messages: {
@@ -324,6 +418,10 @@ export type Database = {
           reply_to_id: string | null
           pinned: boolean
           is_system: boolean
+          thread_id: string | null
+          message_kind: string
+          poll: Json | null
+          forwarded_from: Json | null
           edited_at: string | null
           attachment_url: string | null
           attachment_type: string | null
@@ -338,6 +436,10 @@ export type Database = {
           reply_to_id?: string | null
           pinned?: boolean
           is_system?: boolean
+          thread_id?: string | null
+          message_kind?: string
+          poll?: Json | null
+          forwarded_from?: Json | null
           edited_at?: string | null
           attachment_url?: string | null
           attachment_type?: string | null

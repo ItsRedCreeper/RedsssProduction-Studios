@@ -13,6 +13,9 @@ import { createPortal } from "react-dom";
 import {
   Check,
   Copy,
+  Forward,
+  Link2,
+  MessagesSquare,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -23,6 +26,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { PollCard, type PollData } from "@/components/messenger/PollCard";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -141,6 +145,12 @@ type MessageItemProps = {
   onJumpToReply?: (messageId: string) => void;
   onReact?: (emoji: string) => void;
   onTogglePin?: () => void;
+  onForward?: (message: ChatMessage) => void;
+  onMarkUnread?: (message: ChatMessage) => void;
+  onCreateThread?: (message: ChatMessage) => void;
+  onCopyLink?: (message: ChatMessage) => void;
+  pollVotes?: { user_id: string; option_index: number }[];
+  onPollVote?: (messageId: string, optionIndex: number) => void;
 };
 
 export function MessageItem({
@@ -169,6 +179,12 @@ export function MessageItem({
   onJumpToReply,
   onReact,
   onTogglePin,
+  onForward,
+  onMarkUnread,
+  onCreateThread,
+  onCopyLink,
+  pollVotes = [],
+  onPollVote,
 }: MessageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [fullPickerOpen, setFullPickerOpen] = useState(false);
@@ -468,7 +484,17 @@ export function MessageItem({
           </div>
         ) : (
           <>
-            {message.content && (
+            {message.forwarded_from &&
+            typeof message.forwarded_from === "object" &&
+            !Array.isArray(message.forwarded_from) ? (
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#949ba4]">
+                Forwarded
+                {(message.forwarded_from as { from?: string }).from
+                  ? ` from ${(message.forwarded_from as { from?: string }).from}`
+                  : ""}
+              </p>
+            ) : null}
+            {message.content && message.message_kind !== "poll" && (
               <div className="break-words text-[0.95rem] leading-relaxed text-[#dbdee1] [overflow-wrap:anywhere] whitespace-pre-wrap">
                 {formatMessageContent(message.content, {
                   currentUserId,
@@ -483,8 +509,21 @@ export function MessageItem({
                 })}
               </div>
             )}
+            {message.message_kind === "poll" &&
+            message.poll &&
+            typeof message.poll === "object" &&
+            !Array.isArray(message.poll) ? (
+              <PollCard
+                poll={message.poll as unknown as PollData}
+                votes={pollVotes}
+                currentUserId={currentUserId}
+                onVote={(index) => onPollVote?.(message.id, index)}
+              />
+            ) : null}
             <MessageMedia message={message} />
-            {message.content && <LinkEmbeds content={message.content} />}
+            {message.content && message.message_kind !== "poll" && (
+              <LinkEmbeds content={message.content} />
+            )}
           </>
         )}
 
@@ -706,6 +745,57 @@ export function MessageItem({
                     <Pin className="h-4 w-4" strokeWidth={1.75} />
                   )}
                   {message.pinned ? "Unpin Message" : "Pin Message"}
+                </button>
+              )}
+              {onForward && !message.is_system && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onForward(message);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                >
+                  <Forward className="h-4 w-4" strokeWidth={1.75} />
+                  Forward
+                </button>
+              )}
+              {onCreateThread && !message.is_system && !message.thread_id && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCreateThread(message);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                >
+                  <MessagesSquare className="h-4 w-4" strokeWidth={1.75} />
+                  Create Thread
+                </button>
+              )}
+              {onMarkUnread && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onMarkUnread(message);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                >
+                  Mark Unread
+                </button>
+              )}
+              {onCopyLink && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCopyLink(message);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                >
+                  <Link2 className="h-4 w-4" strokeWidth={1.75} />
+                  Copy Message Link
                 </button>
               )}
               {isOwn && (

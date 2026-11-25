@@ -1,30 +1,43 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, FolderPlus, Hash, LogOut, Settings, UserPlus } from "lucide-react";
+import {
+  ChevronDown,
+  Eye,
+  FolderPlus,
+  Hash,
+  LogOut,
+  Settings,
+  UserPlus,
+} from "lucide-react";
 import { HoverTip } from "@/components/ui/HoverTip";
 
 type ServerHeaderMenuProps = {
   serverName: string;
   /** When false, invite / settings / create / leave are hidden (Discover preview). */
   interactive?: boolean;
+  roles?: { id: string; name: string; color: string | null }[];
   onInvite?: () => void;
   onSettings?: () => void;
   onCreateChannel?: () => void;
   onCreateCategory?: () => void;
+  onViewAsRole?: (roleId: string) => void;
   onLeave?: () => void;
 };
 
 export function ServerHeaderMenu({
   serverName,
   interactive = true,
+  roles = [],
   onInvite,
   onSettings,
   onCreateChannel,
   onCreateCategory,
+  onViewAsRole,
   onLeave,
 }: ServerHeaderMenuProps) {
   const [open, setOpen] = useState(false);
+  const [viewAsOpen, setViewAsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -125,6 +138,42 @@ export function ServerHeaderMenu({
               <Settings className="h-4 w-4" strokeWidth={1.75} />
               Server Settings
             </button>
+          )}
+          {onViewAsRole && roles.length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => setViewAsOpen((value) => !value)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-accent hover:text-white"
+              >
+                <Eye className="h-4 w-4" strokeWidth={1.75} />
+                View Server As Role
+              </button>
+              {viewAsOpen ? (
+                <ul className="mx-2 mb-1 max-h-40 overflow-y-auto rounded-md border border-[#2b2d31] bg-[#1e1f22] py-1">
+                  {roles.map((role) => (
+                    <li key={role.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          setViewAsOpen(false);
+                          onViewAsRole(role.id);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[#dbdee1] hover:bg-white/10"
+                      >
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: role.color || "#99aab5" }}
+                        />
+                        {role.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           )}
           {onLeave && (
             <>

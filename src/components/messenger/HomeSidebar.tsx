@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Users, X } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { HoverTip } from "@/components/ui/HoverTip";
 import type { DmThread } from "@/components/messenger/types";
@@ -20,6 +20,7 @@ type HomeSidebarProps = {
   typingUserIdsKey?: string;
   onSelectThread: (threadId: string) => void;
   onCloseThread?: (threadId: string) => void;
+  onCreateGroup?: () => void;
   footer?: ReactNode;
 };
 
@@ -31,6 +32,7 @@ export function HomeSidebar({
   typingUserIdsKey = "",
   onSelectThread,
   onCloseThread,
+  onCreateGroup,
   footer,
 }: HomeSidebarProps) {
   void typingUserIdsKey;
@@ -38,7 +40,11 @@ export function HomeSidebar({
   const feed = useOptionalPresenceFeed();
   void feed?.version;
 
-  const watchKey = threads.map((thread) => thread.otherUserId).join(",");
+  const watchKey = threads
+    .flatMap((thread) =>
+      thread.isGroup ? thread.participantIds ?? [] : [thread.otherUserId],
+    )
+    .join(",");
   useEffect(() => {
     if (!feed || !watchKey) return;
     feed.watchMany(watchKey.split(",").filter(Boolean));
@@ -46,8 +52,22 @@ export function HomeSidebar({
 
   return (
     <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
-      <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-[15px] font-semibold text-white shadow-sm shadow-black/20">
-        Direct Messages
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-black/30 px-4 shadow-sm shadow-black/20">
+        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-white">
+          Direct Messages
+        </span>
+        {onCreateGroup ? (
+          <HoverTip label="New Group DM" delayMs={40}>
+            <button
+              type="button"
+              onClick={onCreateGroup}
+              aria-label="New Group DM"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#b5bac1] hover:bg-white/10 hover:text-white"
+            >
+              <Users className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </HoverTip>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {loadingThreads ? (
@@ -60,10 +80,15 @@ export function HomeSidebar({
           <ul className="space-y-0.5">
             {threads.map((thread) => {
               const active = thread.id === activeThreadId;
-              const name =
-                profileUi?.nicknameFor(thread.otherUserId) || thread.username;
-              const live = feed?.get(thread.otherUserId);
-              const typing = typingUserIds?.has(thread.otherUserId) ?? false;
+              const name = thread.isGroup
+                ? thread.groupName?.trim() || thread.username
+                : profileUi?.nicknameFor(thread.otherUserId) || thread.username;
+              const live = thread.isGroup
+                ? null
+                : feed?.get(thread.otherUserId);
+              const typing = thread.isGroup
+                ? false
+                : (typingUserIds?.has(thread.otherUserId) ?? false);
               return (
                 <li key={thread.id} className="group/thread relative">
                   <button
@@ -82,12 +107,18 @@ export function HomeSidebar({
                         size="sm"
                         className="!h-8 !w-8"
                       />
-                      <StatusPresenceBadge
-                        status={live?.status ?? thread.status}
-                        lastSeenAt={live?.lastSeenAt ?? thread.last_seen_at}
-                        typing={typing}
-                        ringClassName="ring-[#2b2d31]"
-                      />
+                      {!thread.isGroup ? (
+                        <StatusPresenceBadge
+                          status={live?.status ?? thread.status}
+                          lastSeenAt={live?.lastSeenAt ?? thread.last_seen_at}
+                          typing={typing}
+                          ringClassName="ring-[#2b2d31]"
+                        />
+                      ) : (
+                        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2d31] ring-2 ring-[#2b2d31]">
+                          <Users className="h-2.5 w-2.5 text-[#949ba4]" strokeWidth={2.5} />
+                        </span>
+                      )}
                     </span>
                     <span className="min-w-0 flex-1">
                       <HoverTip
@@ -100,12 +131,18 @@ export function HomeSidebar({
                           {name}
                         </span>
                       </HoverTip>
-                      <PresenceCaption
-                        userId={thread.otherUserId}
-                        status={thread.status}
-                        lastSeenAt={thread.last_seen_at}
-                        customStatus={thread.status_text}
-                      />
+                      {thread.isGroup ? (
+                        <span className="block truncate text-[11px] text-[#6d6f78]">
+                          {(thread.participantIds?.length ?? 0) + 1} members
+                        </span>
+                      ) : (
+                        <PresenceCaption
+                          userId={thread.otherUserId}
+                          status={thread.status}
+                          lastSeenAt={thread.last_seen_at}
+                          customStatus={thread.status_text}
+                        />
+                      )}
                     </span>
                   </button>
                   {onCloseThread && (

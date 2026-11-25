@@ -70,6 +70,26 @@ export type DmThread = {
   status_text?: string | null;
   preview: string | null;
   previewAt: string | null;
+  isGroup?: boolean;
+  groupName?: string | null;
+  participantIds?: string[];
+};
+
+export type ChannelThread = {
+  id: string;
+  channel_id: string;
+  server_id: string;
+  starter_message_id: string | null;
+  name: string;
+  creator_id: string | null;
+  archived: boolean;
+  created_at: string;
+};
+
+export type PollPayload = {
+  question: string;
+  options: string[];
+  allowMultiple?: boolean;
 };
 
 export type FriendEntry = {
@@ -86,6 +106,9 @@ export type SettingsTab =
   | "members"
   | "invites"
   | "channels"
-  | "emojis";
+  | "emojis"
+  | "stickers"
+  | "automod"
+  | "safety";
 
 export { QUICK_REACTION_EMOJIS as QUICK_REACTIONS } from "@/lib/emoji";

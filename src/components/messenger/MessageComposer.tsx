@@ -91,6 +91,9 @@ type MessageComposerProps = {
   onRemoveFile: (id: string) => void;
   onToggleFileSpoiler?: (id: string) => void;
   onPickGif?: (gif: GifResult) => void;
+  stickers?: { id: string; name: string; url: string }[];
+  onPickSticker?: (sticker: { id: string; name: string; url: string }) => void;
+  onOpenPoll?: () => void;
   /** Optional expanded content (emoji slots → tokens) for send. */
   onSubmit: (content?: string) => void;
   onTyping?: () => void;
@@ -126,6 +129,9 @@ export function MessageComposer({
   onRemoveFile,
   onToggleFileSpoiler,
   onPickGif,
+  stickers = [],
+  onPickSticker,
+  onOpenPoll,
   onSubmit,
   onTyping,
   onTypingStop,
@@ -136,6 +142,7 @@ export function MessageComposer({
   const mirrorRef = useRef<HTMLDivElement | null>(null);
   const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
   const gifBtnRef = useRef<HTMLButtonElement | null>(null);
+  const stickerBtnRef = useRef<HTMLButtonElement | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const typingStopTimer = useRef<number | null>(null);
   /** Discord tokens parallel to each COMPOSER_SLOT_CHAR in the draft. */
@@ -147,6 +154,7 @@ export function MessageComposer({
   const [dragging, setDragging] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [gifOpen, setGifOpen] = useState(false);
+  const [stickerOpen, setStickerOpen] = useState(false);
   const [pickerStyle, setPickerStyle] = useState<CSSProperties | null>(null);
   const replying = !!replyAuthor;
 
@@ -339,33 +347,39 @@ export function MessageComposer({
   }, [draft]);
 
   useEffect(() => {
-    if (!emojiOpen && !gifOpen) return;
+    if (!emojiOpen && !gifOpen && !stickerOpen) return;
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
       if (
         pickerRef.current?.contains(target) ||
         emojiBtnRef.current?.contains(target) ||
-        gifBtnRef.current?.contains(target)
+        gifBtnRef.current?.contains(target) ||
+        stickerBtnRef.current?.contains(target)
       ) {
         return;
       }
       setEmojiOpen(false);
       setGifOpen(false);
+      setStickerOpen(false);
     }
     window.addEventListener("mousedown", onPointerDown);
     return () => window.removeEventListener("mousedown", onPointerDown);
-  }, [emojiOpen, gifOpen]);
+  }, [emojiOpen, gifOpen, stickerOpen]);
 
   useLayoutEffect(() => {
-    if (!emojiOpen && !gifOpen) {
+    if (!emojiOpen && !gifOpen && !stickerOpen) {
       setPickerStyle(null);
       return;
     }
     function place() {
-      const anchor = emojiOpen ? emojiBtnRef.current : gifBtnRef.current;
+      const anchor = emojiOpen
+        ? emojiBtnRef.current
+        : stickerOpen
+          ? stickerBtnRef.current
+          : gifBtnRef.current;
       if (!anchor) return;
       const rect = anchor.getBoundingClientRect();
-      const height = emojiOpen ? 360 : 400;
+      const height = emojiOpen ? 360 : stickerOpen ? 280 : 400;
       const spaceAbove = rect.top - 8;
       const openUp = spaceAbove >= height || spaceAbove > window.innerHeight - rect.bottom;
       setPickerStyle({
@@ -384,7 +398,7 @@ export function MessageComposer({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [emojiOpen, gifOpen]);
+  }, [emojiOpen, gifOpen, stickerOpen]);
 
   function bumpTyping() {
     onTyping?.();
@@ -1012,6 +1026,7 @@ export function MessageComposer({
               onClick={() => {
                 setEmojiOpen((open) => !open);
                 setGifOpen(false);
+                setStickerOpen(false);
               }}
               className={`mb-0.5 shrink-0 rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 ${
                 emojiOpen ? "bg-white/10 text-white" : ""
@@ -1034,6 +1049,7 @@ export function MessageComposer({
                 onClick={() => {
                   setGifOpen((open) => !open);
                   setEmojiOpen(false);
+                  setStickerOpen(false);
                 }}
                 className={`mb-0.5 shrink-0 rounded-md px-1.5 py-1 text-xs font-bold tracking-wide text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 ${
                   gifOpen ? "bg-white/10 text-white" : ""
@@ -1041,6 +1057,39 @@ export function MessageComposer({
                 aria-label="GIF picker"
               >
                 GIF
+              </button>
+            </HoverTip>
+          )}
+          {onPickSticker && stickers.length > 0 && (
+            <HoverTip label="Stickers" delayMs={40}>
+              <button
+                ref={stickerBtnRef}
+                type="button"
+                disabled={disabled || sending}
+                onClick={() => {
+                  setStickerOpen((open) => !open);
+                  setEmojiOpen(false);
+                  setGifOpen(false);
+                }}
+                className={`mb-0.5 shrink-0 rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 ${
+                  stickerOpen ? "bg-white/10 text-white" : ""
+                }`}
+                aria-label="Sticker picker"
+              >
+                <ImageIcon className="h-5 w-5" strokeWidth={1.75} />
+              </button>
+            </HoverTip>
+          )}
+          {onOpenPoll && (
+            <HoverTip label="Create Poll" delayMs={40}>
+              <button
+                type="button"
+                disabled={disabled || sending}
+                onClick={onOpenPoll}
+                className="mb-0.5 shrink-0 rounded-md px-1.5 py-1 text-xs font-semibold text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40"
+                aria-label="Create poll"
+              >
+                Poll
               </button>
             </HoverTip>
           )}
@@ -1057,7 +1106,7 @@ export function MessageComposer({
           </button>
         </form>
       </div>
-      {(emojiOpen || gifOpen) &&
+      {(emojiOpen || gifOpen || stickerOpen) &&
         pickerStyle &&
         typeof document !== "undefined" &&
         createPortal(
@@ -1068,6 +1117,33 @@ export function MessageComposer({
                 serverNamesById={serverNamesById}
                 onPick={handleEmojiPick}
               />
+            ) : stickerOpen ? (
+              <div className="w-72 max-w-[min(18rem,calc(100vw-1rem))] rounded-md border border-[#1e1f22] bg-[#2b2d31] p-2 shadow-xl shadow-black/50">
+                <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">
+                  Stickers
+                </p>
+                <div className="grid max-h-56 grid-cols-3 gap-2 overflow-y-auto">
+                  {stickers.map((sticker) => (
+                    <button
+                      key={sticker.id}
+                      type="button"
+                      onClick={() => {
+                        onPickSticker?.(sticker);
+                        setStickerOpen(false);
+                      }}
+                      className="rounded-md bg-[#1e1f22] p-1.5 hover:bg-white/10"
+                      title={sticker.name}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={sticker.url}
+                        alt={sticker.name}
+                        className="h-16 w-full object-contain"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : (
               <GifPicker
                 onPick={(gif) => {

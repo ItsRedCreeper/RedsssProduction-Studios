@@ -51,6 +51,15 @@ type ChatTimelineProps = {
   onJumpToReply: (messageId: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
   onTogglePin?: (message: ChatMessage) => void;
+  onForward?: (message: ChatMessage) => void;
+  onMarkUnread?: (message: ChatMessage) => void;
+  onCreateThread?: (message: ChatMessage) => void;
+  onCopyLink?: (message: ChatMessage) => void;
+  pollVotesByMessage?: Record<
+    string,
+    { user_id: string; option_index: number }[]
+  >;
+  onPollVote?: (messageId: string, optionIndex: number) => void;
 };
 
 /** Stay pinned to newest messages while within this of the bottom. */
@@ -127,6 +136,12 @@ export function ChatTimeline({
   onJumpToReply,
   onReact,
   onTogglePin,
+  onForward,
+  onMarkUnread,
+  onCreateThread,
+  onCopyLink,
+  pollVotesByMessage,
+  onPollVote,
 }: ChatTimelineProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -422,6 +437,28 @@ export function ChatTimeline({
                         ? undefined
                         : () => onTogglePin(message)
                     }
+                    onForward={
+                      readOnly || !onForward
+                        ? undefined
+                        : () => onForward(message)
+                    }
+                    onMarkUnread={
+                      readOnly || !onMarkUnread
+                        ? undefined
+                        : () => onMarkUnread(message)
+                    }
+                    onCreateThread={
+                      readOnly || !onCreateThread
+                        ? undefined
+                        : () => onCreateThread(message)
+                    }
+                    onCopyLink={
+                      readOnly || !onCopyLink
+                        ? undefined
+                        : () => onCopyLink(message)
+                    }
+                    pollVotes={pollVotesByMessage?.[message.id] ?? []}
+                    onPollVote={readOnly ? undefined : onPollVote}
                   />
                 </div>
               );
