@@ -26,8 +26,9 @@ export function RolePills({
         return (
           <span
             key={role.id}
-            className={`inline-flex max-w-full items-center gap-1.5 rounded-md border border-white/10 bg-[#111214] font-medium text-[#dbdee1] ${pad}`}
+            className={`inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-[#1a1b1e]/90 font-medium text-[#dbdee1] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)] ${pad}`}
             title={role.name}
+            style={{ boxShadow: `inset 0 0 0 1px ${color}33` }}
           >
             <span
               className={`shrink-0 rounded-full ${dot}`}

@@ -138,7 +138,7 @@ export function SmallProfileCard({
     <div
       ref={cardRef}
       data-profile-popover
-      className="fixed z-[80] max-h-[calc(100dvh-16px)] w-[300px] overflow-y-auto overflow-x-hidden rounded-lg border border-[#1e1f22] bg-[#111214] shadow-2xl shadow-black/60"
+      className="fixed z-[80] max-h-[calc(100dvh-16px)] w-[300px] overflow-y-auto overflow-x-hidden rounded-2xl border border-white/[0.08] bg-[#111214] shadow-2xl shadow-black/60 ring-1 ring-accent/15"
       style={{
         top: pos.top,
         left: pos.left,
@@ -335,7 +335,7 @@ export function SmallProfileCard({
               <button
                 type="button"
                 onClick={onMessage}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
               >
                 <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
                 Message
@@ -355,7 +355,7 @@ export function SmallProfileCard({
                 <button
                   type="button"
                   onClick={onUnblock}
-                  className="inline-flex flex-1 items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
+                  className="inline-flex flex-1 items-center justify-center rounded-lg bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
                 >
                   Unblock
                 </button>
@@ -363,7 +363,7 @@ export function SmallProfileCard({
                 <button
                   type="button"
                   onClick={onBlock}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-[#f2b8b5] hover:bg-[#4e5058]"
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#3f4147] px-3 py-2 text-sm font-medium text-[#f2b8b5] hover:bg-[#4e5058]"
                 >
                   <Ban className="h-4 w-4" strokeWidth={1.75} />
                   Block
@@ -374,7 +374,7 @@ export function SmallProfileCard({
                   <button
                     type="button"
                     onClick={onUnignore}
-                    className="inline-flex flex-1 items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
+                    className="inline-flex flex-1 items-center justify-center rounded-lg bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
                   >
                     Unignore
                   </button>
@@ -382,7 +382,7 @@ export function SmallProfileCard({
                   <button
                     type="button"
                     onClick={onIgnore}
-                    className="inline-flex flex-1 items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-[#dbdee1] hover:bg-[#4e5058]"
+                    className="inline-flex flex-1 items-center justify-center rounded-lg bg-[#3f4147] px-3 py-2 text-sm font-medium text-[#dbdee1] hover:bg-[#4e5058]"
                   >
                     Ignore
                   </button>
@@ -390,7 +390,7 @@ export function SmallProfileCard({
               <button
                 type="button"
                 onClick={onViewProfile}
-                className="inline-flex flex-1 items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
+                className="inline-flex flex-1 items-center justify-center rounded-lg bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
               >
                 View Profile
               </button>
@@ -400,7 +400,7 @@ export function SmallProfileCard({
             <button
               type="button"
               onClick={onViewProfile}
-              className="inline-flex w-full items-center justify-center rounded-md bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-[#3f4147] px-3 py-2 text-sm font-medium text-white hover:bg-[#4e5058]"
             >
               View Profile
             </button>

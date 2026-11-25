@@ -376,12 +376,12 @@ export function BigProfileModal({
         aria-label="Close profile"
         onClick={onClose}
       />
-      <div className="relative z-10 flex max-h-[min(94vh,56rem)] w-full max-w-5xl flex-col overflow-visible rounded-xl border border-border bg-[#111214] shadow-2xl shadow-black/60">
-        <div className="relative shrink-0 overflow-visible rounded-t-xl pb-14">
+      <div className="relative z-10 flex max-h-[min(90dvh,56rem)] w-full max-w-5xl flex-col overflow-visible rounded-2xl border border-white/[0.08] bg-[#111214] shadow-2xl shadow-black/60 ring-1 ring-accent/20">
+        <div className="relative shrink-0 overflow-visible rounded-t-2xl pb-14">
           <ProfileBanner
             bannerUrl={profile.banner_url}
             bannerColor={profile.banner_color}
-            className="relative h-44 overflow-hidden rounded-t-xl sm:h-56"
+            className="relative h-44 overflow-hidden rounded-t-2xl sm:h-56"
           >
             <button
               type="button"
@@ -610,8 +610,8 @@ export function BigProfileModal({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl px-6 pb-6 pt-3">
-          <div className="rounded-lg bg-[#1e1f22] p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-b-2xl px-6 pb-6 pt-3">
+          <div className="rounded-xl border border-white/[0.04] bg-[#1e1f22] p-4">
             <h2
               id="big-profile-title"
               className={`text-2xl font-bold tracking-tight ${
