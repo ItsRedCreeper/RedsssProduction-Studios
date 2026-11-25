@@ -150,7 +150,7 @@ body::before {
  *  --ms-chat        main chat / settings content background (#313338)
  *  --ms-sidebar     channel/DM/member sidebars (#2b2d31)
  *  --ms-rail        server icon rail (#1a1b1e)
- *  --ms-elevated    account dock / floating bars (#232428)
+ *  --ms-elevated    floating bars / voice chrome (#232428)
  *  --ms-input       composer fill (#383a40)
  *  --ms-border      hairlines / panel edges (#1e1f22)
  *  --ms-text        primary message text (#dbdee1)
@@ -205,23 +205,19 @@ body::before {
 .messenger-header {
   position: relative;
   border-bottom: 1px solid var(--ms-border);
-  box-shadow: 0 1px 0 rgba(220, 38, 38, 0.12);
 }
 
 .messenger-header::after {
   content: "";
   position: absolute;
   left: 0;
-  right: 0;
+  width: 3.5rem;
   bottom: -1px;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(220, 38, 38, 0.45) 0%,
-    rgba(220, 38, 38, 0.08) 28%,
-    transparent 55%
-  );
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.85;
   pointer-events: none;
+  border-radius: 0 2px 0 0;
 }
 
 .messenger-row-active {
@@ -230,13 +226,7 @@ body::before {
 }
 
 .messenger-account-dock {
-  margin: 0.5rem;
   border: 1px solid var(--ms-border-soft);
   border-radius: 0.75rem;
-  background: linear-gradient(
-    135deg,
-    rgba(220, 38, 38, 0.08) 0%,
-    var(--ms-elevated) 42%
-  );
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--ms-elevated);
 }

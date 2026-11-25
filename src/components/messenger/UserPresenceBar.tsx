@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Settings } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { StatusPicker } from "@/components/profile/StatusPicker";
@@ -18,9 +18,16 @@ import {
 
 type UserPresenceBarProps = {
   className?: string;
+  /** Top-nav chip (default). Bottom Discord-style bar is no longer used. */
+  variant?: "nav";
 };
 
-export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
+/** Compact account + status control for the site top nav. */
+export function UserPresenceBar({
+  className = "",
+  variant = "nav",
+}: UserPresenceBarProps) {
+  void variant;
   const { user, profile } = useCurrentProfile();
   const profileUi = useOptionalProfileUi();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -71,7 +78,7 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
 
   return (
     <div
-      className={`messenger-account-dock relative flex items-center gap-2 px-2 py-1.5 ${className}`}
+      className={`relative flex items-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.03] py-1 pl-1 pr-1.5 ${className}`}
     >
       <button
         type="button"
@@ -84,19 +91,19 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
           userId={user.id}
           status={mergedStatus}
           lastSeenAt={mergedLastSeen}
-          ringClassName="ring-[#232428]"
+          ringClassName="ring-background"
         />
       </button>
       <button
         type="button"
         onClick={() => void profileUi?.openBigProfile(user.id)}
-        className="min-w-0 flex-1 text-left"
+        className="hidden min-w-0 max-w-[7.5rem] text-left sm:block"
       >
         <HoverTip label={name} onlyIfTruncated delayMs={40} className="block min-w-0">
-          <p className="truncate text-sm font-semibold text-white">{name}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{name}</p>
         </HoverTip>
         <HoverTip label={subtitle} onlyIfTruncated delayMs={40} className="block min-w-0">
-          <p className="truncate text-[11px] text-[var(--ms-text-muted)]">{subtitle}</p>
+          <p className="truncate text-[10px] text-muted">{subtitle}</p>
         </HoverTip>
       </button>
       <div className="relative shrink-0">
@@ -104,11 +111,11 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
           <button
             type="button"
             onClick={() => setPickerOpen((open) => !open)}
-            className="rounded-md p-1.5 text-[#b5bac1] hover:bg-white/5 hover:text-white"
+            className="rounded-md p-1 text-muted hover:bg-surface-hover hover:text-foreground"
             aria-label="Set status"
             aria-expanded={pickerOpen}
           >
-            <ChevronDown className="h-4 w-4" strokeWidth={2} />
+            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
         </HoverTip>
         <StatusPicker
@@ -119,7 +126,7 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
           statusText={profile.status_text}
           manualStatusExpiresAt={manualExpiresAt}
           statusTextExpiresAt={customExpiresAt}
-          placement="above"
+          placement="below"
           onClose={() => setPickerOpen(false)}
           onSaved={(next) => {
             setManualExpiresAt(
@@ -136,16 +143,6 @@ export function UserPresenceBar({ className = "" }: UserPresenceBarProps) {
           }}
         />
       </div>
-      <HoverTip label="User Settings">
-        <button
-          type="button"
-          onClick={() => void profileUi?.openBigProfile(user.id)}
-          className="rounded-md p-1.5 text-[#b5bac1] hover:bg-white/5 hover:text-white"
-          aria-label="User settings"
-        >
-          <Settings className="h-4 w-4" strokeWidth={2} />
-        </button>
-      </HoverTip>
     </div>
   );
 }

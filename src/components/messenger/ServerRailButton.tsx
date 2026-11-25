@@ -20,7 +20,7 @@ export function ServerRailButton({
   tone = "default",
 }: ServerRailButtonProps) {
   return (
-    <div className="group/server relative flex h-11 w-full items-center justify-center px-3">
+    <div className="group/server relative flex h-10 w-full items-center justify-center px-2">
       <span
         className={`absolute left-0 top-1/2 w-[3px] -translate-y-1/2 rounded-r-full bg-accent transition-all duration-200 ${
           active
@@ -37,7 +37,7 @@ export function ServerRailButton({
           aria-label={unread && !active ? `${label} (unread)` : label}
           aria-pressed={active || undefined}
           onClick={onClick}
-          className="relative z-[1] flex h-11 w-11 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a1b1e]"
+          className="relative z-[1] flex h-10 w-10 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a1b1e]"
         >
           {children}
           {unread && !active && tone !== "action" && (

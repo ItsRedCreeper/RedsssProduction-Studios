@@ -50,7 +50,6 @@ import { CallOverlay } from "@/components/messenger/CallOverlay";
 import { ResizableSidebar } from "@/components/messenger/ResizableSidebar";
 import { ServerHeaderMenu } from "@/components/messenger/ServerHeaderMenu";
 import { ServerSettingsModal } from "@/components/messenger/ServerSettingsModal";
-import { UserPresenceBar } from "@/components/messenger/UserPresenceBar";
 import {
   useVoiceSession,
   VOICE_STALE_AFTER_MS,
@@ -4122,12 +4121,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     />
   ) : null;
 
-  const sidebarFooter = (
-    <>
-      {voiceFooter}
-      <UserPresenceBar />
-    </>
-  );
+  const sidebarFooter = voiceFooter;
 
   return (
     <div className="messenger-shell flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -5341,7 +5335,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         </div>
       )}
     </div>
-    <div className="shrink-0 sm:hidden">{sidebarFooter}</div>
+    {sidebarFooter ? (
+      <div className="shrink-0 border-t border-[var(--ms-border)] bg-[var(--ms-sidebar)] sm:hidden">
+        {sidebarFooter}
+      </div>
+    ) : null}
     </div>
   );
 }

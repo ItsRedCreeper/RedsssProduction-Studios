@@ -13,14 +13,13 @@ import { NotificationsPanel } from "@/components/layout/NotificationsPanel";
 import { AccountSettingsModal } from "@/components/settings/AccountSettingsModal";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { createClient } from "@/lib/supabase/client";
-import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
 import { useProfileUi } from "@/components/profile/ProfileProvider";
-import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import { NAV_LINKS } from "@/lib/nav";
 import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
 import { ensureDmConversation } from "@/lib/friends";
 import { HoverTip } from "@/components/ui/HoverTip";
+import { UserPresenceBar } from "@/components/messenger/UserPresenceBar";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -30,7 +29,7 @@ function isActive(pathname: string, href: string) {
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, profile, loading } = useCurrentProfile();
+  const { user } = useCurrentProfile();
   const voice = useOptionalVoiceSession();
   const profileUi = useProfileUi();
   const speaking = !!voice?.selfSpeaking;
@@ -71,13 +70,13 @@ export function Navbar() {
     router.refresh();
   }
 
-  const displayName = profile?.username ?? (loading ? "…" : "Guest");
-
   return (
     <>
       <header
-        className={`relative z-30 shrink-0 overflow-x-hidden border-b bg-background/95 backdrop-blur-md ${
-          onMessenger ? "border-[var(--ms-border,#1e1f22)]" : "border-border"
+        className={`relative z-30 shrink-0 overflow-x-hidden border-b backdrop-blur-md ${
+          onMessenger
+            ? "border-[var(--ms-border,#1e1f22)] bg-[var(--ms-rail,#1a1b1e)]/95"
+            : "border-border bg-background/95"
         }`}
       >
         <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-2 px-2 sm:gap-3 sm:px-5">
@@ -173,9 +172,9 @@ export function Navbar() {
               </button>
             </HoverTip>
 
-            <div className="ml-1 flex items-center gap-1.5 sm:gap-2.5">
+            <div className="ml-1 flex items-center gap-1.5 sm:gap-2">
               {user && (
-                <HoverTip label="User Settings">
+                <HoverTip label="Account settings">
                   <button
                     type="button"
                     className={`rounded-md p-2 transition-colors ${
@@ -191,62 +190,26 @@ export function Navbar() {
                   </button>
                 </HoverTip>
               )}
-              <HoverTip label={displayName} delayMs={40}>
-                <button
-                  type="button"
-                  className="relative shrink-0"
-                  aria-label={displayName}
-                  onClick={() => {
-                    if (!user) return;
-                    void profileUi.openBigProfile(user.id);
-                  }}
-                >
-                  <UserAvatar
-                    username={displayName}
-                    avatarUrl={profile?.avatar_url}
-                    size="lg"
-                    speaking={speaking}
-                    className={speaking ? "!ring-offset-background" : ""}
-                  />
-                  {user && (
-                    <LiveStatusDot
-                      userId={user.id}
-                      status={profile?.status}
-                      lastSeenAt={profile?.last_seen_at}
-                      size="md"
-                      ringClassName="ring-2 ring-background"
-                    />
-                  )}
-                </button>
-              </HoverTip>
-              <HoverTip
-                label={displayName}
-                onlyIfTruncated
-                delayMs={40}
-                className="hidden max-w-[8rem] lg:inline-flex"
-              >
-                <button
-                  type="button"
-                  className="max-w-[8rem] truncate text-sm font-semibold text-foreground"
-                  onClick={() => {
-                    if (!user) return;
-                    void profileUi.openBigProfile(user.id);
-                  }}
-                >
-                  {displayName}
-                </button>
-              </HoverTip>
               {user ? (
-                <HoverTip label="Log Out" delayMs={40}>
-                  <button
-                    type="button"
-                    onClick={() => void handleSignOut()}
-                    className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
-                    aria-label="Sign out"
-                  >
-                    <LogOut className="h-4 w-4" strokeWidth={2} />
-                  </button>
-                </HoverTip>
+                <>
+                  <UserPresenceBar
+                    className={
+                      speaking
+                        ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-background"
+                        : ""
+                    }
+                  />
+                  <HoverTip label="Log Out" delayMs={40}>
+                    <button
+                      type="button"
+                      onClick={() => void handleSignOut()}
+                      className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                      aria-label="Sign out"
+                    >
+                      <LogOut className="h-4 w-4" strokeWidth={2} />
+                    </button>
+                  </HoverTip>
+                </>
               ) : (
                 <Link
                   href={`/login?next=${encodeURIComponent(pathname || "/")}`}

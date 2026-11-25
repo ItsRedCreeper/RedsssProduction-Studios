@@ -71,7 +71,7 @@ export function VoiceConnectionBar({
 }: VoiceConnectionBarProps) {
   const directLabel = `Direct call · ${channelName}`;
   return (
-    <div className="mx-2 mb-1 shrink-0 rounded-xl border border-white/[0.06] bg-[var(--ms-border)]/90 px-2 py-2">
+    <div className="m-2 shrink-0 rounded-xl border border-white/[0.06] bg-[var(--ms-elevated)] px-2.5 py-2">
       <div className="mb-1 px-1">
         <HoverTip
           label={micError || (direct ? directLabel : "Voice Connected")}

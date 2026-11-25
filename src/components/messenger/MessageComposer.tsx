@@ -595,7 +595,7 @@ export function MessageComposer({
 
   return (
     <div
-      className="shrink-0 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-4 sm:pb-5"
+      className="shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 sm:px-4 sm:pb-4"
       onDragEnter={(event) => {
         if (!allowAttach) return;
         event.preventDefault();

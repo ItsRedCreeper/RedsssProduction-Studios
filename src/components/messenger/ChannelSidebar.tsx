@@ -346,7 +346,7 @@ export function ChannelSidebar({
         }
         onLeave={!previewMode && canLeave ? onLeave : undefined}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {loading ? (
           <p className="px-2 text-xs text-[var(--ms-text-muted)]">Loading channels…</p>
         ) : sections.length === 0 ? (

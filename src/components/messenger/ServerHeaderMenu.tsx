@@ -71,7 +71,7 @@ export function ServerHeaderMenu({
 
   return (
     <div ref={rootRef} className="messenger-header relative shrink-0 bg-[var(--ms-sidebar)]">
-      <div className="flex h-12 items-center gap-1 px-2">
+      <div className="flex h-11 items-center gap-1 px-2">
         <HoverTip
           label={serverName}
           onlyIfTruncated

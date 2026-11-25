@@ -57,8 +57,8 @@ export function HomeSidebar({
 
   return (
     <aside className="flex h-full w-full flex-col bg-[var(--ms-sidebar)]">
-      <div className="messenger-header flex h-12 shrink-0 items-center gap-2 bg-[var(--ms-sidebar)] px-4">
-        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight text-white">
+      <div className="messenger-header flex h-11 shrink-0 items-center gap-2 bg-[var(--ms-sidebar)] px-3">
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-white">
           Direct Messages
         </span>
         {onCreateGroup ? (
@@ -74,12 +74,12 @@ export function HomeSidebar({
           </HoverTip>
         ) : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {profileUi ? (
           <button
             type="button"
             onClick={() => profileUi.openFriends("online")}
-            className="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] text-[var(--ms-text-muted)] transition-colors hover:bg-white/5 hover:text-white hover:shadow-[inset_2px_0_0_0_var(--accent)]"
+            className="mb-1.5 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-[var(--ms-text-muted)] transition-colors hover:bg-white/5 hover:text-white hover:shadow-[inset_2px_0_0_0_var(--accent)]"
           >
             <Users className="h-4 w-4 shrink-0" strokeWidth={2} />
             <span className="min-w-0 flex-1 truncate font-medium">Friends</span>
