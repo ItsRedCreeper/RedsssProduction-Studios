@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -38,65 +39,159 @@ function elementIsTruncated(el: HTMLElement) {
 }
 
 type TipState = {
+  /** Tip box top-left in viewport coords (no transform centering). */
   top: number;
   left: number;
   side: HoverTipSide;
+  /** Cap width so the tip wraps instead of overflowing the viewport. */
+  maxWidth: number;
+  /** Arrow offset from the tip edge that faces the anchor (px along that edge). */
+  arrowOffset: number;
 };
 
 const GAP = 10;
 const EDGE = 8;
+const MAX_TIP = 320;
 
-function tipTransform(side: HoverTipSide) {
-  switch (side) {
-    case "right":
-      return "translate(0, -50%)";
-    case "left":
-      return "translate(-100%, -50%)";
-    case "bottom":
-      return "translate(-50%, 0)";
-    case "top":
-    default:
-      return "translate(-50%, -100%)";
-  }
-}
-
-function tipArrow(side: HoverTipSide) {
+function tipArrowClass(side: HoverTipSide) {
   const base =
-    "absolute h-2.5 w-2.5 rotate-45 border-accent/45 bg-[#111214]";
+    "absolute h-2.5 w-2.5 rotate-45 border-[#3f4147] bg-[#111214]";
   switch (side) {
     case "right":
-      return `${base} left-[-5px] top-1/2 -translate-y-1/2 border-b border-l`;
+      return `${base} left-[-5px] border-b border-l`;
     case "left":
-      return `${base} right-[-5px] top-1/2 -translate-y-1/2 border-t border-r`;
+      return `${base} right-[-5px] border-t border-r`;
     case "bottom":
-      return `${base} left-1/2 top-[-5px] -translate-x-1/2 border-l border-t`;
+      return `${base} top-[-5px] border-l border-t`;
     case "top":
     default:
-      return `${base} bottom-[-5px] left-1/2 -translate-x-1/2 border-b border-r`;
+      return `${base} bottom-[-5px] border-b border-r`;
   }
 }
 
-function preferredPoint(rect: DOMRect, side: HoverTipSide) {
+function tipArrowStyle(
+  side: HoverTipSide,
+  arrowOffset: number,
+): CSSProperties {
   switch (side) {
     case "right":
-      return { top: rect.top + rect.height / 2, left: rect.right + GAP, side };
     case "left":
-      return { top: rect.top + rect.height / 2, left: rect.left - GAP, side };
+      return { top: arrowOffset, transform: "translateY(-50%) rotate(45deg)" };
     case "bottom":
-      return {
-        top: rect.bottom + GAP,
-        left: rect.left + rect.width / 2,
-        side,
-      };
     case "top":
     default:
-      return { top: rect.top - GAP, left: rect.left + rect.width / 2, side };
+      return { left: arrowOffset, transform: "translateX(-50%) rotate(45deg)" };
   }
+}
+
+function placeTip(
+  rect: DOMRect,
+  tipW: number,
+  tipH: number,
+  preferred: HoverTipSide,
+): TipState {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const space = {
+    top: rect.top - EDGE - GAP,
+    bottom: vh - rect.bottom - EDGE - GAP,
+    left: rect.left - EDGE - GAP,
+    right: vw - rect.right - EDGE - GAP,
+  };
+
+  const order: HoverTipSide[] = [preferred];
+  const flip: Record<HoverTipSide, HoverTipSide> = {
+    top: "bottom",
+    bottom: "top",
+    left: "right",
+    right: "left",
+  };
+  const ortho: HoverTipSide[] =
+    preferred === "top" || preferred === "bottom"
+      ? ["right", "left"]
+      : ["top", "bottom"];
+  order.push(flip[preferred], ...ortho);
+
+  let side = preferred;
+  for (const candidate of order) {
+    const need =
+      candidate === "top" || candidate === "bottom" ? tipH : tipW;
+    if (space[candidate] >= need) {
+      side = candidate;
+      break;
+    }
+  }
+
+  // Prefer the side with the most room if nothing fully fits.
+  if (
+    (side === "top" || side === "bottom"
+      ? tipH
+      : tipW) > space[side]
+  ) {
+    side = (Object.keys(space) as HoverTipSide[]).sort(
+      (a, b) => space[b] - space[a],
+    )[0];
+  }
+
+  const availableAlong =
+    side === "top" || side === "bottom"
+      ? vw - EDGE * 2
+      : Math.max(80, space[side]);
+  const maxWidth = Math.min(MAX_TIP, availableAlong);
+
+  // Re-measure width after maxWidth clamp isn't available here — use tipW
+  // capped to maxWidth for placement math.
+  const boxW = Math.min(tipW, maxWidth);
+  const boxH = tipH;
+
+  let top = 0;
+  let left = 0;
+  const anchorX = rect.left + rect.width / 2;
+  const anchorY = rect.top + rect.height / 2;
+
+  switch (side) {
+    case "right":
+      left = rect.right + GAP;
+      top = anchorY - boxH / 2;
+      break;
+    case "left":
+      left = rect.left - GAP - boxW;
+      top = anchorY - boxH / 2;
+      break;
+    case "bottom":
+      top = rect.bottom + GAP;
+      left = anchorX - boxW / 2;
+      break;
+    case "top":
+    default:
+      top = rect.top - GAP - boxH;
+      left = anchorX - boxW / 2;
+      break;
+  }
+
+  // Slide fully into the viewport — never shrink the box via bad left math.
+  left = Math.min(Math.max(left, EDGE), Math.max(EDGE, vw - EDGE - boxW));
+  top = Math.min(Math.max(top, EDGE), Math.max(EDGE, vh - EDGE - boxH));
+
+  let arrowOffset: number;
+  if (side === "top" || side === "bottom") {
+    arrowOffset = Math.min(
+      Math.max(anchorX - left, 10),
+      Math.max(10, boxW - 10),
+    );
+  } else {
+    arrowOffset = Math.min(
+      Math.max(anchorY - top, 10),
+      Math.max(10, boxH - 10),
+    );
+  }
+
+  return { top, left, side, maxWidth, arrowOffset };
 }
 
 /**
  * Fast Discord-style tooltip. Prefer this over native `title` for icon chrome.
- * Keeps the tip inside the viewport (flips / clamps when near edges).
+ * Keeps the tip inside the viewport (flips / slides when near edges).
  */
 export function HoverTip({
   label,
@@ -114,6 +209,7 @@ export function HoverTip({
   const onlyIfTruncatedRef = useRef(onlyIfTruncated);
   const timerRef = useRef<number | null>(null);
   const [tip, setTip] = useState<TipState | null>(null);
+  const [ready, setReady] = useState(false);
   const clean = label?.trim() || "";
 
   useEffect(() => {
@@ -134,57 +230,28 @@ export function HoverTip({
     if (!tip || !tipRef.current || !anchorRectRef.current) return;
     const el = tipRef.current;
     const rect = anchorRectRef.current;
-    const tipW = el.offsetWidth;
-    const tipH = el.offsetHeight;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
 
-    let nextSide = tip.side;
-    let point = preferredPoint(rect, nextSide);
+    // First paint: measure natural size with a generous max, then place.
+    const measured = placeTip(
+      rect,
+      el.offsetWidth || MAX_TIP,
+      el.offsetHeight || 28,
+      preferredSideRef.current,
+    );
 
-    // Flip if the preferred side would clip.
-    if (nextSide === "top" && point.top - tipH < EDGE) {
-      nextSide = "bottom";
-      point = preferredPoint(rect, nextSide);
-    } else if (nextSide === "bottom" && point.top + tipH > vh - EDGE) {
-      nextSide = "top";
-      point = preferredPoint(rect, nextSide);
-    } else if (nextSide === "right" && point.left + tipW > vw - EDGE) {
-      nextSide = "left";
-      point = preferredPoint(rect, nextSide);
-    } else if (nextSide === "left" && point.left - tipW < EDGE) {
-      nextSide = "right";
-      point = preferredPoint(rect, nextSide);
+    const changed =
+      !ready ||
+      tip.top !== measured.top ||
+      tip.left !== measured.left ||
+      tip.side !== measured.side ||
+      tip.maxWidth !== measured.maxWidth ||
+      tip.arrowOffset !== measured.arrowOffset;
+
+    if (changed) {
+      setTip(measured);
+      setReady(true);
     }
-
-    let { top, left } = point;
-
-    if (nextSide === "top" || nextSide === "bottom") {
-      const half = tipW / 2;
-      left = Math.min(Math.max(left, EDGE + half), vw - EDGE - half);
-      if (nextSide === "top") {
-        top = Math.max(top, EDGE + tipH);
-      } else {
-        top = Math.min(top, vh - EDGE - tipH);
-      }
-    } else {
-      const half = tipH / 2;
-      top = Math.min(Math.max(top, EDGE + half), vh - EDGE - half);
-      if (nextSide === "right") {
-        left = Math.min(left, vw - EDGE - tipW);
-      } else {
-        left = Math.max(left, EDGE + tipW);
-      }
-    }
-
-    if (
-      tip.top !== top ||
-      tip.left !== left ||
-      tip.side !== nextSide
-    ) {
-      setTip({ top, left, side: nextSide });
-    }
-  }, [tip]);
+  }, [tip, ready]);
 
   function clearTimer() {
     if (timerRef.current != null) {
@@ -196,6 +263,7 @@ export function HoverTip({
   function hide() {
     clearTimer();
     anchorRectRef.current = null;
+    setReady(false);
     setTip(null);
   }
 
@@ -205,12 +273,17 @@ export function HoverTip({
     clearTimer();
     const rect = element.getBoundingClientRect();
     anchorRectRef.current = rect;
-    const next = preferredPoint(rect, preferredSideRef.current);
+    // Seed with a rough placement; useLayoutEffect measures and corrects.
+    const seed = placeTip(rect, MAX_TIP, 28, preferredSideRef.current);
     if (delayMs <= 0) {
-      setTip(next);
+      setReady(false);
+      setTip(seed);
       return;
     }
-    timerRef.current = window.setTimeout(() => setTip(next), delayMs);
+    timerRef.current = window.setTimeout(() => {
+      setReady(false);
+      setTip(seed);
+    }, delayMs);
   }
 
   const child = isValidElement(children) ? (
@@ -272,11 +345,17 @@ export function HoverTip({
             style={{
               top: tip.top,
               left: tip.left,
-              transform: tipTransform(tip.side),
+              maxWidth: tip.maxWidth,
+              // Hide until measured+placed so we never flash a clipped tip.
+              opacity: ready ? 1 : 0,
             }}
-            className="pointer-events-none fixed z-[80] max-w-[min(40rem,calc(100vw-1.25rem))] whitespace-pre-line rounded-md border border-accent/45 bg-[#111214] px-3 py-1 text-sm font-semibold leading-snug text-white shadow-[0_8px_24px_rgba(0,0,0,0.55)] [overflow-wrap:anywhere] [text-wrap:pretty]"
+            className="pointer-events-none fixed z-[80] whitespace-pre-line rounded-md border border-[#3f4147] bg-[#111214] px-3 py-1.5 text-sm font-medium leading-snug text-white shadow-[0_8px_24px_rgba(0,0,0,0.55)] [overflow-wrap:anywhere] [text-wrap:pretty]"
           >
-            <span className={tipArrow(tip.side)} aria-hidden />
+            <span
+              className={tipArrowClass(tip.side)}
+              style={tipArrowStyle(tip.side, tip.arrowOffset)}
+              aria-hidden
+            />
             {clean}
           </span>,
           document.body,
