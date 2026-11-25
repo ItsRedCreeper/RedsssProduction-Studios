@@ -82,7 +82,7 @@ export function ForwardMessageModal({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search channels or DMs"
-            className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-[#00a8fc]"
+            className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2 text-sm outline-none focus:border-accent/60"
             autoFocus
           />
           <div className="max-h-64 space-y-1 overflow-y-auto">

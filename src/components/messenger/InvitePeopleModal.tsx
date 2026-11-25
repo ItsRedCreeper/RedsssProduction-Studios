@@ -278,7 +278,7 @@ export function InvitePeopleModal({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search friends"
-            className="w-full rounded-md border border-transparent bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none placeholder:text-[#6d6f78] focus:border-[#00a8fc]"
+            className="w-full rounded-md border border-transparent bg-[#1e1f22] px-3 py-2 text-sm text-white outline-none placeholder:text-[#6d6f78] focus:border-accent/60"
           />
         </div>
 

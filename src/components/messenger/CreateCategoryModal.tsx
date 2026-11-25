@@ -122,7 +122,7 @@ export function CreateCategoryModal({
               minLength={CATEGORY_NAME_MIN}
               maxLength={CATEGORY_NAME_MAX}
               placeholder="Text Channels"
-              className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-white outline-none focus:border-[#00a8fc]"
+              className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-white outline-none focus:border-accent/60"
             />
           </label>
 

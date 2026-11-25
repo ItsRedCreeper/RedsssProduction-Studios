@@ -489,7 +489,7 @@ export function ChatTimeline({
           className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[#3f4147] bg-[#1e1f22]/95 px-3 py-1.5 text-xs font-semibold text-[#dbdee1] shadow-lg shadow-black/40 backdrop-blur-sm transition hover:border-accent/50 hover:text-white"
         >
           <span>Jump to present</span>
-          <ArrowDown className="h-3.5 w-3.5 text-[#00a8fc]" strokeWidth={2.25} />
+          <ArrowDown className="h-3.5 w-3.5 text-accent" strokeWidth={2.25} />
         </button>
       )}
     </div>

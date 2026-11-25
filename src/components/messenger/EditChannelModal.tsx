@@ -335,7 +335,7 @@ export function EditChannelModal({
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   maxLength={CHANNEL_NAME_MAX}
-                  className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-[#00a8fc]"
+                  className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
                 />
               </label>
               {channel.type === "text" && (
@@ -349,7 +349,7 @@ export function EditChannelModal({
                     rows={3}
                     maxLength={1024}
                     placeholder="Let everyone know how to use this channel"
-                    className="w-full resize-none rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-[#00a8fc]"
+                    className="w-full resize-none rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
                   />
                 </label>
               )}
@@ -361,7 +361,7 @@ export function EditChannelModal({
                   <select
                     value={slowmode}
                     onChange={(event) => setSlowmode(Number(event.target.value))}
-                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-[#00a8fc]"
+                    className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
                   >
                     {SLOWMODE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>

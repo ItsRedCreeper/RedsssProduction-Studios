@@ -1088,7 +1088,7 @@ export function MessageComposer({
                 dragging ? "Drop files to attach…" : placeholder
               }
               disabled={disabled || sending}
-              className="relative z-10 max-h-40 min-h-[24px] w-full resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-transparent caret-[#dbdee1] outline-none placeholder:text-[#6d6f78] selection:bg-[#00a8fc]/35 [overflow-wrap:anywhere] whitespace-pre-wrap"
+              className="relative z-10 max-h-40 min-h-[24px] w-full resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-transparent caret-[#dbdee1] outline-none placeholder:text-[#6d6f78] selection:bg-accent/30 [overflow-wrap:anywhere] whitespace-pre-wrap"
             />
           </div>
           <HoverTip label="Emoji" delayMs={40}>

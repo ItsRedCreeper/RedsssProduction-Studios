@@ -62,7 +62,7 @@ export function EmojiPicker({
 
   return (
     <div
-      className={`flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-[#1e1f22] bg-[#2b2d31] shadow-2xl shadow-black/50 ${className}`}
+      className={`flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#2b2d31] shadow-2xl shadow-black/50 ring-1 ring-accent/10 ${className}`}
     >
       <div className="border-b border-black/30 p-2">
         <label className="flex items-center gap-2 rounded-md bg-[#1e1f22] px-2.5 py-1.5">

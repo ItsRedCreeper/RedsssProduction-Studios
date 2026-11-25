@@ -123,7 +123,7 @@ export function ServerHeaderMenu({
                 setOpen(false);
                 onCreateChannel();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-accent hover:text-white"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
             >
               <Hash className="h-4 w-4" strokeWidth={1.75} />
               Create Channel
@@ -137,7 +137,7 @@ export function ServerHeaderMenu({
                 setOpen(false);
                 onCreateCategory();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-accent hover:text-white"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
             >
               <FolderPlus className="h-4 w-4" strokeWidth={1.75} />
               Create Category
@@ -151,7 +151,7 @@ export function ServerHeaderMenu({
                 setOpen(false);
                 onSettings();
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-accent hover:text-white"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
             >
               <Settings className="h-4 w-4" strokeWidth={1.75} />
               Server Settings
@@ -163,7 +163,7 @@ export function ServerHeaderMenu({
                 type="button"
                 role="menuitem"
                 onClick={() => setViewAsOpen((value) => !value)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-accent hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
               >
                 <Eye className="h-4 w-4" strokeWidth={1.75} />
                 View Server As Role
@@ -203,7 +203,7 @@ export function ServerHeaderMenu({
                   setOpen(false);
                   onLeave();
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent hover:bg-accent hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#ed4245] hover:bg-[#ed4245] hover:text-white"
               >
                 <LogOut className="h-4 w-4" strokeWidth={1.75} />
                 Leave Server

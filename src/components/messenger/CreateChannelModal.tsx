@@ -204,7 +204,7 @@ export function CreateChannelModal({
               minLength={CHANNEL_NAME_MIN}
               maxLength={CHANNEL_NAME_MAX}
               autoFocus
-              className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-[#00a8fc]"
+              className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60"
             />
           </label>
 
@@ -216,7 +216,7 @@ export function CreateChannelModal({
               <select
                 value={categoryId}
                 onChange={(event) => setCategoryId(event.target.value)}
-                className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-[#00a8fc]"
+                className="w-full rounded-md border border-[#3f4147] bg-[#1e1f22] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
               >
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>

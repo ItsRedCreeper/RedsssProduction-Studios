@@ -440,7 +440,7 @@ export function MessageItem({
                 setEditDraft(value);
               }}
               rows={2}
-              className="w-full resize-y rounded-md border border-[#1e1f22] bg-[#1e1f22] px-3 py-2 text-sm text-foreground outline-none [overflow-wrap:anywhere] whitespace-pre-wrap focus:border-[#00a8fc] focus:ring-1 focus:ring-[#00a8fc]"
+              className="w-full resize-y rounded-md border border-[#1e1f22] bg-[#1e1f22] px-3 py-2 text-sm text-foreground outline-none [overflow-wrap:anywhere] whitespace-pre-wrap focus:border-accent/60 focus:ring-1 focus:ring-accent/40"
               autoFocus
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
