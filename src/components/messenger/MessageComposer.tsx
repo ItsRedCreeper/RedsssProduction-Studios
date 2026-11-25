@@ -592,7 +592,7 @@ export function MessageComposer({
 
   return (
     <div
-      className="shrink-0 px-3 pb-4 pt-1.5 sm:px-4 sm:pb-5"
+      className="shrink-0 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-4 sm:pb-5"
       onDragEnter={(event) => {
         if (!allowAttach) return;
         event.preventDefault();
@@ -836,7 +836,7 @@ export function MessageComposer({
         )}
         <form
           onSubmit={handleSubmit}
-          className={`relative flex flex-nowrap items-end gap-1.5 border border-white/[0.04] bg-[#383a40] px-2 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:gap-2.5 sm:px-3.5 sm:py-3 ${
+          className={`relative flex flex-wrap items-end gap-1.5 border border-white/[0.04] bg-[var(--ms-input,#383a40)] px-2 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:flex-nowrap sm:gap-2.5 sm:px-3.5 sm:py-3 ${
             dragging ? "ring-2 ring-accent/40" : ""
           } ${
             replying || pendingFiles.length > 0
@@ -943,7 +943,7 @@ export function MessageComposer({
               </div>
             </>
           )}
-          <div className="relative min-h-[24px] min-w-0 flex-1">
+          <div className="relative min-h-[24px] min-w-[10rem] flex-1 basis-[12rem]">
             <div
               ref={mirrorRef}
               className="pointer-events-none absolute inset-0 overflow-y-auto text-[15px] leading-6 text-[#dbdee1]"

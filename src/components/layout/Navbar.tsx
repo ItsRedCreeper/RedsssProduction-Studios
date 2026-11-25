@@ -77,7 +77,7 @@ export function Navbar() {
     <>
       <header
         className={`relative z-30 shrink-0 overflow-x-hidden border-b bg-background/95 backdrop-blur-md ${
-          onMessenger ? "border-[#1e1f22]" : "border-border"
+          onMessenger ? "border-[var(--ms-border,#1e1f22)]" : "border-border"
         }`}
       >
         <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-2 px-2 sm:gap-3 sm:px-5">

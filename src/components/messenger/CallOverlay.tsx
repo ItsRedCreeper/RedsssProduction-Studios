@@ -155,7 +155,7 @@ export function CallOverlay() {
 
   if (!call.stageExpanded) {
     return (
-      <div className="absolute bottom-24 left-[4.25rem] z-40 w-[min(100%-5.5rem,18rem)] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a1b1e]/95 shadow-xl shadow-black/50 ring-1 ring-accent/15 backdrop-blur-sm sm:bottom-3 sm:left-3 sm:w-[min(100%-1.5rem,18rem)]">
+      <div className="absolute left-[4.25rem] right-2 top-2 z-40 w-auto max-w-[18rem] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a1b1e]/95 shadow-xl shadow-black/50 ring-1 ring-accent/15 backdrop-blur-sm sm:bottom-3 sm:left-3 sm:right-auto sm:top-auto sm:w-[min(100%-1.5rem,18rem)] sm:max-w-none">
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold text-[#23a559]">
@@ -217,7 +217,7 @@ export function CallOverlay() {
         : "grid-cols-2 lg:grid-cols-3";
 
   const stage = (
-    <div className="fixed inset-x-0 bottom-0 top-14 z-[45] flex flex-col bg-[#111214]">
+    <div className="fixed inset-x-0 bottom-0 top-14 z-[45] flex flex-col bg-[#111214] isolate">
       <div className="messenger-header flex h-12 shrink-0 items-center justify-between gap-3 bg-[#1a1b1e] px-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#23a559]">

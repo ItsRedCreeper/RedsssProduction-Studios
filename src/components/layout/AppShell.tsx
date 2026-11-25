@@ -35,7 +35,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <SiteActivityTracker />
               <main
                 className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col ${
-                  lockViewport ? "overflow-hidden" : "overflow-y-auto"
+                  lockViewport
+                    ? "overflow-hidden border-t-0"
+                    : "overflow-y-auto"
                 }`}
               >
                 {children}

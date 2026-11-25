@@ -37,7 +37,7 @@ export function ServerRailButton({
           aria-label={unread && !active ? `${label} (unread)` : label}
           aria-pressed={active || undefined}
           onClick={onClick}
-          className="relative z-[1] flex h-11 w-11 items-center justify-center"
+          className="relative z-[1] flex h-11 w-11 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a1b1e]"
         >
           {children}
           {unread && !active && tone !== "action" && (
