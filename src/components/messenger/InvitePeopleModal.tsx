@@ -324,7 +324,7 @@ export function InvitePeopleModal({
                       className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold ${
                         friend.alreadyMember || friend.alreadyInvited
                           ? "bg-[#1e1f22] text-[#6d6f78]"
-                          : "bg-accent text-white hover:bg-accent-hover disabled:opacity-60"
+                          : "bg-[#23a559] text-white hover:brightness-110 disabled:opacity-60"
                       }`}
                     >
                       {friend.alreadyMember ? (
@@ -351,7 +351,7 @@ export function InvitePeopleModal({
         </div>
 
         {error && (
-          <p className="mx-5 mb-2 rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">
+          <p className="mx-5 mb-2 rounded-md border border-[#ed4245]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[#ed4245]">
             {error}
           </p>
         )}
@@ -371,7 +371,7 @@ export function InvitePeopleModal({
               type="button"
               disabled={!inviteCode}
               onClick={() => void copyLink()}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#23a559] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
             >
               {copied ? (
                 <Check className="h-4 w-4" strokeWidth={2.5} />

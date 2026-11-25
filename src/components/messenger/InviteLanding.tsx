@@ -217,12 +217,12 @@ export function InviteLanding({ code }: InviteLandingProps) {
               </div>
 
               {expired && (
-                <p className="mt-4 rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">
+                <p className="mt-4 rounded-md border border-[#ed4245]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[#ed4245]">
                   This invite has expired or reached its use limit.
                 </p>
               )}
               {error && (
-                <p className="mt-4 rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">
+                <p className="mt-4 rounded-md border border-[#ed4245]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[#ed4245]">
                   {error}
                 </p>
               )}
@@ -236,7 +236,7 @@ export function InviteLanding({ code }: InviteLandingProps) {
                 {joined ? (
                   <Link
                     href={messengerServerPath(server.id)}
-                    className="inline-flex flex-1 items-center justify-center rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover"
+                    className="inline-flex flex-1 items-center justify-center rounded-md bg-[#23a559] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
                   >
                     Open server
                   </Link>
@@ -245,7 +245,7 @@ export function InviteLanding({ code }: InviteLandingProps) {
                     type="button"
                     disabled={joining || expired || !user}
                     onClick={() => void join()}
-                    className="inline-flex flex-1 items-center justify-center rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+                    className="inline-flex flex-1 items-center justify-center rounded-md bg-[#23a559] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
                   >
                     {joining ? "Joining…" : "Accept Invite"}
                   </button>
