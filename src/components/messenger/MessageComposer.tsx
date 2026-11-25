@@ -98,6 +98,8 @@ type MessageComposerProps = {
   onSubmit: (content?: string) => void;
   onTyping?: () => void;
   onTypingStop?: () => void;
+  /** Empty composer + ↑ edits your last message when provided. */
+  onEditLastOwnMessage?: () => void;
   onLimitReached?: (message: string) => void;
 };
 
@@ -135,6 +137,7 @@ export function MessageComposer({
   onSubmit,
   onTyping,
   onTypingStop,
+  onEditLastOwnMessage,
   onLimitReached,
 }: MessageComposerProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -1042,9 +1045,33 @@ export function MessageComposer({
                     return;
                   }
                 }
-                if (event.key === "Escape" && (emojiOpen || gifOpen)) {
+                if (event.key === "Escape" && (emojiOpen || gifOpen || stickerOpen)) {
                   setEmojiOpen(false);
                   setGifOpen(false);
+                  setStickerOpen(false);
+                  return;
+                }
+                if (
+                  event.key === "Escape" &&
+                  replying &&
+                  !draft.trim() &&
+                  pendingFiles.length === 0
+                ) {
+                  event.preventDefault();
+                  onCancelReply();
+                  return;
+                }
+                if (
+                  event.key === "ArrowUp" &&
+                  !event.shiftKey &&
+                  !draft.trim() &&
+                  pendingFiles.length === 0 &&
+                  filteredMentions.length === 0 &&
+                  filteredEmojiSuggestions.length === 0 &&
+                  onEditLastOwnMessage
+                ) {
+                  event.preventDefault();
+                  onEditLastOwnMessage();
                   return;
                 }
                 // Backspace deletes a whole emoji chip in one go.

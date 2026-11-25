@@ -19,8 +19,10 @@ function typingCopy(people: TypingPerson[]) {
   if (people.length === 2) {
     return `${people[0].username} and ${people[1].username} are typing…`;
   }
-  // Discord: 3+ collapses to this label (avatars still show the first few).
-  return "Several people are typing…";
+  const rest = people.length - 2;
+  return `${people[0].username}, ${people[1].username} and ${rest} other${
+    rest === 1 ? "" : "s"
+  } are typing…`;
 }
 
 export function TypingIndicator({ people, className = "" }: TypingIndicatorProps) {
