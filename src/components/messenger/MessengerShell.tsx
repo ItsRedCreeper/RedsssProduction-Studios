@@ -755,7 +755,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setThreads([]);
+      setLoadingThreads(false);
+      return;
+    }
     void refreshThreads();
   }, [user, refreshThreads]);
 
