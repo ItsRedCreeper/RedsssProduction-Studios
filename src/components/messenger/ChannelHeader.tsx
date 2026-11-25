@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { MessageSquare, Pin, Search, Users } from "lucide-react";
+import { MessageSquare, Phone, Pin, Search, Users, Video } from "lucide-react";
 import { HoverTip } from "@/components/ui/HoverTip";
 
 type ChannelHeaderProps = {
@@ -16,11 +16,14 @@ type ChannelHeaderProps = {
   showPins?: boolean;
   showMembers?: boolean;
   showChat?: boolean;
+  showCall?: boolean;
   pinCount?: number;
   onToggleSearch: () => void;
   onTogglePins: () => void;
   onToggleMembers: () => void;
   onToggleChat?: () => void;
+  onStartCall?: () => void;
+  onStartVideoCall?: () => void;
 };
 
 function toolClass(active: boolean) {
@@ -43,11 +46,14 @@ export function ChannelHeader({
   showPins = true,
   showMembers = true,
   showChat = false,
+  showCall = false,
   pinCount = 0,
   onToggleSearch,
   onTogglePins,
   onToggleMembers,
   onToggleChat,
+  onStartCall,
+  onStartVideoCall,
 }: ChannelHeaderProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-black/30 px-4 shadow-sm shadow-black/20">
@@ -71,6 +77,30 @@ export function ChannelHeader({
         <span className="flex-1" />
       )}
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        {showCall && onStartCall && (
+          <HoverTip label="Start Voice Call" delayMs={40}>
+            <button
+              type="button"
+              className={toolClass(false)}
+              aria-label="Start voice call"
+              onClick={onStartCall}
+            >
+              <Phone className="h-5 w-5" strokeWidth={1.75} />
+            </button>
+          </HoverTip>
+        )}
+        {showCall && onStartVideoCall && (
+          <HoverTip label="Start Video Call" delayMs={40}>
+            <button
+              type="button"
+              className={toolClass(false)}
+              aria-label="Start video call"
+              onClick={onStartVideoCall}
+            >
+              <Video className="h-5 w-5" strokeWidth={1.75} />
+            </button>
+          </HoverTip>
+        )}
         {showSearch && (
           <HoverTip label="Search" delayMs={40}>
             <button

@@ -8,8 +8,11 @@ import {
   Headphones,
   Mic,
   MicOff,
+  MonitorUp,
   PhoneOff,
   Signal,
+  Video,
+  VideoOff,
   SignalHigh,
   SignalLow,
   SignalMedium,
@@ -51,6 +54,10 @@ type VoiceChannelControlsProps = {
   micError?: string | null;
   compact?: boolean;
   showLeave?: boolean;
+  cameraOn?: boolean;
+  screenSharing?: boolean;
+  onToggleCamera?: () => void;
+  onToggleScreenShare?: () => void;
 };
 
 function QualityIcon({
@@ -297,6 +304,10 @@ export function VoiceChannelControls({
   micError = null,
   compact = false,
   showLeave = true,
+  cameraOn = false,
+  screenSharing = false,
+  onToggleCamera,
+  onToggleScreenShare,
 }: VoiceChannelControlsProps) {
   const ownerId = useId();
   const { menu, open, close, closeAny } = useVoiceMenu(ownerId);
@@ -456,6 +467,47 @@ export function VoiceChannelControls({
           </HoverTip>
         )}
       </div>
+
+      {onToggleCamera && (
+        <HoverTip label={cameraOn ? "Turn Off Camera" : "Turn On Camera"} delayMs={40}>
+          <button
+            type="button"
+            onClick={onToggleCamera}
+            className={`rounded-md p-1.5 ${
+              cameraOn
+                ? "bg-white/10 text-white"
+                : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
+            }`}
+            aria-label={cameraOn ? "Turn off camera" : "Turn on camera"}
+          >
+            {cameraOn ? (
+              <Video className="h-4 w-4" strokeWidth={2} />
+            ) : (
+              <VideoOff className="h-4 w-4" strokeWidth={2} />
+            )}
+          </button>
+        </HoverTip>
+      )}
+
+      {onToggleScreenShare && (
+        <HoverTip
+          label={screenSharing ? "Stop Sharing" : "Share Your Screen"}
+          delayMs={40}
+        >
+          <button
+            type="button"
+            onClick={onToggleScreenShare}
+            className={`rounded-md p-1.5 ${
+              screenSharing
+                ? "bg-accent/20 text-accent"
+                : "text-[#b5bac1] hover:bg-white/5 hover:text-white"
+            }`}
+            aria-label={screenSharing ? "Stop screen share" : "Share screen"}
+          >
+            <MonitorUp className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </HoverTip>
+      )}
 
       {showLeave && (
         <HoverTip label="Disconnect" delayMs={40}>

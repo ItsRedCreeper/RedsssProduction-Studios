@@ -9,7 +9,7 @@ export function MessengerLayout({ discover = false }: MessengerLayoutProps) {
   return (
     <Suspense
       fallback={
-        <div className="flex h-[calc(100dvh-3.5rem-2.75rem)] items-center justify-center bg-[#313338] text-sm text-muted md:h-[calc(100dvh-3.5rem)]">
+        <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-[#313338] text-sm text-muted">
           Loading messenger…
         </div>
       }

@@ -57,6 +57,10 @@ type VoiceSessionContextValue = {
   leaveVoice: () => Promise<void>;
   toggleMute: () => void;
   toggleDeafen: () => void;
+  cameraOn: boolean;
+  screenSharing: boolean;
+  toggleCamera: () => Promise<void>;
+  toggleScreenShare: () => Promise<void>;
   setInputDeviceId: (deviceId: string) => void;
   setOutputDeviceId: (deviceId: string) => void;
   setInputVolume: (value: number) => void;
@@ -128,6 +132,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [selfSpeaking, setSelfSpeaking] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [screenSharing, setScreenSharing] = useState(false);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
+  const screenTrackRef = useRef<MediaStreamTrack | null>(null);
 
   const voiceOpRef = useRef(0);
   const muteOpRef = useRef(0);
@@ -578,6 +586,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     setMuteLinked(false);
     muteLinkedRef.current = false;
     setLocalSpeaking(false);
+    cameraTrackRef.current?.stop();
+    screenTrackRef.current?.stop();
+    cameraTrackRef.current = null;
+    screenTrackRef.current = null;
+    setCameraOn(false);
+    setScreenSharing(false);
     stopMicMonitor();
     await stopMesh();
     detachBroadcast();
@@ -657,6 +671,67 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     }
     void persistFlags(true, deafenedRef.current);
   }, [persistFlags]);
+
+  const toggleCamera = useCallback(async () => {
+    const mesh = meshRef.current;
+    if (!mesh || !connectionRef.current) return;
+    if (cameraTrackRef.current) {
+      await mesh.setLocalVideoTrack(null);
+      cameraTrackRef.current.stop();
+      cameraTrackRef.current = null;
+      setCameraOn(false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      });
+      const track = stream.getVideoTracks()[0];
+      if (!track) return;
+      cameraTrackRef.current = track;
+      setCameraOn(true);
+      await mesh.setLocalVideoTrack(track);
+    } catch {
+      setMicError("Camera permission denied.");
+    }
+  }, []);
+
+  const toggleScreenShare = useCallback(async () => {
+    const mesh = meshRef.current;
+    if (!mesh || !connectionRef.current) return;
+    if (screenTrackRef.current) {
+      await mesh.setLocalScreenTrack(null);
+      screenTrackRef.current.stop();
+      screenTrackRef.current = null;
+      setScreenSharing(false);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
+      const track = stream.getVideoTracks()[0];
+      if (!track) return;
+      screenTrackRef.current = track;
+      setScreenSharing(true);
+      track.addEventListener(
+        "ended",
+        () => {
+          void (async () => {
+            await meshRef.current?.setLocalScreenTrack(null);
+            screenTrackRef.current = null;
+            setScreenSharing(false);
+          })();
+        },
+        { once: true },
+      );
+      await mesh.setLocalScreenTrack(track);
+    } catch {
+      setMicError("Screen share cancelled or blocked.");
+    }
+  }, []);
 
   const toggleDeafen = useCallback(() => {
     if (deafenedRef.current) {
@@ -905,6 +980,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       leaveVoice,
       toggleMute,
       toggleDeafen,
+      cameraOn,
+      screenSharing,
+      toggleCamera,
+      toggleScreenShare,
       setInputDeviceId: devices.setInputDeviceId,
       setOutputDeviceId: devices.setOutputDeviceId,
       setInputVolume: devices.setInputVolume,
@@ -938,6 +1017,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       leaveVoice,
       toggleMute,
       toggleDeafen,
+      cameraOn,
+      screenSharing,
+      toggleCamera,
+      toggleScreenShare,
       shouldSkipAutoJoin,
       clearSkipAutoJoin,
     ],

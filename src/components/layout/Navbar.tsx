@@ -60,23 +60,23 @@ export function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-3 sm:px-5">
+      <header className="sticky top-0 z-30 shrink-0 overflow-x-hidden border-b border-border bg-background/95 backdrop-blur-md">
+        <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-2 px-2 sm:gap-3 sm:px-5">
           <Link
             href="/"
-            className="flex min-w-0 shrink-0 items-center gap-2.5 transition-opacity hover:opacity-90"
+            className="flex min-w-0 shrink items-center gap-2 transition-opacity hover:opacity-90 sm:gap-2.5"
           >
             <SiteLogo />
-            <span className="hidden truncate text-sm font-semibold tracking-tight text-foreground sm:inline md:max-w-[11rem] lg:max-w-none">
+            <span className="hidden truncate text-sm font-semibold tracking-tight text-foreground xl:inline">
               RedsssProduction Studios
             </span>
-            <span className="truncate text-sm font-semibold tracking-tight text-foreground sm:hidden">
+            <span className="hidden truncate text-sm font-semibold tracking-tight text-foreground sm:inline xl:hidden">
               Redsss
             </span>
           </Link>
 
           <nav
-            className="hidden flex-1 items-center justify-center gap-0.5 md:flex"
+            className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex"
             aria-label="Primary"
           >
             {NAV_LINKS.map((link) => {
@@ -85,7 +85,7 @@ export function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  className={`relative shrink-0 rounded-md px-2 py-1.5 text-sm font-medium transition-colors xl:px-3 ${
                     active
                       ? "text-accent"
                       : "text-muted hover:bg-surface-hover hover:text-foreground"
@@ -100,7 +100,7 @@ export function Navbar() {
             })}
           </nav>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <div className="ml-auto flex min-w-0 shrink-0 items-center gap-0.5 sm:gap-2">
             <HoverTip label="Notifications">
               <button
                 type="button"
@@ -194,11 +194,11 @@ export function Navbar() {
                 label={displayName}
                 onlyIfTruncated
                 delayMs={40}
-                className="hidden max-w-[10rem] sm:inline-flex"
+                className="hidden max-w-[8rem] xl:inline-flex"
               >
                 <button
                   type="button"
-                  className="max-w-[10rem] truncate text-sm font-semibold text-foreground"
+                  className="max-w-[8rem] truncate text-sm font-semibold text-foreground"
                   onClick={() => {
                     if (!user) return;
                     void profileUi.openBigProfile(user.id);
@@ -222,7 +222,7 @@ export function Navbar() {
         </div>
 
         <nav
-          className="flex gap-1 overflow-x-auto border-t border-border px-2 py-1.5 md:hidden"
+          className="flex gap-1 overflow-x-auto border-t border-border px-2 py-1.5 lg:hidden"
           aria-label="Primary mobile"
         >
           {NAV_LINKS.map((link) => {

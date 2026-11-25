@@ -31,10 +31,18 @@ export type VoiceMeshOptions = {
   supabase: SupabaseClient;
   channelId: string;
   userId: string;
+  /** Realtime topic prefix. Default voice-rtc; use call-rtc for DM calls. */
+  topicPrefix?: string;
   onSpeaking?: (userId: string, speaking: boolean) => void;
   onPeerCount?: (count: number) => void;
   /** Fired when a peer slot is created (hello / offer). */
   onPeerJoined?: (peerId: string) => void;
+  /** Remote video/screen track for a peer (null when removed). */
+  onRemoteVideo?: (
+    peerId: string,
+    stream: MediaStream | null,
+    kind: "camera" | "screen" | "unknown",
+  ) => void;
   onError?: (message: string) => void;
 };
 
@@ -47,6 +55,8 @@ export class VoiceMesh {
   private signal: RealtimeChannel | null = null;
   private peers = new Map<string, PeerSlot>();
   private localStream: MediaStream | null = null;
+  private localVideoTrack: MediaStreamTrack | null = null;
+  private localScreenTrack: MediaStreamTrack | null = null;
   private muted = false;
   private deafened = false;
   private outputDeviceId = "";
@@ -65,8 +75,9 @@ export class VoiceMesh {
     this.started = true;
     const { supabase, channelId, userId } = this.opts;
 
+    const prefix = this.opts.topicPrefix ?? "voice-rtc";
     this.signal = supabase
-      .channel(`voice-rtc:${channelId}`, {
+      .channel(`${prefix}:${channelId}`, {
         config: { broadcast: { self: false } },
       })
       .on("broadcast", { event: "signal" }, ({ payload }) => {
@@ -103,6 +114,22 @@ export class VoiceMesh {
       this.closePeer(peerId);
     }
     this.localStream = null;
+    if (this.localVideoTrack) {
+      try {
+        this.localVideoTrack.stop();
+      } catch {
+        /* ignore */
+      }
+      this.localVideoTrack = null;
+    }
+    if (this.localScreenTrack) {
+      try {
+        this.localScreenTrack.stop();
+      } catch {
+        /* ignore */
+      }
+      this.localScreenTrack = null;
+    }
     this.started = false;
   }
 
@@ -128,6 +155,47 @@ export class VoiceMesh {
     this.muted = muted;
     const track = this.localStream?.getAudioTracks()[0];
     if (track) track.enabled = !muted;
+  }
+
+  /** Camera or null to stop. Renegotiates with peers. */
+  async setLocalVideoTrack(track: MediaStreamTrack | null) {
+    if (this.localVideoTrack && this.localVideoTrack !== track) {
+      try {
+        this.localVideoTrack.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.localVideoTrack = track;
+    for (const peerId of this.peers.keys()) {
+      await this.applyVideoToPeer(peerId, "camera");
+    }
+  }
+
+  /** Screen share or null to stop. */
+  async setLocalScreenTrack(track: MediaStreamTrack | null) {
+    if (this.localScreenTrack && this.localScreenTrack !== track) {
+      try {
+        this.localScreenTrack.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.localScreenTrack = track;
+    if (track) {
+      track.addEventListener(
+        "ended",
+        () => {
+          if (this.localScreenTrack === track) {
+            void this.setLocalScreenTrack(null);
+          }
+        },
+        { once: true },
+      );
+    }
+    for (const peerId of this.peers.keys()) {
+      await this.applyVideoToPeer(peerId, "screen");
+    }
   }
 
   setDeafened(deafened: boolean) {
@@ -178,7 +246,7 @@ export class VoiceMesh {
 
     const sender = slot.pc
       .getSenders()
-      .find((s) => s.track?.kind === "audio" || !s.track);
+      .find((s) => s.track?.kind === "audio");
     if (sender) {
       try {
         await sender.replaceTrack(track);
@@ -190,6 +258,70 @@ export class VoiceMesh {
         slot.pc.addTrack(track, this.localStream);
       } catch {
         /* ignore */
+      }
+    }
+    await this.applyVideoToPeer(peerId, "camera");
+    await this.applyVideoToPeer(peerId, "screen");
+  }
+
+  private async applyVideoToPeer(
+    peerId: string,
+    kind: "camera" | "screen",
+  ) {
+    const slot = this.peers.get(peerId);
+    if (!slot) return;
+    const track =
+      kind === "camera" ? this.localVideoTrack : this.localScreenTrack;
+    const contentHint = kind === "screen" ? "detail" : "motion";
+    if (track && "contentHint" in track) {
+      try {
+        (track as MediaStreamTrack & { contentHint: string }).contentHint =
+          contentHint;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const senders = slot.pc.getSenders().filter((s) => s.track?.kind === "video");
+    // Prefer matching by existing track identity / contentHint when possible.
+    let sender =
+      senders.find((s) =>
+        kind === "camera"
+          ? s.track === this.localVideoTrack ||
+            (s.track &&
+              s.track !== this.localScreenTrack &&
+              (s.track as MediaStreamTrack & { contentHint?: string })
+                .contentHint !== "detail")
+          : s.track === this.localScreenTrack ||
+            (s.track as MediaStreamTrack & { contentHint?: string } | null)
+              ?.contentHint === "detail",
+      ) ?? null;
+
+    if (!sender && kind === "camera") {
+      sender = senders[0] ?? null;
+    }
+    if (!sender && kind === "screen" && senders.length > 1) {
+      sender = senders[1] ?? null;
+    }
+
+    if (sender) {
+      try {
+        await sender.replaceTrack(track);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    if (track) {
+      try {
+        const stream = new MediaStream([track]);
+        slot.pc.addTrack(track, stream);
+      } catch {
+        try {
+          slot.pc.addTransceiver(track, { direction: "sendrecv" });
+        } catch {
+          /* ignore */
+        }
       }
     }
   }
@@ -335,6 +467,17 @@ export class VoiceMesh {
         /* ignore */
       }
     }
+    try {
+      pc.addTransceiver("video", { direction: "recvonly" });
+    } catch {
+      /* ignore */
+    }
+    if (this.localVideoTrack) {
+      await this.applyVideoToPeer(peerId, "camera");
+    }
+    if (this.localScreenTrack) {
+      await this.applyVideoToPeer(peerId, "screen");
+    }
 
     pc.onnegotiationneeded = () => {
       if (slot.polite) return;
@@ -351,12 +494,28 @@ export class VoiceMesh {
     };
 
     pc.ontrack = (event) => {
+      const track = event.track;
+      if (track.kind === "video") {
+        const ms = new MediaStream([track]);
+        const hint = (track as MediaStreamTrack & { contentHint?: string })
+          .contentHint;
+        const kind =
+          hint === "detail" ? "screen" : hint === "motion" ? "camera" : "unknown";
+        this.opts.onRemoteVideo?.(peerId, ms, kind);
+        track.addEventListener("ended", () => {
+          this.opts.onRemoteVideo?.(peerId, null, kind);
+        });
+        track.addEventListener("mute", () => {
+          this.opts.onRemoteVideo?.(peerId, null, kind);
+        });
+        return;
+      }
       const [stream] = event.streams;
       if (stream) {
         audioEl.srcObject = stream;
         void audioEl.play().catch(() => undefined);
-      } else if (event.track) {
-        const ms = new MediaStream([event.track]);
+      } else if (track) {
+        const ms = new MediaStream([track]);
         audioEl.srcObject = ms;
         void audioEl.play().catch(() => undefined);
       }

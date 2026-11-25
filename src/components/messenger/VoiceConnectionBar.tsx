@@ -32,6 +32,10 @@ type VoiceConnectionBarProps = {
   onOpenDeviceMenus?: () => void;
   micLevel?: number;
   micError?: string | null;
+  cameraOn?: boolean;
+  screenSharing?: boolean;
+  onToggleCamera?: () => void;
+  onToggleScreenShare?: () => void;
 };
 
 export function VoiceConnectionBar({
@@ -57,6 +61,10 @@ export function VoiceConnectionBar({
   onOpenDeviceMenus,
   micLevel,
   micError,
+  cameraOn,
+  screenSharing,
+  onToggleCamera,
+  onToggleScreenShare,
 }: VoiceConnectionBarProps) {
   return (
     <div className="shrink-0 border-t border-black/40 bg-[#232428] px-2 py-2">
@@ -119,6 +127,10 @@ export function VoiceConnectionBar({
         onOpenDeviceMenus={onOpenDeviceMenus}
         micLevel={micLevel}
         micError={micError}
+        cameraOn={cameraOn}
+        screenSharing={screenSharing}
+        onToggleCamera={onToggleCamera}
+        onToggleScreenShare={onToggleScreenShare}
       />
     </div>
   );

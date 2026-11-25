@@ -44,6 +44,7 @@ import type { TypingPerson } from "@/components/messenger/TypingIndicator";
 import { MemberList } from "@/components/messenger/MemberList";
 import { VoicePane } from "@/components/messenger/VoicePane";
 import { VoiceConnectionBar } from "@/components/messenger/VoiceConnectionBar";
+import { CallOverlay } from "@/components/messenger/CallOverlay";
 import { ResizableSidebar } from "@/components/messenger/ResizableSidebar";
 import { ServerHeaderMenu } from "@/components/messenger/ServerHeaderMenu";
 import { ServerSettingsModal } from "@/components/messenger/ServerSettingsModal";
@@ -51,6 +52,7 @@ import {
   useVoiceSession,
   VOICE_STALE_AFTER_MS,
 } from "@/components/messenger/voice/VoiceSessionProvider";
+import { useCallSession } from "@/components/messenger/voice/CallSessionProvider";
 import { useMessengerSidebarWidth } from "@/hooks/useMessengerSidebarWidth";
 import {
   useVoiceChatSidebarWidth,
@@ -227,6 +229,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     [isBlocked, isIgnored],
   );
   const voice = useVoiceSession();
+  const call = useCallSession();
+  const watchConversation = call.watchConversation;
 
   const pathIds = discover
     ? { serverId: null, channelId: null }
@@ -407,6 +411,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const muted = voice.muted;
   const deafened = voice.deafened;
   const displayName = profile?.username ?? "You";
+
+  useEffect(() => {
+    watchConversation(dmMode ? activeConversationId : null);
+  }, [dmMode, activeConversationId, watchConversation]);
   const { width: sidebarWidth, beginResize } = useMessengerSidebarWidth();
   const {
     width: voiceChatWidth,
@@ -3925,6 +3933,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     onOpenDeviceMenus: voice.refreshDevices,
     micLevel: voice.micLevel,
     micError: voice.micError,
+    cameraOn: voice.cameraOn,
+    screenSharing: voice.screenSharing,
+    onToggleCamera: () => void voice.toggleCamera(),
+    onToggleScreenShare: () => void voice.toggleScreenShare(),
   };
 
   const voiceFooter = connection ? (
@@ -3948,12 +3960,30 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       onLeave={() => void voice.leaveVoice()}
       {...deviceProps}
     />
+  ) : call.connection ? (
+    <VoiceConnectionBar
+      channelName={call.connection.label}
+      serverName="Direct Call"
+      muted={call.muted}
+      deafened={call.deafened}
+      quality={call.quality}
+      onToggleMute={call.toggleMute}
+      onToggleDeafen={call.toggleDeafen}
+      onLeave={() => void call.leaveCall()}
+      micLevel={call.micLevel}
+      micError={call.micError}
+      cameraOn={call.cameraOn}
+      screenSharing={call.screenSharing}
+      onToggleCamera={() => void call.toggleCamera()}
+      onToggleScreenShare={() => void call.toggleScreenShare()}
+    />
   ) : null;
 
   const sidebarFooter = voiceFooter;
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem-2.75rem)] min-h-[28rem] min-w-0 overflow-hidden border-t border-black/40 md:h-[calc(100dvh-3.5rem)]">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden border-t border-black/40">
+      <CallOverlay />
       <ServerRail
         servers={servers}
         activeServerId={activeServerId}
@@ -4222,11 +4252,44 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             showPins={textMode && !channelPending && !previewMode}
             showMembers={textMode && !!activeServer && !channelPending}
             showChat={voiceMode && !channelPending && !previewMode}
+            showCall={dmMode && !channelPending && !!activeThread}
             pinCount={pinList.length}
             onToggleSearch={() => setSearchOpen((open) => !open)}
             onTogglePins={() => setPinsOpen((open) => !open)}
             onToggleMembers={() => setMembersOpen((open) => !open)}
             onToggleChat={() => setVoiceChatOpen((open) => !open)}
+            onStartCall={
+              dmMode && activeThread && activeConversationId
+                ? () =>
+                    void call.startCall({
+                      conversationId: activeConversationId,
+                      label:
+                        activeThread.groupName ||
+                        activeThread.username ||
+                        "Direct Call",
+                      peerUserIds: activeThread.isGroup
+                        ? activeThread.participantIds ?? []
+                        : [activeThread.otherUserId],
+                      withVideo: false,
+                    })
+                : undefined
+            }
+            onStartVideoCall={
+              dmMode && activeThread && activeConversationId
+                ? () =>
+                    void call.startCall({
+                      conversationId: activeConversationId,
+                      label:
+                        activeThread.groupName ||
+                        activeThread.username ||
+                        "Direct Call",
+                      peerUserIds: activeThread.isGroup
+                        ? activeThread.participantIds ?? []
+                        : [activeThread.otherUserId],
+                      withVideo: true,
+                    })
+                : undefined
+            }
           />
 
           {channelPending ? (
