@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Hash, MessagesSquare, Volume2 } from "lucide-react";
@@ -209,7 +210,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const searchParams = useSearchParams();
   const dmParam = searchParams.get("dm");
   const wantsPreview = searchParams.get("preview") === "1";
-  const { user, profile } = useCurrentProfile();
+  const { user, profile, loading: authLoading } = useCurrentProfile();
   const profileUi = useOptionalProfileUi();
   const blockedIds = profileUi?.blockedIds ?? EMPTY_BLOCKED_IDS;
   const ignoredIds = profileUi?.ignoredIds ?? EMPTY_BLOCKED_IDS;
@@ -331,6 +332,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [channelHasMore, setChannelHasMore] = useState(false);
   const [dmHasMore, setDmHasMore] = useState(false);
   const [loadingThreads, setLoadingThreads] = useState(false);
+  const [authTimedOut, setAuthTimedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -408,8 +410,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [voiceMode, activeChannelId]);
   const homeEmpty = pane === "home" && !activeConversationId;
   const discoverMode = discover || pane === "discover";
+  const needsSignIn = !user && (!authLoading || authTimedOut);
   const channelPending =
     pane === "server" &&
+    !!user &&
     !!activeServerId &&
     (loadingChannels || loadedServerId !== activeServerId);
   const connection = voice.connection;
@@ -490,6 +494,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   useEffect(() => {
     rememberMessengerPath(pathname);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!authLoading) {
+      setAuthTimedOut(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setAuthTimedOut(true), 4000);
+    return () => window.clearTimeout(timer);
+  }, [authLoading]);
 
   useEffect(() => {
     if (scopeRef.current === scope) return;
@@ -625,7 +638,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         .eq("hidden", false);
       if (mineError) {
         setError(mineError.message);
-        setThreads([]);
+        if (!silent) setThreads([]);
         return;
       }
       const ids = (mine ?? []).map((row) => row.conversation_id);
@@ -3922,7 +3935,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   const waitingForChannel =
-    channelPending || (pane === "server" && !activeChannel && channels.length > 0);
+    !needsSignIn &&
+    (channelPending || (pane === "server" && !activeChannel && channels.length > 0));
   const headerTitle = dmMode
     ? (activeThread
         ? profileUi?.nicknameFor(activeThread.otherUserId) ||
@@ -4171,7 +4185,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             onLeave={() => setLeaveOpen(true)}
             footer={sidebarFooter}
           />
-        ) : pane === "server" && (loadingServers || channelPending) ? (
+        ) : pane === "server" &&
+          !!user &&
+          (loadingServers || channelPending) ? (
           <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
             <div className="flex h-12 items-center border-b border-black/30 px-4 text-sm font-semibold text-white">
               Loading…
@@ -4366,8 +4382,22 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             }
           />
 
-          {channelPending ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-sm text-muted">
+          {needsSignIn ? (
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+              <p className="text-sm text-[#949ba4]">
+                Sign in to open your servers and direct messages.
+              </p>
+              <Link
+                href={`/login?next=${encodeURIComponent(pathname || "/messenger")}`}
+                className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-[#dbdee1]"
+              >
+                Sign in
+              </Link>
+            </div>
+          ) : null}
+
+          {channelPending && !needsSignIn ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-sm text-[#949ba4]">
               Loading…
             </div>
           ) : null}
@@ -4462,7 +4492,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             </div>
           )}
 
-          {homeEmpty && (
+          {homeEmpty && !needsSignIn && (
             <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
               <MessagesSquare className="mb-3 h-12 w-12 text-[#4e5058]" strokeWidth={1.5} />
               <h2 className="text-xl font-semibold text-white">Your DMs</h2>
@@ -4472,7 +4502,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             </div>
           )}
 
-          {dmMode && !channelPending && (
+          {dmMode && !channelPending && !needsSignIn && (
             <ChatTimeline
               messages={visibleDmMessages}
               loading={loadingDmMessages}
@@ -4518,7 +4548,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             />
           )}
 
-          {textMode && !channelPending && (
+          {textMode && !channelPending && !needsSignIn && (
             <>
               {activeThreadId ? (
                 <div className="flex shrink-0 items-center gap-2 border-b border-black/30 bg-[#2b2d31] px-4 py-2">
@@ -4619,7 +4649,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             </>
           )}
 
-          {voiceMode && !channelPending && activeChannel && (
+          {voiceMode && !channelPending && !needsSignIn && activeChannel && (
             previewMode ? (
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
                 <Volume2 className="h-10 w-10 text-[#4e5058]" strokeWidth={1.5} />
@@ -4670,13 +4700,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             )
           )}
 
-          {pane === "server" && !activeChannel && !channelPending && channels.length === 0 && (
+          {pane === "server" &&
+            !needsSignIn &&
+            !activeChannel &&
+            !channelPending &&
+            channels.length === 0 && (
             <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted">
               This server has no channels yet.
             </div>
           )}
 
-          {previewMode && textMode && !channelPending && (
+          {previewMode && textMode && !channelPending && !needsSignIn && (
             <div className="flex items-center justify-between gap-3 border-t border-border bg-[#2b2d31] px-4 py-3">
               <p className="min-w-0 text-sm text-[#b5bac1]">
                 You&apos;re previewing this server. Join to chat in #
@@ -4694,6 +4728,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           )}
 
           {(textMode || dmMode) &&
+            !needsSignIn &&
             !channelPending &&
             !previewMode &&
             (dmMode && dmBlocked ? (

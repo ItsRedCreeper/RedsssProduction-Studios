@@ -38,8 +38,12 @@ function VideoTile({
   return (
     <div
       className={`relative min-h-[9rem] overflow-hidden rounded-md bg-[#1e1f22] ${
-        speaking ? "ring-2 ring-[#23a559]" : "ring-1 ring-black/40"
-      } $      {watching ? "ring-2 ring-[#00a8fc]" : ""}`}
+        watching
+          ? "ring-2 ring-[#00a8fc]"
+          : speaking
+            ? "ring-2 ring-[#23a559]"
+            : "ring-1 ring-black/40"
+      }`}
     >
       {stream ? (
         <video
@@ -129,10 +133,13 @@ export function CallOverlay() {
 
   if (!call.connection) return null;
 
-  const statusLabel = call.connection.withVideo
-    ? "Video Connected"
-    : "Voice Connected";
-  const inCallCount = 1 + (call.outgoing ? connectedPeers.length : peers.length);
+  const ringing = !!call.outgoing && connectedPeers.length === 0;
+  const statusLabel = ringing
+    ? "Ringing…"
+    : call.connection.withVideo
+      ? "Video Connected"
+      : "Voice Connected";
+  const inCallCount = 1 + (ringing ? 0 : call.outgoing ? connectedPeers.length : peers.length);
 
   const focused =
     call.watchingPeerId && call.remoteMedia[call.watchingPeerId]
@@ -167,7 +174,7 @@ export function CallOverlay() {
             <button
               type="button"
               onClick={() => void call.leaveCall()}
-              className="rounded-md p-1.5 text-accent hover:bg-accent/15"
+              className="rounded-md p-1.5 text-[#ed4245] hover:bg-[#ed4245]/15"
               aria-label="Disconnect"
             >
               <PhoneOff className="h-4 w-4" strokeWidth={1.75} />
@@ -213,17 +220,17 @@ export function CallOverlay() {
           <p className="truncate text-sm font-semibold text-white">
             {call.connection.label}
             <span className="ml-2 text-xs font-normal text-[#949ba4]">
-              {call.outgoing && connectedPeers.length === 0
-                ? "Ringing…"
-                : `${inCallCount} in call`}
+              {ringing ? "Waiting for an answer" : `${inCallCount} in call`}
             </span>
           </p>
         </div>
         <div className="flex items-center gap-1">
           {call.micError ? (
-            <p className="mr-2 max-w-[12rem] truncate text-xs text-accent">
-              {call.micError}
-            </p>
+            <HoverTip label={call.micError} delayMs={40}>
+              <p className="mr-2 shrink-0 text-xs font-medium text-[#f0b232]">
+                Mic issue
+              </p>
+            </HoverTip>
           ) : null}
           <HoverTip label="Minimize Call">
             <button
@@ -289,8 +296,7 @@ export function CallOverlay() {
             cameraOff={!call.cameraOn}
             live={call.screenSharing}
           />
-          {peers.length === 0 ||
-          (call.outgoing && connectedPeers.length === 0) ? (
+          {peers.length === 0 || ringing ? (
             <VideoTile
               stream={null}
               label={
