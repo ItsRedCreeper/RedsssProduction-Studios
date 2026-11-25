@@ -3835,7 +3835,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           )}
 
           {previewMode && textMode && !channelPending && (
-            <div className="flex items-center justify-end gap-3 border-t border-border bg-[#2b2d31] px-4 py-3">
+            <div className="flex items-center justify-between gap-3 border-t border-border bg-[#2b2d31] px-4 py-3">
+              <p className="min-w-0 text-sm text-[#b5bac1]">
+                You&apos;re previewing this server. Join to chat in #
+                {activeChannel?.name ?? "channel"}.
+              </p>
               <button
                 type="button"
                 disabled={joiningPreview}
