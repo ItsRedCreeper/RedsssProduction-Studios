@@ -40,8 +40,10 @@ export function PollCard({
   const total = votes.length || 1;
 
   return (
-    <div className="mt-2 max-w-md space-y-2 rounded-md border border-[#3f4147] bg-[#2b2d31] p-3">
-      <p className="text-sm font-semibold text-white">{poll.question}</p>
+    <div className="mt-2 max-w-md space-y-2 rounded-2xl border border-white/[0.06] bg-[#2b2d31] p-3 ring-1 ring-accent/10">
+      <p className="text-sm font-semibold tracking-tight text-white">
+        {poll.question}
+      </p>
       <ul className="space-y-1.5">
         {poll.options.map((option, index) => {
           const count = counts.get(index) ?? 0;
@@ -52,14 +54,14 @@ export function PollCard({
               <button
                 type="button"
                 onClick={() => onVote(index)}
-                className={`relative w-full overflow-hidden rounded-md border px-3 py-2 text-left text-sm ${
+                className={`relative w-full overflow-hidden rounded-xl border px-3 py-2 text-left text-sm ${
                   selected
                     ? "border-accent/60 bg-accent/10 text-white"
                     : "border-[#3f4147] text-[#dbdee1] hover:bg-white/5"
                 }`}
               >
                 <span
-                  className="pointer-events-none absolute inset-y-0 left-0 bg-white/10"
+                  className="pointer-events-none absolute inset-y-0 left-0 bg-accent/20"
                   style={{ width: `${pct}%` }}
                 />
                 <span className="relative flex items-center justify-between gap-2">

@@ -157,8 +157,8 @@ export function InviteLanding({ code }: InviteLandingProps) {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-[#1e1f22] px-4 py-10">
-      <div className="w-full max-w-md overflow-hidden rounded-md border border-[#3f4147] bg-[#2b2d31] shadow-2xl shadow-black/40">
+    <div className="flex flex-1 items-center justify-center bg-[radial-gradient(ellipse_at_top,_rgba(220,38,38,0.14),_transparent_50%),#1a1b1e] px-4 py-10">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-[#2b2d31] shadow-2xl shadow-black/40 ring-1 ring-accent/20">
         {loading || profileLoading ? (
           <p className="p-6 text-sm text-muted">Looking up invite…</p>
         ) : missing || !server || !invite ? (
@@ -176,7 +176,7 @@ export function InviteLanding({ code }: InviteLandingProps) {
           </div>
         ) : (
           <>
-            <div className="relative h-28 bg-gradient-to-br from-[#4a1010] via-[#2b2d31] to-[#1e1f22]">
+            <div className="relative h-28 bg-gradient-to-br from-accent/50 via-[#2b2d31] to-[#1e1f22]">
               {server.icon_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -188,7 +188,7 @@ export function InviteLanding({ code }: InviteLandingProps) {
               <div className="absolute inset-0 bg-gradient-to-t from-[#2b2d31] via-[#2b2d31]/40 to-transparent" />
             </div>
             <div className="relative px-6 pb-6 pt-0">
-              <div className="-mt-10 mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-[20px] border-4 border-[#2b2d31] bg-[#313338] text-lg font-bold text-white shadow-lg shadow-black/40">
+              <div className="-mt-10 mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border-4 border-[#2b2d31] bg-[#313338] text-lg font-bold text-white shadow-lg shadow-black/40 ring-2 ring-accent/30">
                 {server.icon_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={server.icon_url} alt="" className="h-full w-full object-cover" />
@@ -236,7 +236,7 @@ export function InviteLanding({ code }: InviteLandingProps) {
                 {joined ? (
                   <Link
                     href={messengerServerPath(server.id)}
-                    className="inline-flex flex-1 items-center justify-center rounded-md bg-[#23a559] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
+                    className="inline-flex flex-1 items-center justify-center rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover"
                   >
                     Open server
                   </Link>
@@ -245,14 +245,14 @@ export function InviteLanding({ code }: InviteLandingProps) {
                     type="button"
                     disabled={joining || expired || !user}
                     onClick={() => void join()}
-                    className="inline-flex flex-1 items-center justify-center rounded-md bg-[#23a559] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-60"
+                    className="inline-flex flex-1 items-center justify-center rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                   >
                     {joining ? "Joining…" : "Accept Invite"}
                   </button>
                 )}
                 <Link
                   href={user ? "/messenger" : "/login"}
-                  className="inline-flex items-center justify-center rounded-md bg-[#3f4147] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#4e5058]"
+                  className="inline-flex items-center justify-center rounded-xl bg-[#3f4147] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#4e5058]"
                 >
                   {user ? "Cancel" : "Sign in"}
                 </Link>
