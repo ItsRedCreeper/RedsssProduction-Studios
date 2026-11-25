@@ -62,7 +62,7 @@ function MemberButton({
     <button
       type="button"
       onClick={(event) => onClick(event.currentTarget)}
-      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
+      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/5"
     >
       <span className="relative shrink-0 overflow-visible">
         <UserAvatar

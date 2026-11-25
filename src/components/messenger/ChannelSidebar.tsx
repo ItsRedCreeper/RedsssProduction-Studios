@@ -424,7 +424,7 @@ export function ChannelSidebar({
                           setEditingCategoryId(section.id);
                           setEditName(section.name);
                         }}
-                        className="flex w-full min-w-0 items-center gap-0.5 rounded-md px-0.5 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-[#949ba4] hover:text-[#dbdee1]"
+                        className="flex w-full min-w-0 items-center gap-0.5 rounded-md px-0.5 py-1 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#949ba4] hover:text-[#dbdee1]"
                         aria-expanded={!isCollapsed}
                       >
                         <ChevronDown

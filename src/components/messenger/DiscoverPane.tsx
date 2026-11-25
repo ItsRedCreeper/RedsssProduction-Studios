@@ -211,7 +211,7 @@ export function DiscoverPane({
     <div className="flex min-h-0 min-w-0 flex-1">
       <ResizableSidebar width={sidebarWidth} onResizeStart={onSidebarResizeStart}>
         <aside className="flex h-full w-full flex-col bg-[#2b2d31]">
-          <div className="flex h-12 shrink-0 items-center border-b border-black/30 px-4 text-[15px] font-semibold text-white shadow-sm shadow-black/20">
+          <div className="messenger-header flex h-12 shrink-0 items-center bg-[#2b2d31] px-4 text-[15px] font-semibold tracking-tight text-white">
             Discover
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
@@ -227,14 +227,14 @@ export function DiscoverPane({
                     <button
                       type="button"
                       onClick={() => setCategory(item.id)}
-                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[15px] ${
+                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] ${
                         active
-                          ? "bg-[#404249] text-white"
+                          ? "messenger-row-active text-white"
                           : "text-[#949ba4] hover:bg-white/5 hover:text-[#dbdee1]"
                       }`}
                     >
                       <Icon
-                        className={`h-4 w-4 shrink-0 ${active ? "text-[#23a559]" : ""}`}
+                        className={`h-4 w-4 shrink-0 ${active ? "text-accent" : ""}`}
                         strokeWidth={1.75}
                       />
                       {item.label}
@@ -249,11 +249,11 @@ export function DiscoverPane({
       </ResizableSidebar>
 
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#313338]">
-        <div className="relative shrink-0 overflow-hidden border-b border-black/30">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(35,165,89,0.18),_transparent_55%),linear-gradient(135deg,#1e1f22_0%,#2b2d31_45%,#111214_100%)]" />
+        <div className="messenger-header relative shrink-0 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(220,38,38,0.22),_transparent_55%),linear-gradient(135deg,#1a1b1e_0%,#2b2d31_45%,#111214_100%)]" />
           <div className="relative px-5 py-6 sm:px-8 sm:py-8">
             <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[#23a559] text-white shadow-lg shadow-black/40">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-white shadow-lg shadow-black/40 ring-2 ring-accent/40">
                 <Compass className="h-5 w-5" strokeWidth={2} />
               </div>
               <div className="min-w-0">
@@ -274,7 +274,7 @@ export function DiscoverPane({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Explore public servers"
-                className="w-full rounded-md border border-transparent bg-[#1e1f22]/90 py-3 pl-10 pr-4 text-sm text-foreground outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-2 focus:ring-[#00a8fc]"
+                className="w-full rounded-xl border border-transparent bg-[#1e1f22]/90 py-3 pl-10 pr-4 text-sm text-foreground outline-none ring-1 ring-[#3f4147] placeholder:text-[#6d6f78] focus:ring-2 focus:ring-accent/50"
               />
             </label>
           </div>
@@ -288,9 +288,9 @@ export function DiscoverPane({
                 key={item.id}
                 type="button"
                 onClick={() => setCategory(item.id)}
-                className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
+                className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium ${
                   active
-                    ? "bg-[#404249] text-white"
+                    ? "bg-accent/20 text-white ring-1 ring-accent/40"
                     : "bg-[#2b2d31] text-[#949ba4] hover:bg-[#35373c]"
                 }`}
               >

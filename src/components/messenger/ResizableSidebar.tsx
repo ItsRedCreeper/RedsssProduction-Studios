@@ -33,41 +33,42 @@ export function ResizableSidebar({
 
   return (
     <>
-    <div
-      className={`relative hidden h-full shrink-0 sm:block ${className}`}
-      style={{ width }}
-    >
-      <div className="flex h-full w-full flex-col overflow-hidden bg-[#2b2d31]">
-        {children}
-      </div>
       <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={label}
-        aria-valuemin={minWidth}
-        aria-valuemax={maxWidth}
-        aria-valuenow={width}
-        onPointerDown={onResizeStart}
-        className={`group absolute inset-y-0 z-30 w-2 cursor-ew-resize touch-none ${
-          handleSide === "right" ? "-right-1" : "-left-1"
-        }`}
+        className={`relative hidden h-full shrink-0 sm:block ${className}`}
+        style={{ width }}
       >
-        <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-[#23a559] group-active:bg-[#23a559]" />
-      </div>
-    </div>
-    {mobileOpen ? (
-      <div className="fixed inset-0 z-40 sm:hidden">
-        <button
-          type="button"
-          className="absolute inset-0 bg-black/60"
-          aria-label="Close channel list"
-          onClick={onMobileClose}
-        />
-        <div className="absolute bottom-0 left-0 top-0 flex w-[min(100%,18.5rem)] flex-col overflow-hidden bg-[#2b2d31] shadow-2xl shadow-black/50">
+        <div className="flex h-full w-full flex-col overflow-hidden border-r border-[#1e1f22] bg-[#2b2d31]">
           {children}
         </div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={label}
+          aria-valuemin={minWidth}
+          aria-valuemax={maxWidth}
+          aria-valuenow={width}
+          onPointerDown={onResizeStart}
+          className={`group absolute inset-y-0 z-30 w-2 cursor-ew-resize touch-none ${
+            handleSide === "right" ? "-right-1" : "-left-1"
+          }`}
+        >
+          <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
+        </div>
       </div>
-    ) : null}
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-40 sm:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/65 backdrop-blur-[2px]"
+            aria-label="Close channel list"
+            onClick={onMobileClose}
+          />
+          <div className="absolute bottom-0 left-0 top-0 flex w-[min(100%,19rem)] flex-col overflow-hidden rounded-r-2xl border-r border-white/[0.06] bg-[#2b2d31] shadow-2xl shadow-black/60">
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-gradient-to-b from-accent/50 via-transparent to-transparent" />
+            {children}
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
