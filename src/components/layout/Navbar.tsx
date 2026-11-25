@@ -16,9 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
 import { useProfileUi } from "@/components/profile/ProfileProvider";
-import { statusLabel } from "@/components/messenger/data";
 import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
-import { resolveDisplayStatus } from "@/lib/presence";
 import { NAV_LINKS } from "@/lib/nav";
 import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
 import { ensureDmConversation } from "@/lib/friends";
@@ -101,12 +99,16 @@ export function Navbar() {
             className="flex min-w-0 shrink items-center gap-2 transition-opacity hover:opacity-90 sm:gap-2.5"
           >
             <SiteLogo />
-            <span className="hidden truncate text-sm font-semibold tracking-tight text-foreground xl:inline">
-              RedsssProduction Studios
-            </span>
-            <span className="hidden truncate text-sm font-semibold tracking-tight text-foreground sm:inline xl:hidden">
-              Redsss
-            </span>
+            <HoverTip
+              label="RedsssProduction Studios"
+              onlyIfTruncated
+              delayMs={40}
+              className="min-w-0 max-w-[11rem] sm:max-w-[14rem] md:max-w-[18rem] lg:max-w-none"
+            >
+              <span className="block truncate text-sm font-semibold tracking-tight text-foreground">
+                RedsssProduction Studios
+              </span>
+            </HoverTip>
           </Link>
 
           <nav
@@ -189,46 +191,39 @@ export function Navbar() {
                   </button>
                 </HoverTip>
               )}
-              <button
-                type="button"
-                className="relative shrink-0"
-                aria-label={
-                  user
-                    ? statusLabel(
-                        resolveDisplayStatus(
-                          profile?.status,
-                          profile?.last_seen_at,
-                        ),
-                      )
-                    : "Profile"
-                }
-                onClick={() => {
-                  if (!user) return;
-                  void profileUi.openBigProfile(user.id);
-                }}
-              >
-                <UserAvatar
-                  username={displayName}
-                  avatarUrl={profile?.avatar_url}
-                  size="lg"
-                  speaking={speaking}
-                  className={speaking ? "!ring-offset-background" : ""}
-                />
-                {user && (
-                  <LiveStatusDot
-                    userId={user.id}
-                    status={profile?.status}
-                    lastSeenAt={profile?.last_seen_at}
-                    size="md"
-                    ringClassName="ring-2 ring-background"
+              <HoverTip label={displayName} delayMs={40}>
+                <button
+                  type="button"
+                  className="relative shrink-0"
+                  aria-label={displayName}
+                  onClick={() => {
+                    if (!user) return;
+                    void profileUi.openBigProfile(user.id);
+                  }}
+                >
+                  <UserAvatar
+                    username={displayName}
+                    avatarUrl={profile?.avatar_url}
+                    size="lg"
+                    speaking={speaking}
+                    className={speaking ? "!ring-offset-background" : ""}
                   />
-                )}
-              </button>
+                  {user && (
+                    <LiveStatusDot
+                      userId={user.id}
+                      status={profile?.status}
+                      lastSeenAt={profile?.last_seen_at}
+                      size="md"
+                      ringClassName="ring-2 ring-background"
+                    />
+                  )}
+                </button>
+              </HoverTip>
               <HoverTip
                 label={displayName}
                 onlyIfTruncated
                 delayMs={40}
-                className="hidden max-w-[8rem] xl:inline-flex"
+                className="hidden max-w-[8rem] lg:inline-flex"
               >
                 <button
                   type="button"
