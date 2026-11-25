@@ -267,7 +267,7 @@ export function EditChannelModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-channel-title"
-        className="relative z-10 flex max-h-[min(90dvh,42rem)] w-full max-w-2xl flex-col overflow-hidden rounded-md border border-[#1e1f22] bg-[#313338] shadow-2xl shadow-black/50"
+        className="relative z-10 flex max-h-[min(90dvh,42rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
         <div className="flex items-start justify-between border-b border-black/30 px-5 py-4">
           <div className="flex items-center gap-2">

@@ -53,7 +53,7 @@ export function CreatePollModal({
       />
       <form
         onSubmit={submit}
-        className="relative z-10 w-full max-w-md rounded-md border border-[#1e1f22] bg-[#313338] shadow-2xl"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl ring-1 ring-accent/15"
       >
         <div className="flex items-center justify-between border-b border-black/30 px-4 py-3">
           <h2 className="text-base font-semibold text-white">Create Poll</h2>

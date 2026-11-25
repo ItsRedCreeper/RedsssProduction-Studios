@@ -1730,7 +1730,7 @@ export function ServerSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="server-settings-title"
-        className="relative z-10 flex max-h-[min(90dvh,52rem)] w-full max-w-3xl overflow-hidden rounded-md border border-[#1e1f22] bg-[#313338] shadow-2xl shadow-black/50"
+        className="relative z-10 flex max-h-[min(90dvh,52rem)] w-full max-w-3xl overflow-hidden rounded-2xl border border-white/[0.08] bg-[#313338] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
         <aside className="flex w-44 shrink-0 flex-col bg-[#2b2d31] p-3 sm:w-52">
           <p

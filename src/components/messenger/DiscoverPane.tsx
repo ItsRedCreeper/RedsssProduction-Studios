@@ -327,13 +327,13 @@ export function DiscoverPane({
               {Array.from({ length: 6 }).map((_, index) => (
                 <div
                   key={index}
-                  className="h-52 animate-pulse rounded-md bg-[#2b2d31]"
+                  className="h-52 animate-pulse rounded-2xl bg-[#2b2d31]"
                 />
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-md border border-dashed border-[#3f4147] bg-[#2b2d31]/50 px-6 py-16 text-center">
-              <Compass className="mx-auto mb-3 h-8 w-8 text-[#949ba4]" strokeWidth={1.5} />
+            <div className="rounded-2xl border border-dashed border-[#3f4147] bg-[#2b2d31]/50 px-6 py-16 text-center">
+              <Compass className="mx-auto mb-3 h-8 w-8 text-accent/70" strokeWidth={1.5} />
               <p className="text-sm font-medium text-white">No public servers found</p>
               <p className="mt-1 text-xs text-[#949ba4]">
                 Create a server and turn on Discoverable in Server Settings.
@@ -350,11 +350,11 @@ export function DiscoverPane({
                 return (
                   <li
                     key={server.id}
-                    className="flex flex-col overflow-hidden rounded-md border border-[#3f4147] bg-[#2b2d31] transition-colors hover:border-[#23a559]/40"
+                    className="flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#2b2d31] transition-colors hover:border-accent/40 hover:ring-1 hover:ring-accent/20"
                   >
-                    <div className="h-24 bg-[linear-gradient(135deg,rgba(35,165,89,0.35),#1e1f22_55%,#111214)]" />
+                    <div className="h-24 bg-[linear-gradient(135deg,rgba(220,38,38,0.35),#1e1f22_55%,#111214)]" />
                     <div className="relative flex flex-1 flex-col px-4 pb-4 pt-0">
-                      <div className="-mt-7 mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-[1rem] bg-[#313338] text-sm font-bold text-white ring-4 ring-[#2b2d31]">
+                      <div className="-mt-7 mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-[#313338] text-sm font-bold text-white ring-4 ring-[#2b2d31]">
                         {server.icon_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -368,7 +368,7 @@ export function DiscoverPane({
                           </span>
                         )}
                       </div>
-                      <h3 className="truncate text-base font-semibold text-white">
+                      <h3 className="truncate text-base font-semibold tracking-tight text-white">
                         {server.name}
                       </h3>
                       <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-sm text-[#b5bac1]">
@@ -390,7 +390,7 @@ export function DiscoverPane({
                           <button
                             type="button"
                             onClick={() => onPreviewServer(server.id)}
-                            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-[#4e5058] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5c5e66]"
+                            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#4e5058] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5c5e66]"
                           >
                             <Eye className="h-4 w-4" strokeWidth={1.75} />
                             Preview
@@ -400,7 +400,7 @@ export function DiscoverPane({
                           <button
                             type="button"
                             onClick={() => onOpenServer(server.id)}
-                            className="inline-flex flex-1 items-center justify-center rounded-md bg-[#4e5058] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5c5e66]"
+                            className="inline-flex flex-1 items-center justify-center rounded-lg bg-[#4e5058] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5c5e66]"
                           >
                             Open
                           </button>
@@ -409,7 +409,7 @@ export function DiscoverPane({
                             type="button"
                             disabled={joiningId === server.id}
                             onClick={() => void joinServer(server.id)}
-                            className="inline-flex flex-1 items-center justify-center rounded-md bg-[#23a559] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1a7f45] disabled:opacity-60"
+                            className="inline-flex flex-1 items-center justify-center rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                           >
                             {joiningId === server.id ? "Joining…" : "Join Server"}
                           </button>

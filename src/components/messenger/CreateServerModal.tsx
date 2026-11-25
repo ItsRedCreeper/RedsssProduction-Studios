@@ -168,7 +168,7 @@ export function CreateServerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-server-title"
-        className="relative z-10 w-full max-w-md overflow-hidden rounded-md border border-[#3f4147] bg-surface shadow-2xl shadow-black/50"
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.08] bg-surface shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
         <div className="flex items-start justify-between border-b border-[#3f4147] px-5 py-4">
           <div>
@@ -204,7 +204,7 @@ export function CreateServerModal({
               minLength={SERVER_NAME_MIN}
               maxLength={SERVER_NAME_MAX}
               disabled={loading}
-              className="w-full rounded-md border border-[#3f4147] bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-[#00a8fc] focus:ring-1 focus:ring-[#00a8fc] disabled:opacity-60"
+              className="w-full rounded-md border border-[#3f4147] bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/40 disabled:opacity-60"
               placeholder="My Cool Server"
               autoFocus
             />
@@ -220,7 +220,7 @@ export function CreateServerModal({
               rows={3}
               maxLength={SERVER_DESCRIPTION_MAX}
               disabled={loading}
-              className="w-full resize-none rounded-md border border-[#3f4147] bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-[#00a8fc] focus:ring-1 focus:ring-[#00a8fc] disabled:opacity-60"
+              className="w-full resize-none rounded-md border border-[#3f4147] bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/40 disabled:opacity-60"
               placeholder="What is this server about?"
             />
           </label>
