@@ -6,10 +6,12 @@ import {
   Check,
   EyeOff,
   MessageSquare,
+  Phone,
   Search,
   Star,
   UserMinus,
   UserPlus,
+  Users,
   X,
 } from "lucide-react";
 import { useFriendFavorites } from "@/hooks/useFriendFavorites";
@@ -17,11 +19,12 @@ import { HoverTip } from "@/components/ui/HoverTip";
 import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { statusLabel } from "@/components/messenger/data";
+import { isPresenceOnline, statusLabel } from "@/components/messenger/data";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
 import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
 import { useOptionalPresenceFeed } from "@/components/presence/PresenceFeed";
 import { useOptionalProfileUi, type FriendsTab } from "@/components/profile/ProfileProvider";
+import { resolveDisplayStatus } from "@/lib/presence";
 import {
   acceptFriendRequest,
   declineOrCancelFriendRequest,
@@ -65,11 +68,12 @@ type FriendsPanelProps = {
 };
 
 const TABS: { id: FriendsTab; label: string }[] = [
-  { id: "friends", label: "Friends" },
+  { id: "online", label: "Online" },
+  { id: "friends", label: "All" },
   { id: "pending", label: "Pending" },
+  { id: "blocked", label: "Blocked" },
   { id: "add", label: "Add Friend" },
   { id: "ignored", label: "Ignored" },
-  { id: "blocked", label: "Blocked" },
 ];
 
 const BLOCKED_SEEN_KEY = "redsss-blocked-seen-ids";
@@ -129,11 +133,18 @@ export function FriendsPanel({
   const [unblockTarget, setUnblockTarget] = useState<BlockedUser | null>(null);
   const [unblocking, setUnblocking] = useState(false);
   const [unignoreBusyId, setUnignoreBusyId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setTab(profileUi?.friendsTab ?? initialTab);
   }, [open, initialTab, profileUi?.friendsTab]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 2800);
+    return () => window.clearTimeout(id);
+  }, [toast]);
 
   useEffect(() => {
     if (!userId) {
@@ -329,6 +340,20 @@ export function FriendsPanel({
     return list;
   }, [friends, isFavorite, profileUi]);
 
+  const onlineFriends = useMemo(() => {
+    void presenceFeed?.version;
+    return sortedFriends.filter((edge) => {
+      const live = presenceFeed?.get(edge.other.id);
+      const display = resolveDisplayStatus(
+        live?.status ?? edge.other.status,
+        live?.lastSeenAt ?? edge.other.last_seen_at,
+      );
+      return isPresenceOnline(display);
+    });
+  }, [sortedFriends, presenceFeed]);
+
+  const activeNowFriends = onlineFriends.slice(0, 8);
+
   useEffect(() => {
     if (!open) return;
     presenceFeed?.watchMany(friends.map((edge) => edge.other.id));
@@ -459,6 +484,8 @@ export function FriendsPanel({
       return;
     }
     await refresh();
+    setError(null);
+    setToast(`Friend request sent to @${person.username}.`);
   }
 
   async function confirmRemove() {
@@ -498,7 +525,7 @@ export function FriendsPanel({
         onClick={onClose}
       />
       <aside
-        className="fixed right-0 top-0 z-50 flex h-full max-w-[100vw] flex-col border-l border-border bg-surface shadow-2xl shadow-black/50"
+        className="messenger-shell fixed right-0 top-0 z-50 flex h-full max-w-[100vw] flex-col border-l border-[var(--ms-border)] bg-[var(--ms-sidebar)] shadow-2xl shadow-black/50"
         style={{ width }}
         role="dialog"
         aria-modal="true"
@@ -516,36 +543,31 @@ export function FriendsPanel({
         >
           <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover:bg-accent group-active:bg-accent" />
         </div>
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="messenger-header flex items-center justify-between bg-[var(--ms-sidebar)] px-5 py-4">
           <div>
             <h2
               id="friends-panel-title"
-              className="text-sm font-semibold tracking-wide text-foreground"
+              className="text-sm font-semibold tracking-tight text-white"
             >
               Friends
             </h2>
-            <p className="mt-0.5 text-xs text-muted">
-              {friends.length} friend{friends.length === 1 ? "" : "s"}
+            <p className="mt-0.5 text-xs text-[var(--ms-text-muted)]">
+              {onlineFriends.length} online · {friends.length} friend
+              {friends.length === 1 ? "" : "s"}
               {incoming.length > 0 ? ` · ${incoming.length} pending` : ""}
-              {ignoredUsers.length > 0
-                ? ` · ${ignoredUsers.length} ignored`
-                : ""}
-              {blockedUsers.length > 0
-                ? ` · ${blockedUsers.length} blocked`
-                : ""}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-2 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+            className="rounded-lg p-2 text-[var(--ms-text-muted)] transition-colors hover:bg-white/5 hover:text-white"
             aria-label="Close"
           >
             <X className="h-4 w-4" strokeWidth={2} />
           </button>
         </div>
 
-        <div className="flex gap-1 border-b border-border px-3 py-2">
+        <div className="messenger-header flex gap-0.5 overflow-x-auto bg-[var(--ms-sidebar)] px-2 py-1.5 [scrollbar-width:none]">
           {TABS.map((item) => {
             const active = tab === item.id;
             const pendingBadge =
@@ -554,15 +576,18 @@ export function FriendsPanel({
               item.id === "blocked" ? blockedUsers.length : 0;
             const blockedUnseen =
               item.id === "blocked" ? unseenBlockedCount : 0;
+            const isPrimary = item.id === "add";
             return (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => changeTab(item.id)}
-                className={`relative rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  active
-                    ? "bg-accent-muted text-accent"
-                    : "text-muted hover:bg-surface-hover hover:text-foreground"
+                className={`relative shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  isPrimary && !active
+                    ? "bg-accent/15 text-accent hover:bg-accent/25"
+                    : active
+                      ? "text-white shadow-[inset_0_-2px_0_0_var(--accent)]"
+                      : "text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-white"
                 }`}
               >
                 {item.label}
@@ -575,8 +600,8 @@ export function FriendsPanel({
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] text-white">
                     {blockedUnseen}
                   </span>
-                ) : blockedTotal > 0 ? (
-                  <span className="ml-1.5 text-[10px] font-medium text-muted">
+                ) : blockedTotal > 0 && item.id === "blocked" ? (
+                  <span className="ml-1.5 text-[10px] font-medium text-[var(--ms-text-muted)]">
                     {blockedTotal}
                   </span>
                 ) : null}
@@ -586,31 +611,51 @@ export function FriendsPanel({
         </div>
 
         {error && (
-          <p className="border-b border-border px-4 py-2 text-xs text-accent">
+          <p className="border-b border-[var(--ms-border)] px-4 py-2 text-xs text-accent">
             {error}
           </p>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-          {tab === "friends" && (
+        <div className="flex min-h-0 flex-1">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-3 py-3">
+          {(tab === "friends" || tab === "online") && (
             <ul>
               {loading && (
-                <li className="px-3 py-6 text-center text-sm text-muted">
+                <li className="px-3 py-6 text-center text-sm text-[var(--ms-text-muted)]">
                   Loading friends…
                 </li>
               )}
-              {!loading && friends.length === 0 && (
-                <li className="px-3 py-6 text-center text-sm text-muted">
-                  No friends yet. Use Add Friend to send a request.
-                </li>
-              )}
               {!loading &&
-                sortedFriends.map((edge) => {
+                (tab === "online" ? onlineFriends : sortedFriends).length ===
+                  0 && (
+                  <li className="px-3 py-10 text-center">
+                    <Users
+                      className="mx-auto mb-3 h-8 w-8 text-accent/60"
+                      strokeWidth={1.5}
+                    />
+                    <p className="text-sm font-medium text-white">
+                      {tab === "online"
+                        ? "No friends online"
+                        : "No friends yet"}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--ms-text-muted)]">
+                      {tab === "online"
+                        ? "Online friends will show up here."
+                        : "Use Add Friend to send a request."}
+                    </p>
+                  </li>
+                )}
+              {!loading &&
+                (tab === "online" ? onlineFriends : sortedFriends).map(
+                  (edge) => {
                   const favorited = isFavorite(edge.other.id);
+                  const displayName =
+                    profileUi?.nicknameFor(edge.other.id) ||
+                    edge.other.username;
                   return (
                   <li
                     key={edge.id}
-                    className="group mb-1 flex items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-surface-hover"
+                    className="group mb-0.5 flex items-center gap-1 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/5 hover:shadow-[inset_2px_0_0_0_var(--accent)]"
                   >
                     <button
                       type="button"
@@ -627,23 +672,19 @@ export function FriendsPanel({
                           userId={edge.other.id}
                           status={edge.other.status}
                           lastSeenAt={edge.other.last_seen_at}
-                          ringClassName="ring-surface"
+                          ringClassName="ring-[var(--ms-sidebar)]"
                         />
                       </span>
                       <span className="min-w-0">
                         <span className="flex min-w-0 items-center gap-1.5">
                           <HoverTip
-                            label={
-                              profileUi?.nicknameFor(edge.other.id) ||
-                              edge.other.username
-                            }
+                            label={displayName}
                             onlyIfTruncated
                             delayMs={40}
                             className="min-w-0"
                           >
-                            <span className="block truncate text-sm font-medium text-foreground">
-                              {profileUi?.nicknameFor(edge.other.id) ||
-                                edge.other.username}
+                            <span className="block truncate text-sm font-medium text-white">
+                              {displayName}
                             </span>
                           </HoverTip>
                           {favorited && (
@@ -655,6 +696,9 @@ export function FriendsPanel({
                             />
                           )}
                         </span>
+                        <p className="truncate text-[11px] text-[var(--ms-text-faint)]">
+                          @{edge.other.username}
+                        </p>
                         <PresenceCaption
                           userId={edge.other.id}
                           status={edge.other.status}
@@ -664,6 +708,7 @@ export function FriendsPanel({
                         />
                       </span>
                     </button>
+                    <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                     <HoverTip
                       label={favorited ? "Unfavorite" : "Favorite"}
                       delayMs={40}
@@ -678,10 +723,10 @@ export function FriendsPanel({
                         aria-pressed={favorited}
                         disabled={favoriteBusyId === edge.other.id}
                         onClick={() => void handleToggleFavorite(edge.other.id)}
-                        className={`rounded-md p-2 transition-colors disabled:opacity-50 ${
+                        className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
                           favorited
-                            ? "text-accent hover:bg-surface-raised"
-                            : "text-muted opacity-0 hover:bg-surface-raised hover:text-accent group-hover:opacity-100 focus:opacity-100"
+                            ? "text-accent hover:bg-white/5"
+                            : "text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-accent"
                         }`}
                       >
                         <Star
@@ -696,9 +741,19 @@ export function FriendsPanel({
                         type="button"
                         aria-label={`Message ${edge.other.username}`}
                         onClick={() => void handleMessage(edge.other)}
-                        className="rounded-md p-2 text-muted hover:bg-surface-raised hover:text-accent"
+                        className="rounded-md p-1.5 text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-white"
                       >
                         <MessageSquare className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                    </HoverTip>
+                    <HoverTip label="Call" delayMs={40}>
+                      <button
+                        type="button"
+                        aria-label={`Call ${edge.other.username}`}
+                        onClick={() => void handleMessage(edge.other)}
+                        className="rounded-md p-1.5 text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-white"
+                      >
+                        <Phone className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                     </HoverTip>
                     <HoverTip label="Remove Friend" delayMs={40}>
@@ -706,11 +761,12 @@ export function FriendsPanel({
                         type="button"
                         aria-label={`Remove ${edge.other.username}`}
                         onClick={() => setRemoveTarget(edge)}
-                        className="rounded-md p-2 text-muted hover:bg-surface-raised hover:text-accent"
+                        className="rounded-md p-1.5 text-[var(--ms-text-muted)] hover:bg-[var(--ms-danger)]/15 hover:text-[var(--ms-danger)]"
                       >
                         <UserMinus className="h-4 w-4" strokeWidth={1.75} />
                       </button>
                     </HoverTip>
+                    </div>
                   </li>
                   );
                 })}
@@ -757,7 +813,7 @@ export function FriendsPanel({
                           type="button"
                           disabled={busyId === edge.id}
                           onClick={() => void handleAccept(edge)}
-                          className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                          className="rounded-lg bg-[var(--ms-connected)] px-2.5 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-50"
                         >
                           <span className="inline-flex items-center gap-1">
                             <Check className="h-3.5 w-3.5" strokeWidth={2} />
@@ -768,7 +824,7 @@ export function FriendsPanel({
                           type="button"
                           disabled={busyId === edge.id}
                           onClick={() => void handleDeclineOrCancel(edge)}
-                          className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058] disabled:opacity-50"
+                          className="rounded-lg bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[var(--ms-danger)]/80 disabled:opacity-50"
                         >
                           Decline
                         </button>
@@ -811,7 +867,7 @@ export function FriendsPanel({
                           type="button"
                           disabled={busyId === edge.id}
                           onClick={() => void handleDeclineOrCancel(edge)}
-                          className="rounded-md bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#4e5058] disabled:opacity-50"
+                          className="rounded-lg bg-[#3f4147] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[var(--ms-danger)]/80 disabled:opacity-50"
                         >
                           Cancel
                         </button>
@@ -840,8 +896,8 @@ export function FriendsPanel({
                 </p>
               )}
               {!searching && query.trim() && results.length === 0 && (
-                <p className="px-2 py-4 text-center text-sm text-muted">
-                  No users found.
+                <p className="px-2 py-4 text-center text-sm text-[var(--ms-text-muted)]">
+                  No user found with that username.
                 </p>
               )}
               <ul>
@@ -1072,6 +1128,72 @@ export function FriendsPanel({
             </ul>
           )}
         </div>
+
+        {(tab === "friends" || tab === "online") && (
+          <aside className="hidden w-56 shrink-0 overflow-y-auto border-l border-[var(--ms-border)] px-3 py-3 xl:block">
+            <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
+              Active Now
+            </p>
+            {activeNowFriends.length === 0 ? (
+              <p className="px-1 text-xs text-[var(--ms-text-faint)]">
+                No friends online.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {activeNowFriends.map((edge) => {
+                  const name =
+                    profileUi?.nicknameFor(edge.other.id) ||
+                    edge.other.username;
+                  return (
+                    <li key={edge.id}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          profileUi?.openBigProfile(edge.other.id)
+                        }
+                        className="messenger-account-dock flex w-full items-center gap-2 px-2 py-1.5 text-left"
+                      >
+                        <span className="relative shrink-0">
+                          <UserAvatar
+                            username={edge.other.username}
+                            avatarUrl={edge.other.avatar_url}
+                            size="sm"
+                          />
+                          <LiveStatusDot
+                            userId={edge.other.id}
+                            status={edge.other.status}
+                            lastSeenAt={edge.other.last_seen_at}
+                            ringClassName="ring-[#232428]"
+                          />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-semibold text-white">
+                            {name}
+                          </span>
+                          <span className="block truncate text-[10px] text-[var(--ms-text-muted)]">
+                            {statusLabel(
+                              resolveDisplayStatus(
+                                edge.other.status,
+                                edge.other.last_seen_at,
+                              ),
+                            )}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </aside>
+        )}
+        </div>
+
+        {toast ? (
+          <div className="border-t border-[var(--ms-border)] px-4 py-2 text-xs font-medium text-[var(--ms-connected)]">
+            {toast}
+          </div>
+        ) : null}
       </aside>
 
       <ConfirmModal

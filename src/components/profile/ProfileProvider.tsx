@@ -48,7 +48,13 @@ import {
   roleColorForMember,
 } from "@/lib/roles";
 
-export type FriendsTab = "friends" | "pending" | "add" | "blocked" | "ignored";
+export type FriendsTab =
+  | "online"
+  | "friends"
+  | "pending"
+  | "add"
+  | "blocked"
+  | "ignored";
 
 /** Active server role snapshot for profile cards opened from a server. */
 export type ServerMemberRolesContext = {

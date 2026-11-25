@@ -75,6 +75,16 @@ export function HomeSidebar({
         ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+        {profileUi ? (
+          <button
+            type="button"
+            onClick={() => profileUi.openFriends("online")}
+            className="mb-2 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[15px] text-[#949ba4] transition-colors hover:bg-white/5 hover:text-white hover:shadow-[inset_2px_0_0_0_var(--accent)]"
+          >
+            <Users className="h-4 w-4 shrink-0" strokeWidth={2} />
+            <span className="min-w-0 flex-1 truncate font-medium">Friends</span>
+          </button>
+        ) : null}
         {loadingThreads && threads.length === 0 ? (
           <div className="space-y-1 px-1">
             {[0, 1, 2].map((i) => (
