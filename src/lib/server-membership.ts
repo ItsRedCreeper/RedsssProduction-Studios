@@ -1,48 +1,39 @@
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_MEMBER_PERMISSIONS } from "@/lib/permissions";
 
 type Supabase = ReturnType<typeof createClient>;
 
 /**
- * Ensure the server has a Discord-style @everyone / Member default role.
- * Discord always has @everyone — servers cannot have zero base roles.
+ * Look up the server's default Member / @everyone role.
+ * Creation is owned by DB triggers (private.ensure_default_member_role);
+ * the client must not insert roles or member_roles (RLS blocks joiners).
  */
 export async function ensureServerDefaultRole(
   supabase: Supabase,
   serverId: string,
 ) {
-  const { data: existing } = await supabase
+  const { data: existing, error } = await supabase
     .from("roles")
     .select("*")
     .eq("server_id", serverId)
     .eq("is_default", true)
     .maybeSingle();
-  if (existing) return { role: existing, error: null as string | null };
 
-  const { data: created, error } = await supabase
-    .from("roles")
-    .insert({
-      server_id: serverId,
-      name: "Member",
-      color: "#99aab5",
-      position: 0,
-      hoist: false,
-      is_default: true,
-      permissions: DEFAULT_MEMBER_PERMISSIONS,
-    })
-    .select("*")
-    .single();
-
-  if (error || !created) {
+  if (error) {
+    return { role: null, error: error.message };
+  }
+  if (!existing) {
     return {
       role: null,
-      error: error?.message ?? "Could not create default Member role.",
+      error: "Server has no default Member role yet.",
     };
   }
-  return { role: created, error: null as string | null };
+  return { role: existing, error: null as string | null };
 }
 
-/** Assign the server's default role to a member (idempotent). */
+/**
+ * Best-effort verify that the DB AFTER INSERT trigger assigned the default role.
+ * Never hard-fails on RLS-denied client inserts — assignment is trigger-owned.
+ */
 export async function assignDefaultRoleToMember(
   supabase: Supabase,
   serverId: string,
@@ -53,33 +44,28 @@ export async function assignDefaultRoleToMember(
     serverId,
   );
   if (roleError || !role) {
-    return { error: roleError ?? "No default role." };
+    // Membership may still be valid; default role is trigger-owned.
+    return { error: null as string | null, roleId: null as string | null };
   }
 
-  const { error } = await supabase.from("member_roles").insert({
-    server_id: serverId,
-    user_id: userId,
-    role_id: role.id,
-  });
-
-  if (error && !/duplicate|unique/i.test(error.message)) {
-    return { error: error.message };
-  }
-
-  // Keep legacy server_members.role_id in sync when empty.
-  await supabase
-    .from("server_members")
-    .update({ role_id: role.id })
+  const { data: assignment } = await supabase
+    .from("member_roles")
+    .select("role_id")
     .eq("server_id", serverId)
     .eq("user_id", userId)
-    .is("role_id", null);
+    .eq("role_id", role.id)
+    .maybeSingle();
 
-  return { error: null as string | null, roleId: role.id };
+  return {
+    error: null as string | null,
+    roleId: assignment?.role_id ?? role.id,
+  };
 }
 
 /**
- * Join a server and receive the default Member / @everyone role.
- * Call after a successful server_members insert (or when already a member).
+ * Join a server. Membership insert alone is success — the private AFTER INSERT
+ * trigger assigns the default Member role. Do not treat missing client-side
+ * member_roles writes as join failures (RLS only allows owner / MANAGE_ROLES).
  */
 export async function joinServerWithDefaultRole(
   supabase: Supabase,
@@ -97,10 +83,8 @@ export async function joinServerWithDefaultRole(
     return { error: memberError.message, alreadyMember: false };
   }
 
-  const assigned = await assignDefaultRoleToMember(supabase, serverId, userId);
-  if (assigned.error) {
-    return { error: assigned.error, alreadyMember: duplicate };
-  }
+  // Optional verify; ignore failures — trigger owns default role assignment.
+  await assignDefaultRoleToMember(supabase, serverId, userId);
 
   return { error: null as string | null, alreadyMember: duplicate };
 }

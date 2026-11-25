@@ -9,7 +9,6 @@ import {
   SERVER_NAME_MAX,
   SERVER_NAME_MIN,
 } from "@/lib/field-limits";
-import { DEFAULT_MEMBER_PERMISSIONS } from "@/lib/permissions";
 
 type CreateServerModalProps = {
   open: boolean;
@@ -28,12 +27,10 @@ export function CreateServerModal({
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [locked, setLocked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setLocked(false);
     setError(null);
   }, [open]);
 
@@ -41,7 +38,6 @@ export function CreateServerModal({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (locked) return;
     const trimmed = name.trim();
     if (trimmed.length < SERVER_NAME_MIN) {
       setError(`Server name must be at least ${SERVER_NAME_MIN} characters.`);
@@ -73,35 +69,20 @@ export function CreateServerModal({
       return;
     }
 
-    // Discord always has @everyone — create the default Member role first.
-    const { error: roleError } = await supabase.from("roles").insert({
-      server_id: server.id,
-      name: "Member",
-      color: "#99aab5",
-      position: 0,
-      hoist: false,
-      is_default: true,
-      permissions: DEFAULT_MEMBER_PERMISSIONS,
-    });
-    if (roleError) {
-      setLoading(false);
-      setError(roleError.message);
-      onCreated(server.id);
-      setLocked(true);
-      return;
-    }
+    // Default Member role is created by trg_servers_default_member_role —
+    // do not client-insert a second is_default role.
 
-    // Trigger also assigns the default role; client helper is belt-and-suspenders.
+    // Owner membership is required before onCreated; AFTER INSERT trigger
+    // assigns the default role. On failure, delete the orphaned server.
     const { error: memberError } = await supabase.from("server_members").insert({
       server_id: server.id,
       user_id: userId,
     });
 
     if (memberError) {
+      await supabase.from("servers").delete().eq("id", server.id);
       setLoading(false);
       setError(memberError.message);
-      onCreated(server.id);
-      setLocked(true);
       return;
     }
 
@@ -115,9 +96,12 @@ export function CreateServerModal({
 
     if (categoryError || !categories || categories.length < 2) {
       setLoading(false);
-      setError(categoryError?.message ?? "Server was created, but categories failed.");
+      setError(
+        categoryError?.message ??
+          "Server was created, but categories failed. You can still open it and add channels.",
+      );
       onCreated(server.id);
-      setLocked(true);
+      onClose();
       return;
     }
 
@@ -145,9 +129,11 @@ export function CreateServerModal({
 
     if (channelsError) {
       setLoading(false);
-      setError(channelsError.message);
+      setError(
+        `${channelsError.message} Server was created — you can open it and add channels.`,
+      );
       onCreated(server.id);
-      setLocked(true);
+      onClose();
       return;
     }
 
@@ -217,7 +203,7 @@ export function CreateServerModal({
               required
               minLength={SERVER_NAME_MIN}
               maxLength={SERVER_NAME_MAX}
-              disabled={locked}
+              disabled={loading}
               className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent-ring disabled:opacity-60"
               placeholder="My Cool Server"
               autoFocus
@@ -233,7 +219,7 @@ export function CreateServerModal({
               onChange={(event) => setDescription(event.target.value)}
               rows={3}
               maxLength={SERVER_DESCRIPTION_MAX}
-              disabled={locked}
+              disabled={loading}
               className="w-full resize-none rounded-md border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent-ring disabled:opacity-60"
               placeholder="What is this server about?"
             />
@@ -244,7 +230,7 @@ export function CreateServerModal({
               type="checkbox"
               checked={isPublic}
               onChange={(event) => setIsPublic(event.target.checked)}
-              disabled={locked}
+              disabled={loading}
               className="h-4 w-4 accent-[var(--accent)]"
             />
             <span className="text-sm text-foreground">
@@ -264,17 +250,15 @@ export function CreateServerModal({
               onClick={onClose}
               className="rounded-md px-4 py-2 text-sm font-medium text-muted hover:bg-surface-hover hover:text-foreground"
             >
-              {locked ? "Close" : "Cancel"}
+              Cancel
             </button>
-            {!locked && (
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
-              >
-                {loading ? "Creating…" : "Create"}
-              </button>
-            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+            >
+              {loading ? "Creating…" : "Create"}
+            </button>
           </div>
         </form>
       </div>
