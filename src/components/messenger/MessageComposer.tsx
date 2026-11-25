@@ -19,6 +19,7 @@ import {
   Image as ImageIcon,
   Plus,
   Reply,
+  SendHorizontal,
   Shield,
   Smile,
   User,
@@ -153,8 +154,8 @@ export function MessageComposer({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const mirrorRef = useRef<HTMLDivElement | null>(null);
   const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
-  const gifBtnRef = useRef<HTMLButtonElement | null>(null);
-  const stickerBtnRef = useRef<HTMLButtonElement | null>(null);
+  const gifBtnRef = useRef<HTMLElement | null>(null);
+  const stickerBtnRef = useRef<HTMLElement | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const typingStopTimer = useRef<number | null>(null);
   /** Discord tokens parallel to each COMPOSER_SLOT_CHAR in the draft. */
@@ -371,24 +372,27 @@ export function MessageComposer({
   }, []);
 
   useEffect(() => {
-    if (!emojiOpen && !gifOpen && !stickerOpen) return;
+    if (!emojiOpen && !gifOpen && !stickerOpen && !attachMenuOpen) return;
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
       if (
         pickerRef.current?.contains(target) ||
         emojiBtnRef.current?.contains(target) ||
         gifBtnRef.current?.contains(target) ||
-        stickerBtnRef.current?.contains(target)
+        stickerBtnRef.current?.contains(target) ||
+        (target instanceof Element &&
+          target.closest("[data-composer-attach-menu]"))
       ) {
         return;
       }
       setEmojiOpen(false);
       setGifOpen(false);
       setStickerOpen(false);
+      setAttachMenuOpen(false);
     }
     window.addEventListener("mousedown", onPointerDown);
     return () => window.removeEventListener("mousedown", onPointerDown);
-  }, [emojiOpen, gifOpen, stickerOpen]);
+  }, [emojiOpen, gifOpen, stickerOpen, attachMenuOpen]);
 
   useLayoutEffect(() => {
     if (!emojiOpen && !gifOpen && !stickerOpen) {
@@ -399,8 +403,8 @@ export function MessageComposer({
       const anchor = emojiOpen
         ? emojiBtnRef.current
         : stickerOpen
-          ? stickerBtnRef.current
-          : gifBtnRef.current;
+          ? stickerBtnRef.current ?? emojiBtnRef.current
+          : gifBtnRef.current ?? emojiBtnRef.current;
       if (!anchor) return;
       const rect = anchor.getBoundingClientRect();
       const height = emojiOpen ? 360 : stickerOpen ? 280 : 400;
@@ -867,50 +871,50 @@ export function MessageComposer({
               : "rounded-xl"
           }`}
         >
-          {allowAttach && (
-            <>
-              <input
-                ref={fileRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  takeFiles(event.target.files);
-                  event.target.value = "";
-                }}
-              />
-              <HoverTip label="Upload a File" delayMs={40}>
+          {allowAttach ? (
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                takeFiles(event.target.files);
+                event.target.value = "";
+              }}
+            />
+          ) : null}
+          {(allowAttach ||
+            onPickGif ||
+            onOpenPoll ||
+            (onPickSticker && stickers.length > 0)) && (
+            <div className="relative shrink-0" data-composer-attach-menu>
+              <HoverTip label="Upload, GIFs, and more" delayMs={40}>
                 <button
                   type="button"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={
-                    disabled ||
-                    sending ||
-                    pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE
-                  }
-                  className="mb-0.5 hidden shrink-0 rounded-full bg-[#4e5058] p-1 text-[var(--ms-text)] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40 sm:inline-flex"
-                  aria-label="Attach file"
-                >
-                  <Plus className="h-5 w-5" strokeWidth={2.25} />
-                </button>
-              </HoverTip>
-              <div className="relative sm:hidden">
-                <button
-                  type="button"
-                  onClick={() => setAttachMenuOpen((open) => !open)}
-                  disabled={
-                    disabled ||
-                    sending ||
-                    pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE
-                  }
-                  className="mb-0.5 inline-flex shrink-0 rounded-full bg-[#4e5058] p-1 text-[var(--ms-text)] hover:bg-[#5c5e66] hover:text-white disabled:opacity-40"
-                  aria-label="More composer actions"
+                  onClick={() => {
+                    setAttachMenuOpen((open) => !open);
+                    setEmojiOpen(false);
+                    setGifOpen(false);
+                    setStickerOpen(false);
+                  }}
+                  disabled={disabled || sending}
+                  className={`mb-0.5 inline-flex rounded-full p-1 text-[var(--ms-text)] transition-colors hover:text-white disabled:opacity-40 ${
+                    attachMenuOpen
+                      ? "bg-accent text-white hover:bg-accent-hover"
+                      : "bg-[#4e5058] hover:bg-[#5c5e66]"
+                  }`}
+                  aria-label="Upload, GIFs, and more"
                   aria-expanded={attachMenuOpen}
                 >
-                  <Plus className="h-5 w-5" strokeWidth={2.25} />
+                  <Plus
+                    className={`h-5 w-5 transition-transform ${attachMenuOpen ? "rotate-45" : ""}`}
+                    strokeWidth={2.25}
+                  />
                 </button>
-                {attachMenuOpen ? (
-                  <div className="absolute bottom-full left-0 z-30 mb-2 w-44 overflow-hidden rounded-md border border-[var(--ms-border)] bg-[#111214] py-1 shadow-xl shadow-black/50">
+              </HoverTip>
+              {attachMenuOpen ? (
+                <div className="absolute bottom-full left-0 z-30 mb-2 w-48 overflow-hidden rounded-md border border-[var(--ms-border)] bg-[#111214] py-1 shadow-xl shadow-black/50">
+                  {allowAttach ? (
                     <button
                       type="button"
                       className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
@@ -921,50 +925,50 @@ export function MessageComposer({
                     >
                       Upload a File
                     </button>
-                    {onPickGif ? (
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
-                        onClick={() => {
-                          setAttachMenuOpen(false);
-                          setGifOpen(true);
-                          setEmojiOpen(false);
-                          setStickerOpen(false);
-                        }}
-                      >
-                        GIF
-                      </button>
-                    ) : null}
-                    {onOpenPoll ? (
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
-                        onClick={() => {
-                          setAttachMenuOpen(false);
-                          onOpenPoll();
-                        }}
-                      >
-                        Poll
-                      </button>
-                    ) : null}
-                    {onPickSticker && stickers.length > 0 ? (
-                      <button
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
-                        onClick={() => {
-                          setAttachMenuOpen(false);
-                          setStickerOpen(true);
-                          setEmojiOpen(false);
-                          setGifOpen(false);
-                        }}
-                      >
-                        Stickers
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </>
+                  ) : null}
+                  {onPickGif ? (
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
+                      onClick={() => {
+                        setAttachMenuOpen(false);
+                        setGifOpen(true);
+                        setEmojiOpen(false);
+                        setStickerOpen(false);
+                      }}
+                    >
+                      GIF
+                    </button>
+                  ) : null}
+                  {onPickSticker && stickers.length > 0 ? (
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
+                      onClick={() => {
+                        setAttachMenuOpen(false);
+                        setStickerOpen(true);
+                        setEmojiOpen(false);
+                        setGifOpen(false);
+                      }}
+                    >
+                      Stickers
+                    </button>
+                  ) : null}
+                  {onOpenPoll ? (
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#404249]"
+                      onClick={() => {
+                        setAttachMenuOpen(false);
+                        onOpenPoll();
+                      }}
+                    >
+                      Create Poll
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           )}
           <div className="relative min-h-[24px] min-w-0 flex-1">
             <div
@@ -1138,92 +1142,43 @@ export function MessageComposer({
               className="relative z-10 max-h-40 min-h-[24px] w-full resize-none overflow-y-auto bg-transparent text-[15px] leading-6 text-transparent caret-[#dbdee1] outline-none placeholder:text-[var(--ms-text-faint)] selection:bg-accent/30 [overflow-wrap:anywhere] whitespace-pre-wrap"
             />
           </div>
-          <HoverTip label="Emoji" delayMs={40}>
-            <button
-              ref={emojiBtnRef}
-              type="button"
-              disabled={disabled || sending}
-              onClick={() => {
-                setEmojiOpen((open) => !open);
-                setGifOpen(false);
-                setStickerOpen(false);
-              }}
-              className={`mb-0.5 shrink-0 rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 ${
-                emojiOpen ? "bg-white/10 text-white" : ""
-              }`}
-              aria-label="Emoji picker"
-            >
-              <Smile className="h-5 w-5" strokeWidth={1.75} />
-            </button>
-          </HoverTip>
-          {allowAttach && onPickGif && (
-            <HoverTip label="GIF" delayMs={40}>
+          <div className="mb-0.5 flex shrink-0 items-center gap-0.5">
+            <HoverTip label="Emoji" delayMs={40}>
               <button
-                ref={gifBtnRef}
+                ref={emojiBtnRef}
                 type="button"
+                disabled={disabled || sending}
+                onClick={() => {
+                  setEmojiOpen((open) => !open);
+                  setGifOpen(false);
+                  setStickerOpen(false);
+                  setAttachMenuOpen(false);
+                }}
+                className={`rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 ${
+                  emojiOpen ? "bg-white/10 text-white" : ""
+                }`}
+                aria-label="Emoji picker"
+              >
+                <Smile className="h-5 w-5" strokeWidth={1.75} />
+              </button>
+            </HoverTip>
+            <span ref={gifBtnRef} className="sr-only" aria-hidden />
+            <span ref={stickerBtnRef} className="sr-only" aria-hidden />
+            <HoverTip label={sending ? "Sending…" : "Send message"} delayMs={40}>
+              <button
+                type="submit"
                 disabled={
                   disabled ||
                   sending ||
-                  pendingFiles.length >= MAX_ATTACHMENTS_PER_MESSAGE
+                  (!draft.trim() && pendingFiles.length === 0)
                 }
-                onClick={() => {
-                  setGifOpen((open) => !open);
-                  setEmojiOpen(false);
-                  setStickerOpen(false);
-                }}
-                className={`mb-0.5 hidden shrink-0 rounded-md px-1.5 py-1 text-xs font-bold tracking-wide text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 sm:inline ${
-                  gifOpen ? "bg-white/10 text-white" : ""
-                }`}
-                aria-label="GIF picker"
+                className="rounded-md p-1.5 text-accent transition hover:bg-accent/15 hover:text-accent-hover disabled:cursor-not-allowed disabled:text-[#4e5058] disabled:opacity-50 disabled:hover:bg-transparent"
+                aria-label={sending ? "Sending" : "Send message"}
               >
-                GIF
+                <SendHorizontal className="h-5 w-5" strokeWidth={2} />
               </button>
             </HoverTip>
-          )}
-          {onPickSticker && stickers.length > 0 && (
-            <HoverTip label="Stickers" delayMs={40}>
-              <button
-                ref={stickerBtnRef}
-                type="button"
-                disabled={disabled || sending}
-                onClick={() => {
-                  setStickerOpen((open) => !open);
-                  setEmojiOpen(false);
-                  setGifOpen(false);
-                }}
-                className={`mb-0.5 hidden shrink-0 rounded-md p-1.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 sm:inline-flex ${
-                  stickerOpen ? "bg-white/10 text-white" : ""
-                }`}
-                aria-label="Sticker picker"
-              >
-                <ImageIcon className="h-5 w-5" strokeWidth={1.75} />
-              </button>
-            </HoverTip>
-          )}
-          {onOpenPoll && (
-            <HoverTip label="Create Poll" delayMs={40}>
-              <button
-                type="button"
-                disabled={disabled || sending}
-                onClick={onOpenPoll}
-                className="mb-0.5 hidden shrink-0 rounded-md px-1.5 py-1 text-xs font-semibold text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-40 sm:inline"
-                aria-label="Create poll"
-              >
-                Poll
-              </button>
-            </HoverTip>
-          )}
-          <button
-            type="submit"
-            disabled={
-              disabled ||
-              sending ||
-              (!draft.trim() && pendingFiles.length === 0)
-            }
-            className="mb-0.5 shrink-0 rounded-lg bg-accent px-2 py-1.5 text-[11px] font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-[#4e5058] disabled:opacity-50 sm:px-3 sm:text-xs"
-          >
-            {sending ? "…" : "Send"}
-          </button>
+          </div>
         </form>
       </div>
       {(emojiOpen || gifOpen || stickerOpen) &&
