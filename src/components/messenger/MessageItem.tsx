@@ -460,7 +460,7 @@ export function MessageItem({
                 type="button"
                 disabled={saving}
                 onClick={() => void saveEdit()}
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={2} />
                 Save
@@ -587,7 +587,7 @@ export function MessageItem({
       {showToolbar && (
         <div
           ref={menuRef}
-          className={`absolute -top-3 right-4 z-10 items-center overflow-visible rounded-md border border-[#1e1f22] bg-[#111214] shadow-lg shadow-black/40 ${
+          className={`absolute -top-3 right-4 z-10 items-center overflow-visible rounded-xl border border-white/[0.08] bg-[#111214] shadow-lg shadow-black/40 ${
             menuOpen || fullPickerOpen
               ? "flex"
               : "hidden group-hover:flex group-focus-within:flex"
@@ -710,7 +710,7 @@ export function MessageItem({
               <button
                 type="button"
                 onClick={() => void copyText()}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
               >
                 {copied ? (
                   <Check className="h-4 w-4" strokeWidth={2} />
@@ -725,7 +725,7 @@ export function MessageItem({
                   onReply(message);
                   setMenuOpen(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
               >
                 <Reply className="h-4 w-4" strokeWidth={1.75} />
                 Reply
@@ -737,7 +737,7 @@ export function MessageItem({
                     onTogglePin();
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
                 >
                   {message.pinned ? (
                     <PinOff className="h-4 w-4" strokeWidth={1.75} />
@@ -754,7 +754,7 @@ export function MessageItem({
                     onForward(message);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
                 >
                   <Forward className="h-4 w-4" strokeWidth={1.75} />
                   Forward
@@ -767,7 +767,7 @@ export function MessageItem({
                     onCreateThread(message);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
                 >
                   <MessagesSquare className="h-4 w-4" strokeWidth={1.75} />
                   Create Thread
@@ -780,7 +780,7 @@ export function MessageItem({
                     onMarkUnread(message);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
                 >
                   Mark Unread
                 </button>
@@ -792,7 +792,7 @@ export function MessageItem({
                     onCopyLink(message);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
                 >
                   <Link2 className="h-4 w-4" strokeWidth={1.75} />
                   Copy Message Link
@@ -806,7 +806,7 @@ export function MessageItem({
                     setEditing(true);
                     setMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#dbdee1] hover:bg-[#3a3c43] hover:text-white"
                 >
                   <Pencil className="h-4 w-4" strokeWidth={1.75} />
                   Edit Message
@@ -821,7 +821,7 @@ export function MessageItem({
                       setMenuOpen(false);
                       setDeleteOpen(true);
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent hover:bg-accent hover:text-white"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#ed4245] hover:bg-[#ed4245] hover:text-white"
                   >
                     <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                     Delete Message

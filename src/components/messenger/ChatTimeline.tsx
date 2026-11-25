@@ -90,15 +90,19 @@ function ChannelStartHeader({
           : "px-4 pb-4 pt-2"
       }
     >
-      <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-[#41434a]">
+      <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#3a3c43] ring-2 ring-accent/40">
         {emptyIcon === "hash" ? (
-          <Hash className="h-8 w-8 text-white" strokeWidth={2} />
+          <Hash className="h-7 w-7 text-white" strokeWidth={2} />
         ) : (
-          <MessagesSquare className="h-8 w-8 text-white" strokeWidth={2} />
+          <MessagesSquare className="h-7 w-7 text-white" strokeWidth={2} />
         )}
       </div>
-      <p className="text-3xl font-bold text-white">{emptyTitle}</p>
-      <p className="mt-2 max-w-lg text-sm text-[#949ba4]">{emptyBody}</p>
+      <p className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+        {emptyTitle}
+      </p>
+      <p className="mt-2 max-w-lg text-sm leading-relaxed text-[#949ba4]">
+        {emptyBody}
+      </p>
     </div>
   );
 }
@@ -482,7 +486,7 @@ export function ChatTimeline({
         <button
           type="button"
           onClick={() => jumpToLatest(true)}
-          className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[#3f4147] bg-[#1e1f22]/95 px-3 py-1.5 text-xs font-semibold text-[#dbdee1] shadow-lg shadow-black/40 backdrop-blur-sm transition hover:border-[#00a8fc]/50 hover:text-white"
+          className="absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[#3f4147] bg-[#1e1f22]/95 px-3 py-1.5 text-xs font-semibold text-[#dbdee1] shadow-lg shadow-black/40 backdrop-blur-sm transition hover:border-accent/50 hover:text-white"
         >
           <span>Jump to present</span>
           <ArrowDown className="h-3.5 w-3.5 text-[#00a8fc]" strokeWidth={2.25} />

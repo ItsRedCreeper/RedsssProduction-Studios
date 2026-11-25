@@ -592,7 +592,7 @@ export function MessageComposer({
 
   return (
     <div
-      className="shrink-0 px-4 pb-6 pt-2"
+      className="shrink-0 px-3 pb-4 pt-1.5 sm:px-4 sm:pb-5"
       onDragEnter={(event) => {
         if (!allowAttach) return;
         event.preventDefault();
@@ -616,10 +616,10 @@ export function MessageComposer({
     >
       <TypingIndicator people={typingPeople} className="mb-1.5 px-1" />
       {replying && (
-        <div className="flex items-center gap-2 rounded-t-md border-l-4 border-[#00a8fc] bg-[#2b2d31] px-4 py-2">
-          <Reply className="h-4 w-4 shrink-0 text-[#00a8fc]" strokeWidth={2} />
+        <div className="flex items-center gap-2 rounded-t-xl border-l-4 border-accent bg-[#2b2d31] px-4 py-2">
+          <Reply className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-[#00a8fc]">
+            <p className="text-xs font-semibold text-accent">
               Replying to {replyAuthor}
             </p>
             <HoverTip
@@ -645,7 +645,7 @@ export function MessageComposer({
                 onClick={() => onReplyPingChange(!replyPing)}
                 className={`rounded-md px-2 py-1 text-[11px] font-semibold ${
                   replyPing
-                    ? "bg-[#00a8fc]/20 text-[#00a8fc]"
+                    ? "bg-accent/20 text-accent"
                     : "bg-white/5 text-[#949ba4]"
                 }`}
                 aria-pressed={replyPing}
@@ -779,11 +779,11 @@ export function MessageComposer({
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
                       index === mentionIndex
-                        ? "bg-accent/20 text-white"
+                        ? "bg-[#3a3c43] text-white"
                         : "text-[#dbdee1] hover:bg-white/5"
                     }`}
                   >
-                    <Icon className="h-3.5 w-3.5 text-accent" strokeWidth={2} />
+                    <Icon className="h-3.5 w-3.5 text-[#949ba4]" strokeWidth={2} />
                     <span className="font-medium">
                       {item.kind === "channel" ? "#" : "@"}
                       {item.label}
@@ -836,10 +836,12 @@ export function MessageComposer({
         )}
         <form
           onSubmit={handleSubmit}
-          className={`relative flex flex-nowrap items-end gap-1.5 bg-[#383a40] px-2 py-3 sm:gap-3 sm:px-4 ${
-            dragging ? "ring-2 ring-white/20" : ""
+          className={`relative flex flex-nowrap items-end gap-1.5 border border-white/[0.04] bg-[#383a40] px-2 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:gap-2.5 sm:px-3.5 sm:py-3 ${
+            dragging ? "ring-2 ring-accent/40" : ""
           } ${
-            replying || pendingFiles.length > 0 ? "rounded-b-md" : "rounded-md"
+            replying || pendingFiles.length > 0
+              ? "rounded-b-xl"
+              : "rounded-xl"
           }`}
         >
           {allowAttach && (
@@ -1171,7 +1173,7 @@ export function MessageComposer({
               sending ||
               (!draft.trim() && pendingFiles.length === 0)
             }
-            className="mb-0.5 shrink-0 rounded-md bg-[#5865f2] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#4752c4] disabled:cursor-not-allowed disabled:opacity-40"
+            className="mb-0.5 shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-[#4e5058] disabled:opacity-50"
           >
             {sending ? "Sending…" : "Send"}
           </button>
