@@ -5,7 +5,9 @@ import { MessageEmoji } from "@/components/messenger/EmojiInfo";
 import { SpoilerText } from "@/components/messenger/SpoilerText";
 import {
   findEmojiByName,
-  isCustomEmojiOnlyMessage,
+  isEmojiOnlyMessage,
+  MESSAGE_EMOJI_INLINE_PX,
+  MESSAGE_EMOJI_JUMBO_PX,
   type ServerEmoji,
 } from "@/lib/emoji";
 import { extractEmbeddableUrlInfos } from "@/lib/message-media";
@@ -41,7 +43,9 @@ export function formatMessageContent(
 ): ReactNode[] {
   const key = { n: 0 };
   const nextKey = () => key.n++;
-  const emojiSize = isCustomEmojiOnlyMessage(content) ? 48 : 32;
+  const emojiSize = isEmojiOnlyMessage(content)
+    ? MESSAGE_EMOJI_JUMBO_PX
+    : MESSAGE_EMOJI_INLINE_PX;
   const namedPatterns = buildNamedPatterns(opts);
 
   // Multiline quote (>>> ) consumes the rest of the message.

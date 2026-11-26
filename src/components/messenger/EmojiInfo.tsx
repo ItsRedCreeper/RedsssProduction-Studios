@@ -241,7 +241,7 @@ export function MessageEmoji({
   emoji,
   catalog,
   serverNamesById = {},
-  size = 32,
+  size = 22,
   className = "",
 }: MessageEmojiProps) {
   const tipId = useId();

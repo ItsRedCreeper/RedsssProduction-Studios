@@ -61,6 +61,21 @@ export function makeComposerSlot(_seq?: number) {
   return COMPOSER_SLOT_CHAR;
 }
 
+/**
+ * Whether the composer draft can be sent.
+ * Custom emoji chips use U+3000 (ideographic space), which String.trim()
+ * strips — so a lone emoji chip must not be treated as empty.
+ */
+export function composerDraftHasContent(draft: string) {
+  if (!draft) return false;
+  if (draft.includes(COMPOSER_SLOT_CHAR)) return true;
+  for (let i = 0; i < draft.length; i++) {
+    const code = draft.charCodeAt(i);
+    if (code >= 0xe000 && code <= 0xf8ff) return true;
+  }
+  return draft.trim().length > 0;
+}
+
 /** Length of a composer emoji slot starting at index, or 0. */
 export function isComposerEmojiSlotAt(
   text: string,
@@ -404,6 +419,27 @@ export function isCustomEmojiOnlyMessage(content: string) {
     .replace(/\s+/g, "");
   return leftover.length === 0;
 }
+
+/** Discord-style jumbo: message is only custom and/or unicode emoji (+ spaces). */
+export function isEmojiOnlyMessage(content: string) {
+  if (!content.trim()) return false;
+  if (isCustomEmojiOnlyMessage(content)) return true;
+  const withoutCustom = content.replace(
+    /<(a?):([a-zA-Z0-9_]{2,32}):([0-9a-f-]{36})>/gi,
+    "",
+  );
+  // Strip unicode emoji sequences (incl. ZWJ / variation selectors) and spaces.
+  const leftover = withoutCustom
+    .replace(/\p{Extended_Pictographic}(\uFE0F|\uFE0E)?(\u200D\p{Extended_Pictographic}(\uFE0F|\uFE0E)?)*/gu, "")
+    .replace(/[\u200D\uFE0F\uFE0E]/g, "")
+    .replace(/\s+/g, "");
+  return leftover.length === 0 && /\p{Extended_Pictographic}/u.test(content);
+}
+
+/** Inline emoji size in mixed messages (Discord ~22px). */
+export const MESSAGE_EMOJI_INLINE_PX = 22;
+/** Jumbo size when the message is emoji-only. */
+export const MESSAGE_EMOJI_JUMBO_PX = 48;
 
 export function filterUnicodeEmojis(query: string) {
   const q = query.trim().toLowerCase().replace(/^:|:$/g, "");

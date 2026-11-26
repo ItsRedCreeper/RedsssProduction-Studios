@@ -37,6 +37,7 @@ import { HoverTip } from "@/components/ui/HoverTip";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import {
   COMPOSER_SLOT_CHAR,
+  composerDraftHasContent,
   countComposerSlotsBefore,
   customEmojiToken,
   expandComposerDraft,
@@ -611,8 +612,14 @@ export function MessageComposer({
     setEmojiOpen(false);
   }
 
+  const canSend =
+    !disabled &&
+    !sending &&
+    (composerDraftHasContent(draft) || pendingFiles.length > 0);
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!canSend) return;
     clearTypingSoon();
     onSubmit(expandForSend(draft));
   }
@@ -1078,7 +1085,7 @@ export function MessageComposer({
                 if (
                   event.key === "Escape" &&
                   replying &&
-                  !draft.trim() &&
+                  !composerDraftHasContent(draft) &&
                   pendingFiles.length === 0
                 ) {
                   event.preventDefault();
@@ -1088,7 +1095,7 @@ export function MessageComposer({
                 if (
                   event.key === "ArrowUp" &&
                   !event.shiftKey &&
-                  !draft.trim() &&
+                  !composerDraftHasContent(draft) &&
                   pendingFiles.length === 0 &&
                   filteredMentions.length === 0 &&
                   filteredEmojiSuggestions.length === 0 &&
@@ -1125,11 +1132,7 @@ export function MessageComposer({
                 }
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  if (
-                    !disabled &&
-                    !sending &&
-                    (draft.trim() || pendingFiles.length > 0)
-                  ) {
+                  if (canSend) {
                     clearTypingSoon();
                     onSubmit(expandForSend(draft));
                   }
@@ -1167,11 +1170,7 @@ export function MessageComposer({
             <HoverTip label={sending ? "Sending…" : "Send message"} delayMs={40}>
               <button
                 type="submit"
-                disabled={
-                  disabled ||
-                  sending ||
-                  (!draft.trim() && pendingFiles.length === 0)
-                }
+                disabled={!canSend}
                 className="rounded-md p-1.5 text-accent transition hover:bg-accent/15 hover:text-accent-hover disabled:cursor-not-allowed disabled:text-[#4e5058] disabled:opacity-50 disabled:hover:bg-transparent"
                 aria-label={sending ? "Sending" : "Send message"}
               >

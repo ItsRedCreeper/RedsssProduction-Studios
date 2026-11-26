@@ -46,6 +46,10 @@ import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { displayMentionText, type MentionMaps } from "@/lib/mentions";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import {
+  isEmojiOnlyMessage,
+  MESSAGE_EMOJI_JUMBO_PX,
+} from "@/lib/emoji";
+import {
   QUICK_REACTION_EMOJIS,
   type ServerEmoji,
 } from "@/lib/emoji";
@@ -546,7 +550,18 @@ export function MessageItem({
               </p>
             ) : null}
             {message.content && message.message_kind !== "poll" && (
-              <div className="break-words text-[0.95rem] leading-relaxed text-[var(--ms-text)] [overflow-wrap:anywhere] whitespace-pre-wrap">
+              <div
+                className={`break-words leading-relaxed text-[var(--ms-text)] [overflow-wrap:anywhere] whitespace-pre-wrap ${
+                  isEmojiOnlyMessage(message.content)
+                    ? "leading-none"
+                    : "text-[0.95rem]"
+                }`}
+                style={
+                  isEmojiOnlyMessage(message.content)
+                    ? { fontSize: MESSAGE_EMOJI_JUMBO_PX }
+                    : undefined
+                }
+              >
                 {formatMessageContent(message.content, {
                   currentUserId,
                   currentUsername,
