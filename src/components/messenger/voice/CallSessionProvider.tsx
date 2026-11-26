@@ -124,11 +124,23 @@ type CtrlPayload =
       peerUserIds: string[];
     };
 
-async function broadcastCtrl(conversationId: string, payload: CtrlPayload) {
+async function broadcastOnTopic(topic: string, payload: CtrlPayload) {
   const supabase = createClient();
-  const channel = supabase.channel(
-    `call-ctrl-pub:${conversationId}:${crypto.randomUUID()}`,
-  );
+  const existing = supabase
+    .getChannels()
+    .find(
+      (ch) =>
+        ch.topic === topic ||
+        ch.topic === `realtime:${topic}` ||
+        ch.topic.endsWith(`:${topic}`),
+    );
+  if (existing) {
+    await existing.send({ type: "broadcast", event: "ctrl", payload });
+    return;
+  }
+  const channel = supabase.channel(topic, {
+    config: { broadcast: { self: false } },
+  });
   await new Promise<void>((resolve) => {
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED") resolve();
@@ -136,6 +148,72 @@ async function broadcastCtrl(conversationId: string, payload: CtrlPayload) {
   });
   await channel.send({ type: "broadcast", event: "ctrl", payload });
   void supabase.removeChannel(channel);
+}
+
+async function broadcastCtrl(conversationId: string, payload: CtrlPayload) {
+  await broadcastOnTopic(`call-ctrl:${conversationId}`, payload);
+}
+
+async function broadcastInbox(userId: string, payload: CtrlPayload) {
+  await broadcastOnTopic(`call-inbox:${userId}`, payload);
+}
+
+type RingtoneHandle = {
+  stop: () => void;
+};
+
+function startRingtone(): RingtoneHandle {
+  let stopped = false;
+  let ctx: AudioContext | null = null;
+  let intervalId: ReturnType<typeof setInterval> | null = null;
+
+  const beep = () => {
+    if (stopped) return;
+    try {
+      if (!ctx) ctx = new AudioContext();
+      const now = ctx.currentTime;
+      for (const [i, freq] of [880, 660].entries()) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(
+          0.0001,
+          now + 0.28 + i * 0.12,
+        );
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + i * 0.32);
+        osc.stop(now + 0.35 + i * 0.12);
+      }
+    } catch {
+      /* autoplay / AudioContext blocked until gesture */
+    }
+  };
+
+  beep();
+  intervalId = setInterval(beep, 1800);
+
+  return {
+    stop: () => {
+      stopped = true;
+      if (intervalId) clearInterval(intervalId);
+      void ctx?.close();
+      ctx = null;
+    },
+  };
+}
+
+function flashDocumentTitle(active: boolean, fromUsername: string) {
+  if (typeof document === "undefined") return;
+  const base = document.title.replace(/^\(\d+\)\s*/, "").replace(/^📞\s*/, "");
+  if (!active) {
+    document.title = base;
+    return;
+  }
+  document.title = `📞 ${fromUsername} is calling…`;
 }
 
 export function CallSessionProvider({ children }: { children: ReactNode }) {
@@ -173,6 +251,9 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   const mutedRef = useRef(muted);
   const userIdRef = useRef(user?.id ?? null);
   const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ringtoneRef = useRef<RingtoneHandle | null>(null);
+  const titleBaseRef = useRef<string | null>(null);
+  const desktopNotifRef = useRef<Notification | null>(null);
 
   connectionRef.current = connection;
   outgoingRef.current = outgoing;
@@ -203,6 +284,43 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       ringTimerRef.current = null;
     }
   }, []);
+
+  const stopIncomingAlerts = useCallback(() => {
+    ringtoneRef.current?.stop();
+    ringtoneRef.current = null;
+    if (titleBaseRef.current != null) {
+      document.title = titleBaseRef.current;
+      titleBaseRef.current = null;
+    } else {
+      flashDocumentTitle(false, "");
+    }
+    desktopNotifRef.current?.close();
+    desktopNotifRef.current = null;
+  }, []);
+
+  const startIncomingAlerts = useCallback((fromUsername: string) => {
+    stopIncomingAlerts();
+    titleBaseRef.current = document.title.replace(/^\(\d+\)\s*/, "").replace(/^📞\s*/, "");
+    flashDocumentTitle(true, fromUsername);
+    ringtoneRef.current = startRingtone();
+    try {
+      if (
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
+        desktopNotifRef.current = new Notification(
+          `${fromUsername} is calling`,
+          {
+            body: "Incoming call on Redsss Messenger",
+            tag: "redsss-incoming-call",
+            requireInteraction: true,
+          },
+        );
+      }
+    } catch {
+      /* Notifications unavailable */
+    }
+  }, [stopIncomingAlerts]);
 
   const upsertPresence = useCallback(
     async (
@@ -252,14 +370,26 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
 
   const leaveCall = useCallback(async () => {
     clearRingTimer();
+    stopIncomingAlerts();
     const conn = connectionRef.current;
     const uid = userIdRef.current;
+    const outgoingPeer = outgoingRef.current?.peerUserId;
     if (conn && uid) {
-      void broadcastCtrl(conn.conversationId, {
+      const endPayload: CtrlPayload = {
         kind: "end",
         from: uid,
         conversationId: conn.conversationId,
-      });
+      };
+      void broadcastCtrl(conn.conversationId, endPayload);
+      const peers = [
+        ...new Set([
+          ...conn.peerUserIds,
+          ...(outgoingPeer ? [outgoingPeer] : []),
+        ]),
+      ].filter((id) => id !== uid);
+      for (const peerId of peers) {
+        void broadcastInbox(peerId, endPayload);
+      }
       await removeSelfPresence(conn.conversationId);
       setOpenCalls((prev) => {
         const next = { ...prev };
@@ -274,11 +404,12 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     cleanupMedia();
     setConnection(null);
     setOutgoing(null);
+    setIncoming(null);
     setMuted(false);
     setDeafened(false);
     setMicError(null);
     setStageExpanded(true);
-  }, [cleanupMedia, clearRingTimer, removeSelfPresence]);
+  }, [cleanupMedia, clearRingTimer, removeSelfPresence, stopIncomingAlerts]);
 
   const startMedia = useCallback(
     async (withVideo: boolean) => {
@@ -482,14 +613,16 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
         peerNames: args.peerNames,
         skipEnsure: true,
       });
-      void broadcastCtrl(args.conversationId, {
+      const invitePayload: CtrlPayload = {
         kind: "invite",
         from: user.id,
         fromUsername: profile?.username ?? "Someone",
         conversationId: args.conversationId,
         withVideo,
         label: profile?.username ?? "Someone",
-      });
+      };
+      void broadcastCtrl(args.conversationId, invitePayload);
+      void broadcastInbox(peerUserId, invitePayload);
       ringTimerRef.current = setTimeout(() => {
         void (async () => {
           const stillOutgoing =
@@ -546,11 +679,13 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     const ring = outgoingRef.current;
     clearRingTimer();
     if (ring && user) {
-      void broadcastCtrl(ring.conversationId, {
+      const cancelPayload: CtrlPayload = {
         kind: "cancel",
         from: user.id,
         conversationId: ring.conversationId,
-      });
+      };
+      void broadcastCtrl(ring.conversationId, cancelPayload);
+      void broadcastInbox(ring.peerUserId, cancelPayload);
     }
     setOutgoing(null);
     await leaveCall();
@@ -559,6 +694,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   const acceptCall = useCallback(async () => {
     const invite = incoming;
     if (!invite || !user) return;
+    stopIncomingAlerts();
     setIncoming(null);
     clearRingTimer();
     await joinMesh({
@@ -569,21 +705,24 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       peerUserIds: [invite.fromUserId],
       peerNames: { [invite.fromUserId]: invite.fromUsername },
     });
-  }, [clearRingTimer, incoming, joinMesh, user]);
+  }, [clearRingTimer, incoming, joinMesh, stopIncomingAlerts, user]);
 
   const declineCall = useCallback(() => {
     const invite = incoming;
+    stopIncomingAlerts();
     if (!invite || !user) {
       setIncoming(null);
       return;
     }
-    void broadcastCtrl(invite.conversationId, {
+    const declinePayload: CtrlPayload = {
       kind: "decline",
       from: user.id,
       conversationId: invite.conversationId,
-    });
+    };
+    void broadcastCtrl(invite.conversationId, declinePayload);
+    void broadcastInbox(invite.fromUserId, declinePayload);
     setIncoming(null);
-  }, [incoming, user]);
+  }, [incoming, stopIncomingAlerts, user]);
 
   const toggleMute = useCallback(() => {
     setMuted((prev) => {
@@ -732,6 +871,76 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     setOpenCalls(next);
   }, []);
 
+  const handleCtrlMessage = useCallback(
+    (msg: CtrlPayload) => {
+      if (!user || !msg || msg.from === user.id) return;
+
+      if (msg.kind === "invite") {
+        if (connectionRef.current) return;
+        setIncoming((prev) => {
+          if (prev?.conversationId === msg.conversationId) return prev;
+          return {
+            conversationId: msg.conversationId,
+            fromUserId: msg.from,
+            fromUsername: msg.fromUsername,
+            withVideo: msg.withVideo,
+            label: msg.label,
+          };
+        });
+        return;
+      }
+
+      if (msg.kind === "decline") {
+        if (outgoingRef.current?.conversationId === msg.conversationId) {
+          clearRingTimer();
+          setOutgoing(null);
+          void leaveCall();
+        }
+        return;
+      }
+
+      if (msg.kind === "cancel" || msg.kind === "end") {
+        setIncoming((prev) =>
+          prev?.conversationId === msg.conversationId ? null : prev,
+        );
+        if (
+          msg.kind === "end" &&
+          connectionRef.current?.conversationId === msg.conversationId
+        ) {
+          void leaveCall();
+        }
+        return;
+      }
+
+      if (msg.kind === "joined") {
+        clearRingTimer();
+        setOutgoing(null);
+        setConnection((prev) =>
+          prev && prev.conversationId === msg.conversationId
+            ? {
+                ...prev,
+                participantIds: [
+                  ...new Set([...prev.participantIds, msg.from]),
+                ],
+              }
+            : prev,
+        );
+      }
+    },
+    [clearRingTimer, leaveCall, user],
+  );
+
+  useEffect(() => {
+    if (!incoming || connection) {
+      stopIncomingAlerts();
+      return;
+    }
+    startIncomingAlerts(incoming.fromUsername);
+    return () => {
+      stopIncomingAlerts();
+    };
+  }, [incoming, connection, startIncomingAlerts, stopIncomingAlerts]);
+
   useEffect(() => {
     if (!user || !watchId) return;
     const supabase = createClient();
@@ -742,52 +951,29 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       .on("broadcast", { event: "ctrl" }, ({ payload }) => {
         const msg = payload as CtrlPayload;
         if (!msg || msg.conversationId !== watchId) return;
-        if (msg.kind === "invite" && msg.from !== user.id) {
-          if (connectionRef.current) return;
-          setIncoming({
-            conversationId: msg.conversationId,
-            fromUserId: msg.from,
-            fromUsername: msg.fromUsername,
-            withVideo: msg.withVideo,
-            label: msg.label,
-          });
-        }
-        if (msg.kind === "decline" && msg.from !== user.id) {
-          if (outgoingRef.current?.conversationId === watchId) {
-            clearRingTimer();
-            setOutgoing(null);
-            void leaveCall();
-          }
-        }
-        if (msg.kind === "cancel" && msg.from !== user.id) {
-          setIncoming(null);
-        }
-        if (msg.kind === "end" && msg.from !== user.id) {
-          setIncoming(null);
-          if (connectionRef.current?.conversationId === watchId) {
-            void leaveCall();
-          }
-        }
-        if (msg.kind === "joined" && msg.from !== user.id) {
-          clearRingTimer();
-          setOutgoing(null);
-          setConnection((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  participantIds: [
-                    ...new Set([...prev.participantIds, msg.from]),
-                  ],
-                }
-              : prev,
-          );
-        }
+        handleCtrlMessage(msg);
       })
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [clearRingTimer, leaveCall, user, watchId]);
+  }, [handleCtrlMessage, user, watchId]);
+
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`call-inbox:${user.id}`, {
+        config: { broadcast: { self: false } },
+      })
+      .on("broadcast", { event: "ctrl" }, ({ payload }) => {
+        handleCtrlMessage(payload as CtrlPayload);
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [handleCtrlMessage, user]);
 
   useEffect(() => {
     function onLeaveForVoice() {
@@ -875,26 +1061,42 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     <CallSessionContext.Provider value={value}>
       {children}
       {incoming && !connection ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-sm rounded-md border border-[var(--ms-border)] bg-[var(--ms-chat)] p-5 shadow-2xl">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
-              Incoming {incoming.withVideo ? "video" : "voice"} call
-            </p>
-            <p className="mt-2 text-lg font-semibold text-white">
-              {incoming.fromUsername}
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-lg border border-[var(--ms-border)] bg-[var(--ms-chat)] p-6 shadow-2xl">
+            <div className="flex flex-col items-center text-center">
+              <div className="relative mb-4 flex h-16 w-16 items-center justify-center">
+                <span className="absolute inset-0 animate-ping rounded-full bg-[var(--ms-connected)]/30" />
+                <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-[var(--ms-connected)] text-white">
+                  {incoming.withVideo ? (
+                    <svg viewBox="0 0 24 24" className="h-7 w-7" fill="currentColor" aria-hidden>
+                      <path d="M17 10.5V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3.5l4 4v-11l-4 4z" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="h-7 w-7" fill="currentColor" aria-hidden>
+                      <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.3 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.3 1.1L6.6 10.8z" />
+                    </svg>
+                  )}
+                </span>
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
+                Incoming {incoming.withVideo ? "video" : "voice"} call
+              </p>
+              <p className="mt-2 text-xl font-semibold text-white">
+                {incoming.fromUsername}
+              </p>
+            </div>
+            <div className="mt-6 flex justify-center gap-3">
               <button
                 type="button"
                 onClick={declineCall}
-                className="rounded-md px-3 py-2 text-sm text-[var(--ms-text)] hover:bg-white/5"
+                className="min-w-[7rem] rounded-md bg-[#ed4245] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#c03537]"
               >
                 Decline
               </button>
               <button
                 type="button"
                 onClick={() => void acceptCall()}
-                className="rounded-md bg-[var(--ms-connected)] px-3 py-2 text-sm font-semibold text-white hover:brightness-110"
+                className="min-w-[7rem] rounded-md bg-[var(--ms-connected)] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-110"
               >
                 Accept
               </button>
