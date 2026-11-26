@@ -46,10 +46,13 @@ type ChatTimelineProps = {
   /** When false, hide the Discord-style channel/DM start header (e.g. search). */
   showChannelStart?: boolean;
   /**
-   * Id of the first unread message — inserts a “New messages” divider
-   * (same visual language as day dividers) above it.
+   * Id of the first unread message — inserts a red “New messages” divider
+   * above it (replaces the date divider for that spot). Cleared only after
+   * the user scrolls.
    */
   firstUnreadMessageId?: string | null;
+  /** Fired once the user scrolls while an unread divider is visible. */
+  onUnreadDividerDismiss?: () => void;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
   onDelete: (messageId: string) => Promise<void>;
@@ -140,6 +143,7 @@ export function ChatTimeline({
   readOnly = false,
   showChannelStart = true,
   firstUnreadMessageId = null,
+  onUnreadDividerDismiss,
   onReply,
   onEdit,
   onDelete,
@@ -165,10 +169,10 @@ export function ChatTimeline({
   const ignoreScrollClearRef = useRef<number | null>(null);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
 
-  // New channel/DM → always pin to latest until the user scrolls up.
+  // New channel/DM → pin to latest unless an unread divider needs the viewport.
   if (lastKeyRef.current !== scrollKey) {
     lastKeyRef.current = scrollKey;
-    stickToBottomRef.current = true;
+    stickToBottomRef.current = !firstUnreadMessageId;
     prevScrollHeightRef.current = null;
     prevMessageCountRef.current = 0;
     loadOlderLockRef.current = false;
@@ -176,8 +180,8 @@ export function ChatTimeline({
 
   useEffect(() => {
     setAwayFromBottom(false);
-    stickToBottomRef.current = true;
-  }, [scrollKey]);
+    stickToBottomRef.current = !firstUnreadMessageId;
+  }, [scrollKey, firstUnreadMessageId]);
 
   useEffect(() => {
     return () => {
@@ -187,16 +191,23 @@ export function ChatTimeline({
     };
   }, []);
 
-  function beginIgnoreScroll() {
+  function beginIgnoreScroll(holdMs = 0) {
     ignoreScrollRef.current = true;
     if (ignoreScrollClearRef.current != null) {
       cancelAnimationFrame(ignoreScrollClearRef.current);
+      ignoreScrollClearRef.current = null;
     }
-    // Two frames: resize/scroll events from layout often land after the jump.
+    // Two frames (+ optional hold): layout scroll events often land after the jump.
     ignoreScrollClearRef.current = requestAnimationFrame(() => {
       ignoreScrollClearRef.current = requestAnimationFrame(() => {
-        ignoreScrollRef.current = false;
         ignoreScrollClearRef.current = null;
+        if (holdMs > 0) {
+          window.setTimeout(() => {
+            ignoreScrollRef.current = false;
+          }, holdMs);
+          return;
+        }
+        ignoreScrollRef.current = false;
       });
     });
   }
@@ -254,6 +265,25 @@ export function ChatTimeline({
     prevMessageCountRef.current = messages.length;
 
     if (loading) return;
+
+    // Unread divider: pin the divider to the top of the viewport instead of
+    // jumping to the newest message.
+    if (firstUnreadMessageId && el) {
+      stickToBottomRef.current = false;
+      const anchor = el.querySelector(
+        `[data-unread-anchor="${firstUnreadMessageId}"]`,
+      ) as HTMLElement | null;
+      if (anchor) {
+        // Hold ignore longer so the initial pin does not dismiss the divider.
+        beginIgnoreScroll(120);
+        const elRect = el.getBoundingClientRect();
+        const anchorRect = anchor.getBoundingClientRect();
+        const delta = anchorRect.top - elRect.top + el.scrollTop - 8;
+        el.scrollTop = Math.max(0, Number.isFinite(delta) ? delta : 0);
+      }
+      return;
+    }
+
     if (!stickToBottomRef.current) return;
     jumpToLatest(false);
     const frame = requestAnimationFrame(() => {
@@ -268,7 +298,7 @@ export function ChatTimeline({
       cancelAnimationFrame(frame);
       window.clearTimeout(settle);
     };
-  }, [scrollKey, loading, messages]);
+  }, [scrollKey, loading, messages, firstUnreadMessageId]);
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -330,6 +360,13 @@ export function ChatTimeline({
           const el = scrollerRef.current;
           if (!el) return;
           syncAwayFromBottom(el);
+          if (
+            firstUnreadMessageId &&
+            onUnreadDividerDismiss &&
+            !ignoreScrollRef.current
+          ) {
+            onUnreadDividerDismiss();
+          }
           maybeLoadOlder();
         }}
         className="min-h-0 flex-1 overflow-y-auto pb-4 pt-4"
@@ -397,16 +434,40 @@ export function ChatTimeline({
                 : index === 0
                   ? formatDayDivider(message.created_at)
                   : "";
-              const showDayDivider = Boolean(dayLabel) && (index === 0 || dayChanged);
+              const isUnreadAnchor =
+                !!firstUnreadMessageId &&
+                message.id === firstUnreadMessageId;
+              // Unread divider replaces the date divider for this message.
+              const showDayDivider =
+                !isUnreadAnchor &&
+                Boolean(dayLabel) &&
+                (index === 0 || dayChanged);
 
               return (
                 <div
                   key={message.id}
                   className={
-                    !compact && index > 0 && !showDayDivider ? "mt-4" : undefined
+                    !compact && index > 0 && !showDayDivider && !isUnreadAnchor
+                      ? "mt-4"
+                      : undefined
                   }
                 >
-                  {showDayDivider ? (
+                  {isUnreadAnchor ? (
+                    <div
+                      data-unread-anchor={message.id}
+                      className={`relative mx-4 flex items-center ${
+                        index === 0 ? "mb-2 mt-1" : "mb-2 mt-4"
+                      }`}
+                      role="separator"
+                      aria-label="New messages"
+                    >
+                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#ed4245] to-[#ed4245]" />
+                      <span className="rounded-full bg-[var(--ms-sidebar)] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[#ed4245] ring-1 ring-[#ed4245]/40">
+                        New messages
+                      </span>
+                      <div className="h-px flex-1 bg-gradient-to-l from-transparent via-[#ed4245] to-[#ed4245]" />
+                    </div>
+                  ) : showDayDivider ? (
                     <div
                       className={`relative mx-4 flex items-center ${
                         index === 0 ? "mb-2 mt-1" : "mb-2 mt-4"
@@ -417,22 +478,6 @@ export function ChatTimeline({
                       <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#3f4147] to-[#3f4147]" />
                       <span className="rounded-full bg-[var(--ms-sidebar)] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--ms-text-muted)] ring-1 ring-white/[0.04]">
                         {dayLabel}
-                      </span>
-                      <div className="h-px flex-1 bg-gradient-to-l from-transparent via-[#3f4147] to-[#3f4147]" />
-                    </div>
-                  ) : null}
-                  {firstUnreadMessageId &&
-                  message.id === firstUnreadMessageId ? (
-                    <div
-                      className={`relative mx-4 flex items-center ${
-                        showDayDivider || index === 0 ? "mb-2 mt-1" : "mb-2 mt-4"
-                      }`}
-                      role="separator"
-                      aria-label="New messages"
-                    >
-                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#3f4147] to-[#3f4147]" />
-                      <span className="rounded-full bg-[var(--ms-sidebar)] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--ms-text-muted)] ring-1 ring-white/[0.04]">
-                        New messages
                       </span>
                       <div className="h-px flex-1 bg-gradient-to-l from-transparent via-[#3f4147] to-[#3f4147]" />
                     </div>

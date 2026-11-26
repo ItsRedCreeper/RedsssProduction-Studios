@@ -42,9 +42,19 @@ type UnreadContextValue = {
   markChannelRead: (channelId: string, at?: string) => Promise<void>;
   markDmRead: (conversationId: string, at?: string) => Promise<void>;
   markServerRead: (serverId: string) => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  deleteAllReadNotifications: () => Promise<void>;
   /** Bump local last-activity so UI updates before RPC refresh */
-  noteChannelActivity: (channelId: string, at: string) => void;
-  noteDmActivity: (conversationId: string, at: string) => void;
+  noteChannelActivity: (
+    channelId: string,
+    at: string,
+    meta?: { serverId?: string; serverName?: string; channelName?: string },
+  ) => void;
+  noteDmActivity: (
+    conversationId: string,
+    at: string,
+    meta?: { title?: string; avatarUrl?: string | null },
+  ) => void;
 };
 
 const UnreadContext = createContext<UnreadContextValue | null>(null);
@@ -98,7 +108,17 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       supabase.rpc("get_unread_summary"),
     ]);
     setNotifications((notifs.data as AppNotification[] | null) ?? []);
-    const raw = summary.data as UnreadSummary | null;
+    let raw = summary.data as UnreadSummary | string | null;
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw) as UnreadSummary;
+      } catch {
+        raw = null;
+      }
+    }
+    if (summary.error) {
+      console.warn("get_unread_summary", summary.error.message);
+    }
     setChannels(Array.isArray(raw?.channels) ? raw!.channels : []);
     setDms(Array.isArray(raw?.dms) ? raw!.dms : []);
     setLoading(false);
@@ -108,7 +128,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     refreshTimer.current = setTimeout(() => {
       void refresh();
-    }, 250);
+    }, 120);
   }, [refresh]);
 
   useEffect(() => {
@@ -315,13 +335,102 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     [user, channels, refresh],
   );
 
-  const noteChannelActivity = useCallback((_channelId: string, _at: string) => {
-    scheduleRefresh();
-  }, [scheduleRefresh]);
+  const noteChannelActivity = useCallback(
+    (
+      channelId: string,
+      at: string,
+      meta?: { serverId?: string; serverName?: string; channelName?: string },
+    ) => {
+      setChannels((prev) => {
+        const idx = prev.findIndex((row) => row.channel_id === channelId);
+        if (idx >= 0) {
+          const next = [...prev];
+          const row = next[idx]!;
+          next[idx] = {
+            ...row,
+            unread_count: row.unread_count + 1,
+            latest_at: at,
+          };
+          return next.sort(
+            (a, b) => Date.parse(b.latest_at) - Date.parse(a.latest_at),
+          );
+        }
+        if (!meta?.serverId) return prev;
+        return [
+          {
+            channel_id: channelId,
+            server_id: meta.serverId,
+            channel_name: meta.channelName ?? "channel",
+            server_name: meta.serverName ?? "Server",
+            server_icon: null,
+            unread_count: 1,
+            latest_at: at,
+          },
+          ...prev,
+        ];
+      });
+      scheduleRefresh();
+    },
+    [scheduleRefresh],
+  );
 
-  const noteDmActivity = useCallback((_conversationId: string, _at: string) => {
-    scheduleRefresh();
-  }, [scheduleRefresh]);
+  const noteDmActivity = useCallback(
+    (
+      conversationId: string,
+      at: string,
+      meta?: { title?: string; avatarUrl?: string | null },
+    ) => {
+      setDms((prev) => {
+        const idx = prev.findIndex(
+          (row) => row.conversation_id === conversationId,
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          const row = next[idx]!;
+          next[idx] = {
+            ...row,
+            unread_count: row.unread_count + 1,
+            latest_at: at,
+          };
+          return next.sort(
+            (a, b) => Date.parse(b.latest_at) - Date.parse(a.latest_at),
+          );
+        }
+        return [
+          {
+            conversation_id: conversationId,
+            is_group: false,
+            group_name: null,
+            unread_count: 1,
+            latest_at: at,
+            other_user_id: null,
+            other_username: meta?.title ?? "Direct Message",
+            other_avatar_url: meta?.avatarUrl ?? null,
+          },
+          ...prev,
+        ];
+      });
+      scheduleRefresh();
+    },
+    [scheduleRefresh],
+  );
+
+  const deleteNotification = useCallback(async (id: string) => {
+    setNotifications((prev) => prev.filter((item) => item.id !== id));
+    const supabase = createClient();
+    await supabase.from("notifications").delete().eq("id", id);
+  }, []);
+
+  const deleteAllReadNotifications = useCallback(async () => {
+    if (!user) return;
+    setNotifications((prev) => prev.filter((item) => !item.read));
+    const supabase = createClient();
+    await supabase
+      .from("notifications")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("read", true);
+  }, [user]);
 
   const value = useMemo<UnreadContextValue>(
     () => ({
@@ -340,6 +449,8 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       markChannelRead,
       markDmRead,
       markServerRead,
+      deleteNotification,
+      deleteAllReadNotifications,
       noteChannelActivity,
       noteDmActivity,
     }),
@@ -359,6 +470,8 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       markChannelRead,
       markDmRead,
       markServerRead,
+      deleteNotification,
+      deleteAllReadNotifications,
       noteChannelActivity,
       noteDmActivity,
     ],

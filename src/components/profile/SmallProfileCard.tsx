@@ -205,7 +205,11 @@ export function SmallProfileCard({
               className={`truncate text-base font-semibold ${
                 nameColor ? "" : "text-white"
               }`}
-              style={nameColor ? { color: nameColor } : undefined}
+              style={
+                nameColor
+                  ? { color: nameColor, WebkitTextFillColor: nameColor }
+                  : undefined
+              }
             >
               {shownName}
             </p>

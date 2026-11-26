@@ -97,6 +97,26 @@ export function roleColorForMember(
 }
 
 /**
+ * Username tint for profile cards: same source as RolePills — the highest
+ * non-@everyone role. Prefer a custom color; otherwise fall back to the
+ * member-list username color helper.
+ */
+export function profileNameColorForMember(
+  roles: Role[],
+  roleIds: string[],
+): string | null {
+  const displayed = displayRolesForMember(roles, roleIds);
+  for (const role of displayed) {
+    const raw = (role.color || "").trim();
+    if (!raw) continue;
+    const hex = ensureReadableRoleColor(raw);
+    if (!hasCustomRoleColor({ color: hex })) continue;
+    return hex;
+  }
+  return roleColorForMember(roles, roleIds);
+}
+
+/**
  * Discord member-list section: highest role the member has that is hoisted
  * ("Display role members separately from online members").
  * Non-hoisted roles never create a section — those people sit in Online/Offline.

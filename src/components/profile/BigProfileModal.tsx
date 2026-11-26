@@ -617,7 +617,11 @@ export function BigProfileModal({
               className={`text-2xl font-bold tracking-tight ${
                 nameColor ? "" : "text-white"
               }`}
-              style={nameColor ? { color: nameColor } : undefined}
+              style={
+                nameColor
+                  ? { color: nameColor, WebkitTextFillColor: nameColor }
+                  : undefined
+              }
             >
               {shownName}
             </h2>

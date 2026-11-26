@@ -525,7 +525,7 @@ export function FriendsPanel({
         onClick={onClose}
       />
       <aside
-        className="messenger-shell fixed right-0 top-0 z-50 flex h-full max-w-[100vw] flex-col border-l border-[var(--ms-border)] bg-[var(--ms-sidebar)] shadow-2xl shadow-black/50"
+        className="messenger-shell fixed right-0 top-0 z-50 flex h-full max-w-[100vw] flex-col overflow-hidden border-l border-[var(--ms-border)] bg-[var(--ms-sidebar)] shadow-2xl shadow-black/50"
         style={{ width }}
         role="dialog"
         aria-modal="true"
@@ -567,7 +567,7 @@ export function FriendsPanel({
           </button>
         </div>
 
-        <div className="messenger-header flex gap-0.5 overflow-x-auto bg-[var(--ms-sidebar)] px-2 py-1.5 [scrollbar-width:none]">
+        <div className="messenger-header flex min-w-0 shrink-0 flex-wrap gap-0.5 bg-[var(--ms-sidebar)] px-2 py-1.5">
           {TABS.map((item) => {
             const active = tab === item.id;
             const pendingBadge =
@@ -582,7 +582,7 @@ export function FriendsPanel({
                 key={item.id}
                 type="button"
                 onClick={() => changeTab(item.id)}
-                className={`relative shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                className={`relative rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
                   isPrimary && !active
                     ? "bg-accent/15 text-accent hover:bg-accent/25"
                     : active

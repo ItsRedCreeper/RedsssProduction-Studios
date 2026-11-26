@@ -12,9 +12,11 @@ import {
   MessageSquare,
   AtSign,
   Reply,
+  Trash2,
   X,
 } from "lucide-react";
 import { HoverTip } from "@/components/ui/HoverTip";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useOptionalUnread } from "@/components/notifications/UnreadProvider";
 import {
@@ -53,6 +55,8 @@ export function NotificationsPanel({
   const router = useRouter();
   const unread = useOptionalUnread();
   const [readOpen, setReadOpen] = useState(true);
+  const [confirmDeleteAllRead, setConfirmDeleteAllRead] = useState(false);
+  const [deletingAllRead, setDeletingAllRead] = useState(false);
 
   // Keep Navbar badge in sync when provider updates.
   const bellCount = unread?.bellCount ?? 0;
@@ -218,6 +222,25 @@ export function NotificationsPanel({
     await unread?.markNotificationRead(entry.item.id, !entry.item.read);
   }
 
+  async function deleteItem(
+    entry: PanelItem,
+    event: { stopPropagation: () => void },
+  ) {
+    event.stopPropagation();
+    if (entry.kind !== "notif") return;
+    await unread?.deleteNotification(entry.item.id);
+  }
+
+  async function confirmDeleteAllReadAction() {
+    setDeletingAllRead(true);
+    try {
+      await unread?.deleteAllReadNotifications();
+      setConfirmDeleteAllRead(false);
+    } finally {
+      setDeletingAllRead(false);
+    }
+  }
+
   function NotifIcon({ type }: { type: string }) {
     if (type === "mention") return <AtSign className="h-4 w-4" strokeWidth={2} />;
     if (type === "reply") return <Reply className="h-4 w-4" strokeWidth={2} />;
@@ -228,6 +251,7 @@ export function NotificationsPanel({
   }
 
   function Row({ entry }: { entry: PanelItem }) {
+    const canDelete = entry.kind === "notif";
     return (
       <li>
         <div
@@ -306,23 +330,37 @@ export function NotificationsPanel({
             )}
           </span>
 
-          <HoverTip
-            label={entry.read ? "Mark as unread" : "Mark as read"}
-            delayMs={40}
-          >
-            <button
-              type="button"
-              onClick={(event) => void toggleRead(entry, event)}
-              className="rounded-md p-1.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 hover:bg-white/10 hover:text-white"
-              aria-label={entry.read ? "Mark as unread" : "Mark as read"}
+          <span className="flex shrink-0 items-center gap-0.5">
+            <HoverTip
+              label={entry.read ? "Mark as unread" : "Mark as read"}
+              delayMs={40}
             >
-              {entry.read ? (
-                <MessageSquare className="h-3.5 w-3.5" strokeWidth={2} />
-              ) : (
-                <Check className="h-3.5 w-3.5" strokeWidth={2} />
-              )}
-            </button>
-          </HoverTip>
+              <button
+                type="button"
+                onClick={(event) => void toggleRead(entry, event)}
+                className="rounded-md p-1.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 hover:bg-white/10 hover:text-white"
+                aria-label={entry.read ? "Mark as unread" : "Mark as read"}
+              >
+                {entry.read ? (
+                  <MessageSquare className="h-3.5 w-3.5" strokeWidth={2} />
+                ) : (
+                  <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                )}
+              </button>
+            </HoverTip>
+            {canDelete ? (
+              <HoverTip label="Delete notification" delayMs={40}>
+                <button
+                  type="button"
+                  onClick={(event) => void deleteItem(entry, event)}
+                  className="rounded-md p-1.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 hover:bg-white/10 hover:text-[#ed4245]"
+                  aria-label="Delete notification"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                </button>
+              </HoverTip>
+            ) : null}
+          </span>
         </div>
       </li>
     );
@@ -389,18 +427,29 @@ export function NotificationsPanel({
 
               {readItems.length > 0 ? (
                 <div className="border-t border-[var(--ms-border)]">
-                  <button
-                    type="button"
-                    onClick={() => setReadOpen((v) => !v)}
-                    className="flex w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[#b5bac1] hover:bg-white/[0.03]"
-                  >
-                    {readOpen ? (
-                      <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
-                    )}
-                    Read
-                  </button>
+                  <div className="flex items-center gap-1 px-1 pr-2">
+                    <button
+                      type="button"
+                      onClick={() => setReadOpen((v) => !v)}
+                      className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-[#b5bac1] hover:bg-white/[0.03]"
+                    >
+                      {readOpen ? (
+                        <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
+                      )}
+                      Read
+                    </button>
+                    <HoverTip label="Delete all read" delayMs={40}>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteAllRead(true)}
+                        className="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#b5bac1] hover:bg-white/10 hover:text-[#ed4245]"
+                      >
+                        Delete all
+                      </button>
+                    </HoverTip>
+                  </div>
                   {readOpen ? (
                     <ul className="divide-y divide-white/[0.04]">
                       {readItems.map((entry) => (
@@ -414,6 +463,19 @@ export function NotificationsPanel({
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        open={confirmDeleteAllRead}
+        title="Delete all read notifications?"
+        description="This permanently removes every read notification. Unread items are kept."
+        confirmLabel="Delete all"
+        danger
+        busy={deletingAllRead}
+        onConfirm={() => void confirmDeleteAllReadAction()}
+        onCancel={() => {
+          if (!deletingAllRead) setConfirmDeleteAllRead(false);
+        }}
+      />
     </div>
   );
 }

@@ -296,6 +296,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     key: string;
     at: string | null;
   } | null>(null);
+  /** Unread divider stays until the user scrolls (not when auto-mark-read fires). */
+  const [showUnreadDivider, setShowUnreadDivider] = useState(false);
   const [lastMessageAt, setLastMessageAt] = useState<Record<string, string>>({});
   const unreadFeed = useOptionalUnread();
   const [channelServerMap, setChannelServerMap] = useState<Record<string, string>>({});
@@ -387,8 +389,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const typingWantedRef = useRef(false);
   const blockedIdsRef = useRef(blockedIds);
   const ignoredIdsRef = useRef(ignoredIds);
+  const threadsRef = useRef(threads);
   blockedIdsRef.current = blockedIds;
   ignoredIdsRef.current = ignoredIds;
+  threadsRef.current = threads;
 
   paneRef.current = pane;
   routeServerRef.current = routeServerId;
@@ -906,13 +910,28 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "dm_messages" },
         (payload) => {
-          patchThreadPreview(
-            payload.new as {
-              conversation_id?: string;
-              content?: string | null;
-              created_at?: string | null;
-            },
-          );
+          const row = payload.new as {
+            conversation_id?: string;
+            content?: string | null;
+            created_at?: string | null;
+            user_id?: string | null;
+          };
+          patchThreadPreview(row);
+          if (
+            row.conversation_id &&
+            row.created_at &&
+            row.user_id &&
+            row.user_id !== uid &&
+            row.conversation_id !== activeConversationId
+          ) {
+            const thread = threadsRef.current.find(
+              (t) => t.id === row.conversation_id,
+            );
+            unreadFeed?.noteDmActivity(row.conversation_id, row.created_at, {
+              title: thread?.groupName || thread?.username || undefined,
+              avatarUrl: thread?.avatar_url ?? null,
+            });
+          }
         },
       )
       .on(
@@ -935,7 +954,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       unsubLocal();
       void supabase.removeChannel(channel);
     };
-  }, [user, refreshThreads]);
+  }, [user, refreshThreads, unreadFeed, activeConversationId]);
 
   const openDm = useCallback(
     async (otherUserId: string) => {
@@ -1457,30 +1476,55 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     };
   }, [servers]);
 
+  // Live last-message + unread badges for every known text channel (all servers).
   useEffect(() => {
-    if (!activeServerId) return;
-    const serverId = activeServerId;
+    if (!user) return;
     const supabase = createClient();
     const channel = supabase
-      .channel(`server-activity:${serverId}`)
+      .channel(`all-server-activity:${user.id}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
           const row = payload.new as Tables<"messages">;
-          if (!channelIdsRef.current.has(row.channel_id)) return;
+          const serverId = channelServerMap[row.channel_id];
+          if (!serverId) return;
           setLastMessageAt((prev) =>
             prev[row.channel_id] === row.created_at
               ? prev
               : { ...prev, [row.channel_id]: row.created_at },
           );
+          // Skip the channel currently being viewed — mark-read handles it.
+          if (
+            row.user_id !== user.id &&
+            !(
+              pane === "server" &&
+              row.channel_id === activeChannelId
+            )
+          ) {
+            const channelMeta = channels.find((c) => c.id === row.channel_id);
+            const serverMeta = servers.find((s) => s.id === serverId);
+            unreadFeed?.noteChannelActivity(row.channel_id, row.created_at, {
+              serverId,
+              serverName: serverMeta?.name,
+              channelName: channelMeta?.name,
+            });
+          }
         },
       )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [activeServerId]);
+  }, [
+    user,
+    channelServerMap,
+    pane,
+    activeChannelId,
+    channels,
+    servers,
+    unreadFeed,
+  ]);
 
   // Live role / member_role updates for member list colors + grouping.
   useEffect(() => {
@@ -2035,6 +2079,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         key: `channel:${activeChannelId}`,
         at: readAt[activeChannelId] ?? null,
       });
+      setShowUnreadDivider(true);
       return;
     }
     if (pane === "home" && activeConversationId) {
@@ -2042,14 +2087,34 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         key: `dm:${activeConversationId}`,
         at: dmReadAt[activeConversationId] ?? null,
       });
+      setShowUnreadDivider(true);
       return;
     }
     setDividerFloor(null);
+    setShowUnreadDivider(false);
     // Only reset floor when the viewed target changes — not when readAt updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pane, activeChannelId, activeChannel?.type, activeConversationId]);
 
-  // Auto-mark channel as read after a short delay so the divider is visible.
+  // If read cursors load after the target opens, backfill floor.at once while
+  // the divider is still active (avoids treating an unread DM as fully unread).
+  useEffect(() => {
+    if (!dividerFloor || !showUnreadDivider) return;
+    if (dividerFloor.at != null) return;
+    if (dividerFloor.key.startsWith("channel:")) {
+      const channelId = dividerFloor.key.slice("channel:".length);
+      const at = readAt[channelId];
+      if (at) setDividerFloor({ key: dividerFloor.key, at });
+      return;
+    }
+    if (dividerFloor.key.startsWith("dm:")) {
+      const conversationId = dividerFloor.key.slice("dm:".length);
+      const at = dmReadAt[conversationId];
+      if (at) setDividerFloor({ key: dividerFloor.key, at });
+    }
+  }, [dividerFloor, showUnreadDivider, readAt, dmReadAt]);
+
+  // Auto-mark channel as read after a short delay. Divider stays until scroll.
   useEffect(() => {
     if (
       !user ||
@@ -2069,9 +2134,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       });
       void saveChannelRead(user.id, channelId, at);
       void unreadFeed?.markChannelRead(channelId, at);
-      setDividerFloor((prev) =>
-        prev?.key === `channel:${channelId}` ? { key: prev.key, at } : prev,
-      );
     }, 1600);
     return () => window.clearTimeout(timer);
   }, [
@@ -2919,19 +2981,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         return { ...prev, [conversationId]: at };
       });
       void unreadFeed?.markDmRead(conversationId, at);
-      setDividerFloor((prev) =>
-        prev?.key === `dm:${conversationId}` ? { key: prev.key, at } : prev,
-      );
     }, 1600);
     return () => window.clearTimeout(timer);
   }, [user, pane, activeConversationId, unblockedDmMessages, unreadFeed]);
 
   const firstUnreadMessageId = useMemo(() => {
-    if (!user || !dividerFloor) return null;
-    const list =
-      dividerFloor.key.startsWith("dm:")
-        ? unblockedDmMessages
-        : unblockedMessages;
+    if (!user || !dividerFloor || !showUnreadDivider) return null;
+    const list = dividerFloor.key.startsWith("dm:")
+      ? unblockedDmMessages
+      : unblockedMessages;
     const floorAt = dividerFloor.at;
     for (const message of list) {
       if (message.user_id === user.id) continue;
@@ -2941,7 +2999,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       }
     }
     return null;
-  }, [user, dividerFloor, unblockedMessages, unblockedDmMessages]);
+  }, [
+    user,
+    dividerFloor,
+    showUnreadDivider,
+    unblockedMessages,
+    unblockedDmMessages,
+  ]);
 
   const pinList = useMemo(() => {
     const map = new Map<string, ChatMessage>();
@@ -3410,7 +3474,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         p_conversation_id: null,
       });
     }
-    unreadFeed?.noteChannelActivity(channelId, saved.created_at);
     setSending(false);
   }
 
@@ -3605,7 +3668,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         p_conversation_id: conversationId,
       });
     }
-    unreadFeed?.noteDmActivity(conversationId, data.created_at);
     setSending(false);
   }
 
@@ -4850,6 +4912,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               firstUnreadMessageId={
                 searchNeedle ? null : firstUnreadMessageId
               }
+              onUnreadDividerDismiss={() => setShowUnreadDivider(false)}
               onReply={setReplyTo}
               onEdit={editDm}
               onDelete={deleteDm}
@@ -4923,6 +4986,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 firstUnreadMessageId={
                   searchNeedle || previewMode ? null : firstUnreadMessageId
                 }
+                onUnreadDividerDismiss={() => setShowUnreadDivider(false)}
                 pollVotesByMessage={pollVotesByMessage}
                 onReply={setReplyTo}
                 onEdit={editChannel}

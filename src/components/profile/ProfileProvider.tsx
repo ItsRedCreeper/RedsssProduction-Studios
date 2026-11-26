@@ -45,7 +45,7 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import type { Role } from "@/components/messenger/types";
 import {
   displayRolesForMember,
-  roleColorForMember,
+  profileNameColorForMember,
 } from "@/lib/roles";
 
 export type FriendsTab =
@@ -541,7 +541,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       : [];
   const smallNameColor =
     small && serverMemberRoles
-      ? roleColorForMember(serverMemberRoles.roles, smallRoleIds)
+      ? profileNameColorForMember(serverMemberRoles.roles, smallRoleIds)
       : null;
 
   const bigRoleIds =
@@ -554,7 +554,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       : [];
   const bigNameColor =
     big && serverMemberRoles
-      ? roleColorForMember(serverMemberRoles.roles, bigRoleIds)
+      ? profileNameColorForMember(serverMemberRoles.roles, bigRoleIds)
       : null;
 
   return (
