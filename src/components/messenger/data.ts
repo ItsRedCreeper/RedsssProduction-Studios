@@ -748,6 +748,8 @@ export async function saveVoiceState(row: Tables<"voice_states">) {
       server_id: row.server_id,
       muted: row.muted,
       deafened: row.deafened,
+      camera_on: row.camera_on,
+      screen_on: row.screen_on,
       updated_at: row.updated_at,
     })
     .eq("user_id", row.user_id)

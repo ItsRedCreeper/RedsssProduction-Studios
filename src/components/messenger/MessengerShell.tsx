@@ -493,17 +493,30 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       server_id: connection.serverId,
       muted,
       deafened,
+      camera_on: voice.cameraOn,
+      screen_on: voice.screenSharing,
       updated_at: new Date().toISOString(),
     };
     // Update mute/deafen in place — don't shove self to the end (that caused list jumping).
     const hasSelf = fresh.some((state) => state.user_id === user.id);
     if (hasSelf) {
       return fresh.map((state) =>
-        state.user_id === user.id ? selfRow : state,
+        state.user_id === user.id
+          ? { ...state, ...selfRow }
+          : state,
       );
     }
     return [...fresh, selfRow];
-  }, [voiceStates, user, connection, activeServerId, muted, deafened]);
+  }, [
+    voiceStates,
+    user,
+    connection,
+    activeServerId,
+    muted,
+    deafened,
+    voice.cameraOn,
+    voice.screenSharing,
+  ]);
 
   const scope = `${pane}:${activeChannelId ?? ""}:${activeConversationId ?? ""}`;
   const scopeRef = useRef(scope);

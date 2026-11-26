@@ -6,8 +6,10 @@ import {
   Hash,
   Lock,
   MicOff,
+  MonitorUp,
   Pencil,
   Plus,
+  Video,
   Volume2,
 } from "lucide-react";
 import { ServerHeaderMenu } from "@/components/messenger/ServerHeaderMenu";
@@ -233,6 +235,8 @@ export function ChannelSidebar({
           username: member?.nickname || member?.username || "Unknown",
           avatar_url: member?.avatar_url ?? null,
           muted: state.muted || state.deafened,
+          cameraOn: !!state.camera_on,
+          screenOn: !!state.screen_on,
         };
       })
       .sort((a, b) =>
@@ -306,9 +310,21 @@ export function ChannelSidebar({
                     <span className="min-w-0 flex-1 truncate">
                       {person.username}
                     </span>
-                    {person.muted && (
-                      <MicOff className="h-3 w-3 shrink-0" strokeWidth={2} />
-                    )}
+                    <span className="flex shrink-0 items-center gap-1 text-[var(--ms-text-muted)]">
+                      {person.cameraOn && (
+                        <Video className="h-3 w-3" strokeWidth={2} aria-label="Camera on" />
+                      )}
+                      {person.screenOn && (
+                        <MonitorUp
+                          className="h-3 w-3"
+                          strokeWidth={2}
+                          aria-label="Sharing screen"
+                        />
+                      )}
+                      {person.muted && (
+                        <MicOff className="h-3 w-3" strokeWidth={2} aria-label="Muted" />
+                      )}
+                    </span>
                   </button>
                 </li>
               );

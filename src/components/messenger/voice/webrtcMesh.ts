@@ -117,6 +117,8 @@ export class VoiceMesh {
   private blockedPeerIds = new Set<string>();
   private closed = false;
   private started = false;
+  /** Poll timers waiting for a muted receiver track to become renderable after announce. */
+  private pendingVideoPublish = new Map<string, number>();
 
   constructor(opts: VoiceMeshOptions) {
     this.opts = opts;
@@ -148,6 +150,10 @@ export class VoiceMesh {
   async stop() {
     if (this.closed) return;
     this.closed = true;
+    for (const timer of this.pendingVideoPublish.values()) {
+      window.clearInterval(timer);
+    }
+    this.pendingVideoPublish.clear();
     const userId = this.opts.userId;
     if (this.signal) {
       try {
@@ -257,6 +263,10 @@ export class VoiceMesh {
    * Screen share or null to stop.
    * Peers are only told `screen: true` after the capture track is literally live
    * (unmuted) — same as Discord, so cancel / failed capture never spawns tiles.
+   *
+   * Restart path: announce off → replaceTrack → wait live → re-replace → renegotiate
+   * → announce on. Chromium often leaves the remote receiver muted after a second
+   * replaceTrack without an SDP renegotiation.
    */
   async setLocalScreenTrack(track: MediaStreamTrack | null): Promise<boolean> {
     if (this.localScreenTrack && this.localScreenTrack !== track) {
@@ -269,13 +279,12 @@ export class VoiceMesh {
     this.localScreenTrack = track;
     this.screenLive = false;
     // Always announce "off" first so remotes clear any stale tile before a new share.
-    if (!track) {
-      for (const peerId of this.peers.keys()) {
-        await this.applyVideoToPeer(peerId, "screen");
-      }
-      await this.announceMedia();
-      return true;
+    for (const peerId of this.peers.keys()) {
+      await this.applyVideoToPeer(peerId, "screen");
     }
+    await this.announceMedia();
+    if (!track) return true;
+
     if ("contentHint" in track) {
       try {
         (track as MediaStreamTrack & { contentHint: string }).contentHint =
@@ -311,8 +320,18 @@ export class VoiceMesh {
       await this.announceMedia();
       return false;
     }
+    // Fresh replace after live so the second share isn't a no-op on remotes.
+    for (const peerId of this.peers.keys()) {
+      await this.applyVideoToPeer(peerId, "screen");
+    }
     this.screenLive = true;
+    await this.renegotiateAll();
     await this.announceMedia();
+    // Late unmute / renegotiation: nudge remotes once more.
+    window.setTimeout(() => {
+      if (this.closed || !this.screenLive || this.localScreenTrack !== track) return;
+      void this.announceMedia();
+    }, 350);
     return true;
   }
 
@@ -430,6 +449,47 @@ export class VoiceMesh {
     this.opts.onRemoteVideo?.(peerId, new MediaStream([track]), kind);
   }
 
+  private clearPendingVideoPublish(peerId: string, kind: "camera" | "screen") {
+    const key = `${peerId}:${kind}`;
+    const timer = this.pendingVideoPublish.get(key);
+    if (timer != null) {
+      window.clearInterval(timer);
+      this.pendingVideoPublish.delete(key);
+    }
+  }
+
+  /** Keep trying until the receiver track unmutes after a restart replaceTrack. */
+  private armPendingVideoPublish(peerId: string, kind: "camera" | "screen") {
+    this.clearPendingVideoPublish(peerId, kind);
+    const key = `${peerId}:${kind}`;
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      const slot = this.peers.get(peerId);
+      if (!slot || this.closed) {
+        this.clearPendingVideoPublish(peerId, kind);
+        return;
+      }
+      const wanted = kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
+      if (!wanted) {
+        this.clearPendingVideoPublish(peerId, kind);
+        return;
+      }
+      const track =
+        kind === "screen"
+          ? slot.screenTransceiver.receiver.track
+          : slot.cameraTransceiver.receiver.track;
+      if (isTrackRenderable(track)) {
+        this.publishRemoteVideo(peerId, kind, track);
+        this.clearPendingVideoPublish(peerId, kind);
+        return;
+      }
+      if (Date.now() - started > 6000) {
+        this.clearPendingVideoPublish(peerId, kind);
+      }
+    }, 200);
+    this.pendingVideoPublish.set(key, timer);
+  }
+
   private syncRemoteMediaFromAnnounce(
     peerId: string,
     camera: boolean,
@@ -441,22 +501,39 @@ export class VoiceMesh {
     slot.remoteScreen = screen;
 
     if (!camera) {
+      this.clearPendingVideoPublish(peerId, "camera");
       this.publishRemoteVideo(peerId, "camera", null);
     } else {
       const track = slot.cameraTransceiver.receiver.track;
       if (isTrackRenderable(track)) {
+        this.clearPendingVideoPublish(peerId, "camera");
         this.publishRemoteVideo(peerId, "camera", track);
+      } else {
+        this.armPendingVideoPublish(peerId, "camera");
       }
-      // If still muted, unmute handler will publish once frames flow.
     }
 
     if (!screen) {
+      this.clearPendingVideoPublish(peerId, "screen");
       this.publishRemoteVideo(peerId, "screen", null);
     } else {
       const track = slot.screenTransceiver.receiver.track;
       if (isTrackRenderable(track)) {
+        this.clearPendingVideoPublish(peerId, "screen");
         this.publishRemoteVideo(peerId, "screen", track);
+      } else {
+        // Announce can beat unmute / renegotiation on a restarted share.
+        this.armPendingVideoPublish(peerId, "screen");
       }
+    }
+  }
+
+  private async renegotiateAll() {
+    for (const [peerId, slot] of this.peers) {
+      if (slot.makingOffer) continue;
+      if (slot.pc.signalingState !== "stable") continue;
+      // Impolite peers always offer; polite peers may also offer — glare is handled.
+      await this.makeOffer(peerId, slot);
     }
   }
 
@@ -745,6 +822,8 @@ export class VoiceMesh {
     const slot = this.peers.get(peerId);
     if (!slot) return;
     this.peers.delete(peerId);
+    this.clearPendingVideoPublish(peerId, "camera");
+    this.clearPendingVideoPublish(peerId, "screen");
     this.opts.onRemoteVideo?.(peerId, null, "camera");
     this.opts.onRemoteVideo?.(peerId, null, "screen");
     try {

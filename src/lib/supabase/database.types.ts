@@ -608,8 +608,26 @@ export type Database = {
         Relationships: []
       }
       voice_states: {
-        Row: { user_id: string; channel_id: string; server_id: string; muted: boolean; deafened: boolean; updated_at: string }
-        Insert: { user_id: string; channel_id: string; server_id: string; muted?: boolean; deafened?: boolean; updated_at?: string }
+        Row: {
+          user_id: string
+          channel_id: string
+          server_id: string
+          muted: boolean
+          deafened: boolean
+          camera_on: boolean
+          screen_on: boolean
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          channel_id: string
+          server_id: string
+          muted?: boolean
+          deafened?: boolean
+          camera_on?: boolean
+          screen_on?: boolean
+          updated_at?: string
+        }
         Update: Partial<Database["public"]["Tables"]["voice_states"]["Insert"]>
         Relationships: []
       }

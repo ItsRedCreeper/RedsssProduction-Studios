@@ -625,6 +625,24 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     [setLocalSpeaking, startMicMonitor],
   );
 
+  const persistMediaFlags = useCallback(
+    async (camera: boolean, screen: boolean) => {
+      const userId = userIdRef.current;
+      if (!userId || !connectionRef.current) return;
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("voice_states")
+        .update({
+          camera_on: camera,
+          screen_on: screen,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId);
+      if (error) console.error(error.message);
+    },
+    [],
+  );
+
   const leaveVoice = useCallback(async () => {
     const current = connectionRef.current;
     if (current) {
@@ -699,6 +717,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         server_id: args.serverId,
         muted: mutedRef.current,
         deafened: deafenedRef.current,
+        camera_on: !!cameraTrackRef.current,
+        screen_on: !!screenTrackRef.current,
         updated_at: new Date().toISOString(),
       };
 
@@ -739,6 +759,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       cameraTrackRef.current = null;
       setCameraOn(false);
       setLocalVideoStream(null);
+      await persistMediaFlags(false, !!screenTrackRef.current);
       return;
     }
     try {
@@ -765,10 +786,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       cameraTrackRef.current = track;
       setCameraOn(true);
       setLocalVideoStream(new MediaStream([track]));
+      await persistMediaFlags(true, !!screenTrackRef.current);
     } catch {
       setMicError("Camera permission denied.");
     }
-  }, []);
+  }, [persistMediaFlags]);
 
   const toggleScreenShare = useCallback(async () => {
     const mesh = meshRef.current;
@@ -779,6 +801,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       screenTrackRef.current = null;
       setScreenSharing(false);
       setLocalScreenStream(null);
+      await persistMediaFlags(!!cameraTrackRef.current, false);
       return;
     }
     try {
@@ -802,6 +825,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       screenTrackRef.current = track;
       setScreenSharing(true);
       setLocalScreenStream(new MediaStream([track]));
+      await persistMediaFlags(!!cameraTrackRef.current, true);
       track.addEventListener(
         "ended",
         () => {
@@ -810,6 +834,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             screenTrackRef.current = null;
             setScreenSharing(false);
             setLocalScreenStream(null);
+            await persistMediaFlags(!!cameraTrackRef.current, false);
           })();
         },
         { once: true },
@@ -818,7 +843,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       // User cancelled the picker — remotes never saw a share tile.
       setMicError(null);
     }
-  }, []);
+  }, [persistMediaFlags]);
 
   const toggleDeafen = useCallback(() => {
     if (deafenedRef.current) {
