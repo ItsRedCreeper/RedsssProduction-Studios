@@ -6,6 +6,10 @@
  * banner, server icon — and custom stickers use PNG/APNG, not GIF.
  */
 
+/** Custom emoji upload cap (above Discord’s 256 KB so animated GIFs can be larger). */
+export const SERVER_EMOJI_MAX_BYTES = 2 * 1024 * 1024;
+export const SERVER_EMOJI_MAX_LABEL = "2 MB";
+
 export const STATIC_IMAGE_ACCEPT = "image/png,image/jpeg,image/webp";
 
 export const EMOJI_IMAGE_ACCEPT =

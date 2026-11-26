@@ -45,6 +45,8 @@ import { sanitizeEmojiName, type ServerEmoji } from "@/lib/emoji";
 import {
   EMOJI_IMAGE_ACCEPT,
   GIF_NOT_ALLOWED_HERE,
+  SERVER_EMOJI_MAX_BYTES,
+  SERVER_EMOJI_MAX_LABEL,
   STATIC_IMAGE_ACCEPT,
   STATIC_IMAGE_HINT,
   STICKER_IMAGE_ACCEPT,
@@ -1473,8 +1475,8 @@ export function ServerSettingsModal({
       setError("Emoji name must be at least 2 characters.");
       return;
     }
-    if (emojiFile.size > 512 * 1024) {
-      setError("Emoji must be 512 KB or smaller.");
+    if (emojiFile.size > SERVER_EMOJI_MAX_BYTES) {
+      setError(`Emoji must be ${SERVER_EMOJI_MAX_LABEL} or smaller.`);
       return;
     }
     setEmojiBusy(true);
@@ -3292,8 +3294,8 @@ export function ServerSettingsModal({
                       </button>
                     </div>
                     <p className="text-[11px] text-[var(--ms-text-muted)]">
-                      PNG, JPG, GIF, or WebP · max 512 KB · names use letters,
-                      numbers, and underscores
+                      PNG, JPG, GIF, or WebP · max {SERVER_EMOJI_MAX_LABEL} ·
+                      names use letters, numbers, and underscores
                     </p>
                   </form>
                 ) : (
