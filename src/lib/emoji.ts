@@ -209,6 +209,22 @@ export function parseCustomEmojiToken(token: string): {
   };
 }
 
+/** Collect custom emoji UUIDs from message/reaction token strings. */
+export function collectCustomEmojiIds(
+  ...texts: (string | null | undefined)[]
+): string[] {
+  const ids = new Set<string>();
+  for (const text of texts) {
+    if (!text) continue;
+    const re = new RegExp(CUSTOM_EMOJI_RE.source, "gi");
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+      if (match[3]) ids.add(match[3]);
+    }
+  }
+  return [...ids];
+}
+
 export function isCustomEmojiToken(token: string) {
   return !!parseCustomEmojiToken(token);
 }

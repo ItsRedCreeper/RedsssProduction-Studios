@@ -1,8 +1,12 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { ServerEmoji } from "@/lib/emoji";
 import { parseCustomEmojiToken } from "@/lib/emoji";
+import {
+  getCachedEmoji,
+  resolveServerEmojiById,
+} from "@/lib/emoji-resolve";
 
 type CustomEmojiProps = {
   token?: string;
@@ -23,21 +27,67 @@ export function CustomEmoji({
   style,
   title,
 }: CustomEmojiProps) {
-  let resolved = emoji ?? null;
-  if (!resolved && token) {
-    const parsed = parseCustomEmojiToken(token);
-    if (parsed) {
-      const fromCatalog = catalog?.get(parsed.id);
-      resolved = fromCatalog
-        ? fromCatalog
-        : {
-            id: parsed.id,
-            name: parsed.name,
-            url: "",
-            animated: parsed.animated,
-          };
+  const parsed = token ? parseCustomEmojiToken(token) : null;
+  const id = emoji?.id ?? parsed?.id ?? null;
+  const fromCatalog = id ? catalog?.get(id) : undefined;
+
+  const [fetched, setFetched] = useState<ServerEmoji | null>(() => {
+    if (!id) return null;
+    const hit = getCachedEmoji(id);
+    return hit?.url ? hit : null;
+  });
+  const [lookupDone, setLookupDone] = useState(() => {
+    if (!id) return true;
+    if (fromCatalog?.url || emoji?.url) return true;
+    return getCachedEmoji(id) !== undefined;
+  });
+
+  useEffect(() => {
+    if (!id) {
+      setLookupDone(true);
+      return;
     }
-  }
+    if (fromCatalog?.url || emoji?.url) {
+      setLookupDone(true);
+      return;
+    }
+    const cached = getCachedEmoji(id);
+    if (cached?.url) {
+      setFetched(cached);
+      setLookupDone(true);
+      return;
+    }
+    if (cached === null) {
+      setLookupDone(true);
+      return;
+    }
+    let cancelled = false;
+    setLookupDone(false);
+    void resolveServerEmojiById(id).then((row) => {
+      if (cancelled) return;
+      if (row?.url) setFetched(row);
+      setLookupDone(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, fromCatalog?.url, emoji?.url]);
+
+  const resolved: Pick<
+    ServerEmoji,
+    "id" | "name" | "url" | "animated"
+  > | null =
+    (fromCatalog?.url ? fromCatalog : null) ??
+    (emoji?.url ? emoji : null) ??
+    (fetched?.url ? fetched : null) ??
+    (parsed
+      ? {
+          id: parsed.id,
+          name: parsed.name,
+          url: "",
+          animated: parsed.animated,
+        }
+      : emoji ?? null);
 
   if (!resolved) {
     return (
@@ -51,6 +101,21 @@ export function CustomEmoji({
     title === undefined ? `:${resolved.name}:` : title || undefined;
 
   if (!resolved.url) {
+    // Keep layout while fetching; avoid flashing raw <:name:id> tokens.
+    if (!lookupDone) {
+      return (
+        <span
+          className={`inline-block align-middle ${className}`}
+          style={{
+            width: style?.width ?? size,
+            height: style?.height ?? size,
+            ...style,
+          }}
+          title={tip}
+          aria-label={`:${resolved.name}:`}
+        />
+      );
+    }
     return (
       <span
         className={`text-[var(--ms-text-muted)] ${className}`}

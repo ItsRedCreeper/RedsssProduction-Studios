@@ -376,9 +376,7 @@ export function MessageEmoji({
                     <span className="font-medium text-[var(--ms-text)]">{serverName}</span>
                   </p>
                 ) : (
-                  <p className="mt-1 text-sm text-[#b5bac1]">
-                    Custom emoji from one of your servers.
-                  </p>
+                  <p className="mt-1 text-sm text-[#b5bac1]">Custom emoji</p>
                 )}
                 <p className="mt-2 text-xs leading-relaxed text-[var(--ms-text-muted)]">
                   Type{" "}

@@ -97,7 +97,15 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   type MessageAttachment,
 } from "@/lib/message-media";
-import { resolveEmojiShortcodes, type ServerEmoji } from "@/lib/emoji";
+import {
+  collectCustomEmojiIds,
+  resolveEmojiShortcodes,
+  type ServerEmoji,
+} from "@/lib/emoji";
+import {
+  resolveServerEmojisByIds,
+  seedEmojiCache,
+} from "@/lib/emoji-resolve";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import {
   can,
@@ -308,6 +316,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   >([]);
   const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
   const [customEmojis, setCustomEmojis] = useState<ServerEmoji[]>([]);
+  /** Cross-server emoji rows needed to render messages/reactions you can see. */
+  const [emojiExtras, setEmojiExtras] = useState<ServerEmoji[]>([]);
   const [sending, setSending] = useState(false);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [createChannelType, setCreateChannelType] = useState<"text" | "voice">("text");
@@ -639,6 +649,36 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   useEffect(() => {
     void loadCustomEmojis();
   }, [loadCustomEmojis, servers]);
+
+  useEffect(() => {
+    seedEmojiCache(customEmojis);
+  }, [customEmojis]);
+
+  useEffect(() => {
+    const ids = collectCustomEmojiIds(
+      ...messages.map((message) => message.content),
+      ...dmMessages.map((message) => message.content),
+      ...pinnedExtra.map((message) => message.content),
+      ...reactions.map((reaction) => reaction.emoji),
+    );
+    const known = new Set<string>();
+    for (const emoji of customEmojis) known.add(emoji.id);
+    for (const emoji of emojiExtras) known.add(emoji.id);
+    const missing = ids.filter((id) => !known.has(id));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void resolveServerEmojisByIds(missing).then((rows) => {
+      if (cancelled || rows.length === 0) return;
+      setEmojiExtras((prev) => {
+        const map = new Map(prev.map((emoji) => [emoji.id, emoji]));
+        for (const row of rows) map.set(row.id, row);
+        return [...map.values()];
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, dmMessages, pinnedExtra, reactions, customEmojis, emojiExtras]);
 
   const refreshThreads = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) {
@@ -2410,8 +2450,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const emojiCatalog = useMemo(() => {
     const map = new Map<string, ServerEmoji>();
     for (const emoji of customEmojis) map.set(emoji.id, emoji);
+    for (const emoji of emojiExtras) {
+      if (!map.has(emoji.id)) map.set(emoji.id, emoji);
+    }
     return map;
-  }, [customEmojis]);
+  }, [customEmojis, emojiExtras]);
 
   const serverNamesById = useMemo(() => {
     const map: Record<string, string> = {};
