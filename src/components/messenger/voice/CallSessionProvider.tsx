@@ -18,7 +18,8 @@ import { VoiceMesh } from "@/components/messenger/voice/webrtcMesh";
 import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 
-const RING_TIMEOUT_MS = 45_000;
+/** Discord-style: ~30s ring, then missed-call notice. Decline ends earlier with no chat message. */
+const RING_TIMEOUT_MS = 30_000;
 
 export type CallConnection = {
   conversationId: string;
