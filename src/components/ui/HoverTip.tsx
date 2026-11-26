@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -44,11 +45,104 @@ type TipState = {
   side: HoverTipSide;
   /** Cap width so the tip wraps instead of overflowing the viewport. */
   maxWidth: number;
+  /** Caret offset from the tip edge that faces the anchor. */
+  arrowOffset: number;
 };
 
-const GAP = 8;
+const GAP = 10;
 const EDGE = 8;
 const MAX_TIP = 320;
+const TIP_BG = "#111214";
+const TIP_BORDER = "#3f4147";
+
+/** Real triangle caret (border trick) — not a rotated square that reads as a block. */
+function TipCaret({
+  side,
+  offset,
+}: {
+  side: HoverTipSide;
+  offset: number;
+}) {
+  const wrap: CSSProperties =
+    side === "top"
+      ? { left: offset, bottom: -6, transform: "translateX(-50%)" }
+      : side === "bottom"
+        ? { left: offset, top: -6, transform: "translateX(-50%)" }
+        : side === "left"
+          ? { top: offset, right: -6, transform: "translateY(-50%)" }
+          : { top: offset, left: -6, transform: "translateY(-50%)" };
+
+  // Outer triangle = border color; inner = fill, inset 1px toward the tip.
+  const outer: CSSProperties =
+    side === "top"
+      ? {
+          borderLeft: "6px solid transparent",
+          borderRight: "6px solid transparent",
+          borderTop: `6px solid ${TIP_BORDER}`,
+        }
+      : side === "bottom"
+        ? {
+            borderLeft: "6px solid transparent",
+            borderRight: "6px solid transparent",
+            borderBottom: `6px solid ${TIP_BORDER}`,
+          }
+        : side === "left"
+          ? {
+              borderTop: "6px solid transparent",
+              borderBottom: "6px solid transparent",
+              borderLeft: `6px solid ${TIP_BORDER}`,
+            }
+          : {
+              borderTop: "6px solid transparent",
+              borderBottom: "6px solid transparent",
+              borderRight: `6px solid ${TIP_BORDER}`,
+            };
+
+  const innerPos: CSSProperties =
+    side === "top"
+      ? { left: -5, top: -6 }
+      : side === "bottom"
+        ? { left: -5, bottom: -6 }
+        : side === "left"
+          ? { top: -5, left: -6 }
+          : { top: -5, right: -6 };
+
+  const inner: CSSProperties =
+    side === "top"
+      ? {
+          borderLeft: "5px solid transparent",
+          borderRight: "5px solid transparent",
+          borderTop: `5px solid ${TIP_BG}`,
+        }
+      : side === "bottom"
+        ? {
+            borderLeft: "5px solid transparent",
+            borderRight: "5px solid transparent",
+            borderBottom: `5px solid ${TIP_BG}`,
+          }
+        : side === "left"
+          ? {
+              borderTop: "5px solid transparent",
+              borderBottom: "5px solid transparent",
+              borderLeft: `5px solid ${TIP_BG}`,
+            }
+          : {
+              borderTop: "5px solid transparent",
+              borderBottom: "5px solid transparent",
+              borderRight: `5px solid ${TIP_BG}`,
+            };
+
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute h-0 w-0"
+      style={wrap}
+    >
+      <span className="absolute left-0 top-0 h-0 w-0" style={outer} />
+      <span className="absolute h-0 w-0" style={{ ...innerPos, ...inner }} />
+    </span>
+  );
+}
 
 function placeTip(
   rect: DOMRect,
@@ -139,7 +233,20 @@ function placeTip(
   left = Math.min(Math.max(left, EDGE), Math.max(EDGE, vw - EDGE - boxW));
   top = Math.min(Math.max(top, EDGE), Math.max(EDGE, vh - EDGE - boxH));
 
-  return { top, left, side, maxWidth };
+  let arrowOffset: number;
+  if (side === "top" || side === "bottom") {
+    arrowOffset = Math.min(
+      Math.max(anchorX - left, 10),
+      Math.max(10, boxW - 10),
+    );
+  } else {
+    arrowOffset = Math.min(
+      Math.max(anchorY - top, 10),
+      Math.max(10, boxH - 10),
+    );
+  }
+
+  return { top, left, side, maxWidth, arrowOffset };
 }
 
 /**
@@ -197,7 +304,8 @@ export function HoverTip({
       tip.top !== measured.top ||
       tip.left !== measured.left ||
       tip.side !== measured.side ||
-      tip.maxWidth !== measured.maxWidth;
+      tip.maxWidth !== measured.maxWidth ||
+      tip.arrowOffset !== measured.arrowOffset;
 
     if (changed) {
       setTip(measured);
@@ -303,6 +411,7 @@ export function HoverTip({
             }}
             className="pointer-events-none fixed z-[80] whitespace-pre-line rounded-md border border-[#3f4147] bg-[#111214] px-3 py-1.5 text-sm font-medium leading-snug text-white shadow-[0_8px_24px_rgba(0,0,0,0.55)] [overflow-wrap:anywhere] [text-wrap:pretty]"
           >
+            <TipCaret side={tip.side} offset={tip.arrowOffset} />
             {clean}
           </span>,
           document.body,
