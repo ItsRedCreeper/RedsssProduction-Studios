@@ -752,10 +752,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       });
       const track = stream.getVideoTracks()[0];
       if (!track) return;
+      const ok = await mesh.setLocalVideoTrack(track);
+      if (!ok) {
+        try {
+          track.stop();
+        } catch {
+          /* ignore */
+        }
+        setMicError("Camera failed to start.");
+        return;
+      }
       cameraTrackRef.current = track;
       setCameraOn(true);
       setLocalVideoStream(new MediaStream([track]));
-      await mesh.setLocalVideoTrack(track);
     } catch {
       setMicError("Camera permission denied.");
     }
@@ -779,6 +788,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       });
       const track = stream.getVideoTracks()[0];
       if (!track) return;
+      // Don't show local/remote tiles until capture is actually live.
+      const ok = await mesh.setLocalScreenTrack(track);
+      if (!ok) {
+        try {
+          track.stop();
+        } catch {
+          /* ignore */
+        }
+        setMicError("Screen share failed to start.");
+        return;
+      }
       screenTrackRef.current = track;
       setScreenSharing(true);
       setLocalScreenStream(new MediaStream([track]));
@@ -794,9 +814,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         },
         { once: true },
       );
-      await mesh.setLocalScreenTrack(track);
     } catch {
-      setMicError("Screen share cancelled or blocked.");
+      // User cancelled the picker — remotes never saw a share tile.
+      setMicError(null);
     }
   }, []);
 

@@ -842,6 +842,16 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       });
       const track = stream.getVideoTracks()[0];
       if (!track) return;
+      const ok = await meshRef.current.setLocalScreenTrack(track);
+      if (!ok) {
+        try {
+          track.stop();
+        } catch {
+          /* ignore */
+        }
+        setMicError("Screen share failed to start.");
+        return;
+      }
       screenTrackRef.current = track;
       setScreenSharing(true);
       setLocalScreenStream(new MediaStream([track]));
@@ -858,10 +868,10 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
         },
         { once: true },
       );
-      await meshRef.current.setLocalScreenTrack(track);
       await persistMediaFlags(cameraOn, true);
     } catch {
-      setMicError("Screen share cancelled or blocked.");
+      // Picker cancelled — nothing announced to peers.
+      setMicError(null);
     }
   }, [cameraOn, persistMediaFlags]);
 

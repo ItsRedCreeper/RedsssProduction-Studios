@@ -7,6 +7,39 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun1.l.google.com:19302" },
 ];
 
+function isTrackRenderable(
+  track: MediaStreamTrack | null | undefined,
+): track is MediaStreamTrack {
+  return !!track && track.readyState === "live" && !track.muted;
+}
+
+/** Wait until capture is actually producing (unmuted). Cancel/fail → false. */
+function waitUntilTrackLive(
+  track: MediaStreamTrack,
+  timeoutMs = 8000,
+): Promise<boolean> {
+  if (track.readyState === "ended") return Promise.resolve(false);
+  if (!track.muted) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      track.removeEventListener("unmute", onUnmute);
+      track.removeEventListener("ended", onEnded);
+      window.clearTimeout(timer);
+      resolve(ok);
+    };
+    const onUnmute = () => finish(track.readyState === "live");
+    const onEnded = () => finish(false);
+    const timer = window.setTimeout(() => {
+      finish(track.readyState === "live" && !track.muted);
+    }, timeoutMs);
+    track.addEventListener("unmute", onUnmute);
+    track.addEventListener("ended", onEnded);
+  });
+}
+
 type SignalPayload =
   | { kind: "hello"; from: string }
   | { kind: "goodbye"; from: string }
@@ -72,6 +105,10 @@ export class VoiceMesh {
   private localStream: MediaStream | null = null;
   private localVideoTrack: MediaStreamTrack | null = null;
   private localScreenTrack: MediaStreamTrack | null = null;
+  /** Only true after a screen track is live+unmuted — Discord-like “actually sharing”. */
+  private screenLive = false;
+  /** Only true after a camera track is live+unmuted. */
+  private cameraLive = false;
   private muted = false;
   private deafened = false;
   private outputDeviceId = "";
@@ -130,6 +167,8 @@ export class VoiceMesh {
       this.closePeer(peerId);
     }
     this.localStream = null;
+    this.cameraLive = false;
+    this.screenLive = false;
     if (this.localVideoTrack) {
       try {
         this.localVideoTrack.stop();
@@ -173,8 +212,8 @@ export class VoiceMesh {
     if (track) track.enabled = !muted;
   }
 
-  /** Camera or null to stop. Renegotiates with peers. */
-  async setLocalVideoTrack(track: MediaStreamTrack | null) {
+  /** Camera or null to stop. Returns false if the track never became live. */
+  async setLocalVideoTrack(track: MediaStreamTrack | null): Promise<boolean> {
     if (this.localVideoTrack && this.localVideoTrack !== track) {
       try {
         this.localVideoTrack.stop();
@@ -183,6 +222,7 @@ export class VoiceMesh {
       }
     }
     this.localVideoTrack = track;
+    this.cameraLive = false;
     if (track && "contentHint" in track) {
       try {
         (track as MediaStreamTrack & { contentHint: string }).contentHint =
@@ -194,11 +234,31 @@ export class VoiceMesh {
     for (const peerId of this.peers.keys()) {
       await this.applyVideoToPeer(peerId, "camera");
     }
+    if (!track) {
+      await this.announceMedia();
+      return true;
+    }
+    const ok = await waitUntilTrackLive(track);
+    if (!ok || this.localVideoTrack !== track || this.closed) {
+      if (this.localVideoTrack === track) this.localVideoTrack = null;
+      this.cameraLive = false;
+      for (const peerId of this.peers.keys()) {
+        await this.applyVideoToPeer(peerId, "camera");
+      }
+      await this.announceMedia();
+      return false;
+    }
+    this.cameraLive = true;
     await this.announceMedia();
+    return true;
   }
 
-  /** Screen share or null to stop. */
-  async setLocalScreenTrack(track: MediaStreamTrack | null) {
+  /**
+   * Screen share or null to stop.
+   * Peers are only told `screen: true` after the capture track is literally live
+   * (unmuted) — same as Discord, so cancel / failed capture never spawns tiles.
+   */
+  async setLocalScreenTrack(track: MediaStreamTrack | null): Promise<boolean> {
     if (this.localScreenTrack && this.localScreenTrack !== track) {
       try {
         this.localScreenTrack.stop();
@@ -207,29 +267,53 @@ export class VoiceMesh {
       }
     }
     this.localScreenTrack = track;
-    if (track) {
-      if ("contentHint" in track) {
-        try {
-          (track as MediaStreamTrack & { contentHint: string }).contentHint =
-            "detail";
-        } catch {
-          /* ignore */
-        }
+    this.screenLive = false;
+    // Always announce "off" first so remotes clear any stale tile before a new share.
+    if (!track) {
+      for (const peerId of this.peers.keys()) {
+        await this.applyVideoToPeer(peerId, "screen");
       }
-      track.addEventListener(
-        "ended",
-        () => {
-          if (this.localScreenTrack === track) {
-            void this.setLocalScreenTrack(null);
-          }
-        },
-        { once: true },
-      );
+      await this.announceMedia();
+      return true;
     }
+    if ("contentHint" in track) {
+      try {
+        (track as MediaStreamTrack & { contentHint: string }).contentHint =
+          "detail";
+      } catch {
+        /* ignore */
+      }
+    }
+    track.addEventListener(
+      "ended",
+      () => {
+        if (this.localScreenTrack === track) {
+          void this.setLocalScreenTrack(null);
+        }
+      },
+      { once: true },
+    );
     for (const peerId of this.peers.keys()) {
       await this.applyVideoToPeer(peerId, "screen");
     }
+    const ok = await waitUntilTrackLive(track);
+    if (!ok || this.localScreenTrack !== track || this.closed) {
+      if (this.localScreenTrack === track) this.localScreenTrack = null;
+      this.screenLive = false;
+      try {
+        track.stop();
+      } catch {
+        /* ignore */
+      }
+      for (const peerId of this.peers.keys()) {
+        await this.applyVideoToPeer(peerId, "screen");
+      }
+      await this.announceMedia();
+      return false;
+    }
+    this.screenLive = true;
     await this.announceMedia();
+    return true;
   }
 
   setDeafened(deafened: boolean) {
@@ -272,8 +356,9 @@ export class VoiceMesh {
     await this.send({
       kind: "media",
       from: this.opts.userId,
-      camera: !!this.localVideoTrack,
-      screen: !!this.localScreenTrack,
+      // Only advertise sources that are actually producing frames.
+      camera: this.cameraLive && !!this.localVideoTrack,
+      screen: this.screenLive && !!this.localScreenTrack,
     });
   }
 
@@ -337,7 +422,8 @@ export class VoiceMesh {
     kind: "camera" | "screen",
     track: MediaStreamTrack | null,
   ) {
-    if (!track || track.readyState === "ended") {
+    // Muted/placeholder receiver tracks must not create Discord-style tiles.
+    if (!isTrackRenderable(track)) {
       this.opts.onRemoteVideo?.(peerId, null, kind);
       return;
     }
@@ -351,25 +437,24 @@ export class VoiceMesh {
   ) {
     const slot = this.peers.get(peerId);
     if (!slot) return;
-    const prevCamera = slot.remoteCamera;
-    const prevScreen = slot.remoteScreen;
     slot.remoteCamera = camera;
     slot.remoteScreen = screen;
 
     if (!camera) {
       this.publishRemoteVideo(peerId, "camera", null);
-    } else if (camera && (!prevCamera || slot.cameraTransceiver.receiver.track)) {
+    } else {
       const track = slot.cameraTransceiver.receiver.track;
-      if (track && track.readyState === "live") {
+      if (isTrackRenderable(track)) {
         this.publishRemoteVideo(peerId, "camera", track);
       }
+      // If still muted, unmute handler will publish once frames flow.
     }
 
     if (!screen) {
       this.publishRemoteVideo(peerId, "screen", null);
-    } else if (screen && (!prevScreen || slot.screenTransceiver.receiver.track)) {
+    } else {
       const track = slot.screenTransceiver.receiver.track;
-      if (track && track.readyState === "live") {
+      if (isTrackRenderable(track)) {
         this.publishRemoteVideo(peerId, "screen", track);
       }
     }
@@ -559,11 +644,10 @@ export class VoiceMesh {
           else if (index === 0) kind = "camera";
         }
 
-        // Only surface video once the peer announced that source is on
-        // (avoids empty placeholder tracks from sendrecv m-lines).
+        // Only surface video once announced AND the track is actually renderable.
         const announced =
           kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
-        if (announced) {
+        if (announced && isTrackRenderable(track)) {
           this.publishRemoteVideo(peerId, kind, track);
         }
 
@@ -571,19 +655,16 @@ export class VoiceMesh {
           this.publishRemoteVideo(peerId, kind, null);
         });
         track.addEventListener("mute", () => {
-          if (kind === "screen" && !slot.remoteScreen) {
-            this.publishRemoteVideo(peerId, "screen", null);
-          }
-          if (kind === "camera" && !slot.remoteCamera) {
-            this.publishRemoteVideo(peerId, "camera", null);
-          }
+          // replaceTrack(null) mutes without ending — only clear if share was announced off.
+          const wanted =
+            kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
+          if (!wanted) this.publishRemoteVideo(peerId, kind, null);
         });
         track.addEventListener("unmute", () => {
-          if (kind === "screen" && slot.remoteScreen) {
-            this.publishRemoteVideo(peerId, "screen", track);
-          }
-          if (kind === "camera" && slot.remoteCamera) {
-            this.publishRemoteVideo(peerId, "camera", track);
+          const stillWanted =
+            kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
+          if (stillWanted && isTrackRenderable(track)) {
+            this.publishRemoteVideo(peerId, kind, track);
           }
         });
         return;
