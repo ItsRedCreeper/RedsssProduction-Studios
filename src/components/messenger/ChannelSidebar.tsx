@@ -21,6 +21,7 @@ import type {
 } from "@/components/messenger/types";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { HoverTip } from "@/components/ui/HoverTip";
+import { UnreadBadge } from "@/components/ui/UnreadBadge";
 import { isPrivateChannel } from "@/lib/permissions";
 
 type ChannelSidebarProps = {
@@ -30,6 +31,7 @@ type ChannelSidebarProps = {
   channels: Channel[];
   activeChannelId: string | null;
   unreadChannelIds: Set<string>;
+  unreadChannelCounts?: Record<string, number>;
   voiceStates: VoiceState[];
   membersById: Map<string, MemberView>;
   /** Speaking rings only apply when the viewer is connected to that voice channel. */
@@ -65,12 +67,14 @@ function ChannelButton({
   channel,
   active,
   unread,
+  unreadCount = 0,
   onClick,
   onEdit,
 }: {
   channel: Channel;
   active: boolean;
   unread: boolean;
+  unreadCount?: number;
   onClick: () => void;
   onEdit?: () => void;
 }) {
@@ -123,9 +127,15 @@ function ChannelButton({
             aria-label="Private"
           />
         ) : null}
-        {unread && !active && (
-          <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
-        )}
+        {unreadCount > 0 && !active ? (
+          <UnreadBadge count={unreadCount} />
+        ) : unread && !active ? (
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: "#ed4245" }}
+            aria-label="Unread"
+          />
+        ) : null}
       </button>
     </HoverTip>
   );
@@ -138,6 +148,7 @@ export function ChannelSidebar({
   channels,
   activeChannelId,
   unreadChannelIds,
+  unreadChannelCounts = {},
   voiceStates,
   membersById,
   speakingUserIds,
@@ -254,7 +265,14 @@ export function ChannelSidebar({
         <ChannelButton
           channel={channel}
           active={channel.id === activeChannelId || connectedHere}
-          unread={channel.type === "text" && unreadChannelIds.has(channel.id)}
+          unread={
+            channel.type === "text" &&
+            ((unreadChannelCounts[channel.id] ?? 0) > 0 ||
+              unreadChannelIds.has(channel.id))
+          }
+          unreadCount={
+            channel.type === "text" ? unreadChannelCounts[channel.id] ?? 0 : 0
+          }
           onClick={() => onSelectChannel(channel.id)}
           onEdit={
             onEditChannel ? () => onEditChannel(channel.id) : undefined

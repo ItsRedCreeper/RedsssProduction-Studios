@@ -9,6 +9,7 @@ import { StatusPresenceBadge } from "@/components/messenger/StatusPresenceBadge"
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { PresenceCaption } from "@/components/presence/PresenceCaption";
 import { useOptionalPresenceFeed } from "@/components/presence/PresenceFeed";
+import { UnreadBadge } from "@/components/ui/UnreadBadge";
 
 type HomeSidebarProps = {
   threads: DmThread[];
@@ -20,6 +21,10 @@ type HomeSidebarProps = {
   typingUserIdsKey?: string;
   /** Conversation ids with an open joinable call. */
   openCallIds?: Set<string>;
+  /** Unread message counts by conversation id. */
+  unreadDmCounts?: Record<string, number>;
+  /** Total unread DMs for the section header badge. */
+  totalDmUnread?: number;
   onSelectThread: (threadId: string) => void;
   onJoinCall?: (threadId: string) => void;
   onCloseThread?: (threadId: string) => void;
@@ -34,6 +39,8 @@ export function HomeSidebar({
   typingUserIds,
   typingUserIdsKey = "",
   openCallIds,
+  unreadDmCounts = {},
+  totalDmUnread = 0,
   onSelectThread,
   onJoinCall,
   onCloseThread,
@@ -44,6 +51,17 @@ export function HomeSidebar({
   const profileUi = useOptionalProfileUi();
   const feed = useOptionalPresenceFeed();
   void feed?.version;
+
+  const sortedThreads = [...threads].sort((a, b) => {
+    const aUnread = unreadDmCounts[a.id] ?? 0;
+    const bUnread = unreadDmCounts[b.id] ?? 0;
+    const aAt = a.previewAt ? Date.parse(a.previewAt) : 0;
+    const bAt = b.previewAt ? Date.parse(b.previewAt) : 0;
+    // Most recent activity first (unread or not — activity drives order).
+    if (bAt !== aAt) return bAt - aAt;
+    if (bUnread !== aUnread) return bUnread - aUnread;
+    return a.username.localeCompare(b.username);
+  });
 
   const watchKey = threads
     .flatMap((thread) =>
@@ -61,6 +79,7 @@ export function HomeSidebar({
         <span className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight text-white">
           Direct Messages
         </span>
+        {totalDmUnread > 0 ? <UnreadBadge count={totalDmUnread} /> : null}
         {onCreateGroup ? (
           <HoverTip label="New Group DM" delayMs={40}>
             <button
@@ -103,8 +122,9 @@ export function HomeSidebar({
           </p>
         ) : (
           <ul className="space-y-0.5">
-            {threads.map((thread) => {
+            {sortedThreads.map((thread) => {
               const active = thread.id === activeThreadId;
+              const dmUnread = unreadDmCounts[thread.id] ?? 0;
               const name = thread.isGroup
                 ? thread.groupName?.trim() || thread.username
                 : profileUi?.nicknameFor(thread.otherUserId) || thread.username;
@@ -122,7 +142,9 @@ export function HomeSidebar({
                     className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pr-8 text-left ${
                       active
                         ? "messenger-row-active text-white"
-                        : "text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-[var(--ms-text)]"
+                        : dmUnread > 0
+                          ? "font-semibold text-white hover:bg-white/5"
+                          : "text-[var(--ms-text-muted)] hover:bg-white/5 hover:text-[var(--ms-text)]"
                     }`}
                   >
                     <span className="relative shrink-0 overflow-visible">
@@ -144,6 +166,12 @@ export function HomeSidebar({
                           <Users className="h-2.5 w-2.5 text-[var(--ms-text-muted)]" strokeWidth={2.5} />
                         </span>
                       )}
+                      {dmUnread > 0 && !active ? (
+                        <UnreadBadge
+                          count={dmUnread}
+                          className="absolute -right-1 -top-1 ring-[#2b2d31]"
+                        />
+                      ) : null}
                     </span>
                     <span className="min-w-0 flex-1">
                       <HoverTip

@@ -20,6 +20,8 @@ import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
 import { ensureDmConversation } from "@/lib/friends";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { UserPresenceBar } from "@/components/messenger/UserPresenceBar";
+import { useOptionalUnread } from "@/components/notifications/UnreadProvider";
+import { formatUnreadCount, UNREAD_BADGE_RED } from "@/lib/unread";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -36,6 +38,8 @@ export function Navbar() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const unreadFeed = useOptionalUnread();
+  const bellCount = unreadFeed?.bellCount ?? unreadNotifications;
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -142,9 +146,12 @@ export function Navbar() {
                 onClick={() => setNotificationsOpen(true)}
               >
                 <Bell className="h-5 w-5" strokeWidth={1.75} />
-                {unreadNotifications > 0 && (
-                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">
-                    {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                {bellCount > 0 && (
+                  <span
+                    className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                    style={{ backgroundColor: UNREAD_BADGE_RED }}
+                  >
+                    {formatUnreadCount(bellCount)}
                   </span>
                 )}
               </button>

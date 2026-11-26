@@ -45,6 +45,11 @@ type ChatTimelineProps = {
   readOnly?: boolean;
   /** When false, hide the Discord-style channel/DM start header (e.g. search). */
   showChannelStart?: boolean;
+  /**
+   * Id of the first unread message — inserts a “New messages” divider
+   * (same visual language as day dividers) above it.
+   */
+  firstUnreadMessageId?: string | null;
   onReply: (message: ChatMessage) => void;
   onEdit: (messageId: string, content: string) => Promise<boolean>;
   onDelete: (messageId: string) => Promise<void>;
@@ -134,6 +139,7 @@ export function ChatTimeline({
   roleColorByUserId,
   readOnly = false,
   showChannelStart = true,
+  firstUnreadMessageId = null,
   onReply,
   onEdit,
   onDelete,
@@ -411,6 +417,22 @@ export function ChatTimeline({
                       <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#3f4147] to-[#3f4147]" />
                       <span className="rounded-full bg-[var(--ms-sidebar)] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--ms-text-muted)] ring-1 ring-white/[0.04]">
                         {dayLabel}
+                      </span>
+                      <div className="h-px flex-1 bg-gradient-to-l from-transparent via-[#3f4147] to-[#3f4147]" />
+                    </div>
+                  ) : null}
+                  {firstUnreadMessageId &&
+                  message.id === firstUnreadMessageId ? (
+                    <div
+                      className={`relative mx-4 flex items-center ${
+                        showDayDivider || index === 0 ? "mb-2 mt-1" : "mb-2 mt-4"
+                      }`}
+                      role="separator"
+                      aria-label="New messages"
+                    >
+                      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#3f4147] to-[#3f4147]" />
+                      <span className="rounded-full bg-[var(--ms-sidebar)] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--ms-text-muted)] ring-1 ring-white/[0.04]">
+                        New messages
                       </span>
                       <div className="h-px flex-1 bg-gradient-to-l from-transparent via-[#3f4147] to-[#3f4147]" />
                     </div>

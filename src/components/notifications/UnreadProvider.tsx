@@ -1,0 +1,382 @@
+"use client";
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import {
+  aggregateServerUnread,
+  isIndividualNotification,
+  type AppNotification,
+  type UnreadChannelRow,
+  type UnreadDmRow,
+  type UnreadSummary,
+} from "@/lib/unread";
+import { saveChannelRead } from "@/components/messenger/data";
+
+type UnreadContextValue = {
+  loading: boolean;
+  notifications: AppNotification[];
+  channels: UnreadChannelRow[];
+  dms: UnreadDmRow[];
+  /** Message counts by channel id */
+  channelCountById: Record<string, number>;
+  /** Message counts by server id */
+  serverCountById: Record<string, number>;
+  /** Message counts by DM conversation id */
+  dmCountById: Record<string, number>;
+  totalDmUnread: number;
+  /** Bell badge: individual unread notifs + aggregate rows with activity */
+  bellCount: number;
+  refresh: () => Promise<void>;
+  markNotificationRead: (id: string, read?: boolean) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  markChannelRead: (channelId: string, at?: string) => Promise<void>;
+  markDmRead: (conversationId: string, at?: string) => Promise<void>;
+  markServerRead: (serverId: string) => Promise<void>;
+  /** Bump local last-activity so UI updates before RPC refresh */
+  noteChannelActivity: (channelId: string, at: string) => void;
+  noteDmActivity: (conversationId: string, at: string) => void;
+};
+
+const UnreadContext = createContext<UnreadContextValue | null>(null);
+
+async function saveDmRead(userId: string, conversationId: string, at: string) {
+  const supabase = createClient();
+  const row = {
+    user_id: userId,
+    conversation_id: conversationId,
+    last_read_at: at,
+  };
+  const upserted = await supabase
+    .from("user_dm_reads")
+    .upsert(row, { onConflict: "user_id,conversation_id" });
+  if (!upserted.error) return null;
+  const updated = await supabase
+    .from("user_dm_reads")
+    .update({ last_read_at: at })
+    .eq("user_id", userId)
+    .eq("conversation_id", conversationId)
+    .select("user_id");
+  if (!updated.error && (updated.data?.length ?? 0) > 0) return null;
+  const inserted = await supabase.from("user_dm_reads").insert(row);
+  return inserted.error?.message ?? upserted.error.message;
+}
+
+export function UnreadProvider({ children }: { children: ReactNode }) {
+  const { user } = useCurrentProfile();
+  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [channels, setChannels] = useState<UnreadChannelRow[]>([]);
+  const [dms, setDms] = useState<UnreadDmRow[]>([]);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!user) {
+      setNotifications([]);
+      setChannels([]);
+      setDms([]);
+      setLoading(false);
+      return;
+    }
+    const supabase = createClient();
+    const [notifs, summary] = await Promise.all([
+      supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(80),
+      supabase.rpc("get_unread_summary"),
+    ]);
+    setNotifications((notifs.data as AppNotification[] | null) ?? []);
+    const raw = summary.data as UnreadSummary | null;
+    setChannels(Array.isArray(raw?.channels) ? raw!.channels : []);
+    setDms(Array.isArray(raw?.dms) ? raw!.dms : []);
+    setLoading(false);
+  }, [user]);
+
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => {
+      void refresh();
+    }, 250);
+  }, [refresh]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`unread-feed:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => scheduleRefresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "user_channel_reads" },
+        () => scheduleRefresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "user_dm_reads" },
+        () => scheduleRefresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        () => scheduleRefresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "dm_messages" },
+        () => scheduleRefresh(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    };
+  }, [user, scheduleRefresh]);
+
+  const channelCountById = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const row of channels) map[row.channel_id] = row.unread_count;
+    return map;
+  }, [channels]);
+
+  const serverCountById = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const row of aggregateServerUnread(channels)) {
+      map[row.serverId] = row.count;
+    }
+    return map;
+  }, [channels]);
+
+  const dmCountById = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const row of dms) map[row.conversation_id] = row.unread_count;
+    return map;
+  }, [dms]);
+
+  const totalDmUnread = useMemo(
+    () => dms.reduce((sum, row) => sum + row.unread_count, 0),
+    [dms],
+  );
+
+  const bellCount = useMemo(() => {
+    const individual = notifications.filter(
+      (n) => !n.read && isIndividualNotification(n.type),
+    ).length;
+    const serverRows = aggregateServerUnread(channels).length;
+    const dmRows = dms.length;
+    return individual + serverRows + dmRows;
+  }, [notifications, channels, dms]);
+
+  const markNotificationRead = useCallback(
+    async (id: string, read = true) => {
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, read } : item)),
+      );
+      const supabase = createClient();
+      await supabase.from("notifications").update({ read }).eq("id", id);
+    },
+    [],
+  );
+
+  const markAllNotificationsRead = useCallback(async () => {
+    if (!user) return;
+    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+    // Also clear message unread by advancing reads to now for all unread channels/dms
+    const now = new Date().toISOString();
+    const channelIds = [...new Set(channels.map((c) => c.channel_id))];
+    const dmIds = [...new Set(dms.map((d) => d.conversation_id))];
+    setChannels([]);
+    setDms([]);
+    const supabase = createClient();
+    await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", user.id)
+      .eq("read", false);
+    await Promise.all([
+      ...channelIds.map((id) => saveChannelRead(user.id, id, now)),
+      ...dmIds.map((id) => saveDmRead(user.id, id, now)),
+    ]);
+    void refresh();
+  }, [user, channels, dms, refresh]);
+
+  const markChannelRead = useCallback(
+    async (channelId: string, at?: string) => {
+      if (!user) return;
+      const when = at ?? new Date().toISOString();
+      setChannels((prev) => prev.filter((row) => row.channel_id !== channelId));
+      await saveChannelRead(user.id, channelId, when);
+      // Mark related mention/reply notifs for this channel as read
+      setNotifications((prev) =>
+        prev.map((item) => {
+          if (item.read) return item;
+          const meta = item.meta ?? {};
+          if (meta.channel_id === channelId) return { ...item, read: true };
+          if (item.link?.includes(channelId)) return { ...item, read: true };
+          return item;
+        }),
+      );
+      const supabase = createClient();
+      const unread = notifications.filter(
+        (n) =>
+          !n.read &&
+          (n.meta?.channel_id === channelId || n.link?.includes(channelId)),
+      );
+      await Promise.all(
+        unread.map((n) =>
+          supabase.from("notifications").update({ read: true }).eq("id", n.id),
+        ),
+      );
+    },
+    [user, notifications],
+  );
+
+  const markDmRead = useCallback(
+    async (conversationId: string, at?: string) => {
+      if (!user) return;
+      const when = at ?? new Date().toISOString();
+      setDms((prev) =>
+        prev.filter((row) => row.conversation_id !== conversationId),
+      );
+      await saveDmRead(user.id, conversationId, when);
+      setNotifications((prev) =>
+        prev.map((item) => {
+          if (item.read) return item;
+          if (item.meta?.conversation_id === conversationId) {
+            return { ...item, read: true };
+          }
+          if (item.link?.includes(conversationId)) {
+            return { ...item, read: true };
+          }
+          return item;
+        }),
+      );
+      const supabase = createClient();
+      const unread = notifications.filter(
+        (n) =>
+          !n.read &&
+          (n.meta?.conversation_id === conversationId ||
+            n.link?.includes(conversationId)),
+      );
+      await Promise.all(
+        unread.map((n) =>
+          supabase.from("notifications").update({ read: true }).eq("id", n.id),
+        ),
+      );
+    },
+    [user, notifications],
+  );
+
+  const markServerRead = useCallback(
+    async (serverId: string) => {
+      if (!user) return;
+      const now = new Date().toISOString();
+      const ids = channels
+        .filter((c) => c.server_id === serverId)
+        .map((c) => c.channel_id);
+      setChannels((prev) => prev.filter((c) => c.server_id !== serverId));
+      await Promise.all(ids.map((id) => saveChannelRead(user.id, id, now)));
+      setNotifications((prev) =>
+        prev.map((item) => {
+          if (item.read) return item;
+          if (item.meta?.server_id === serverId) return { ...item, read: true };
+          if (item.link?.includes(`/channels/${serverId}/`)) {
+            return { ...item, read: true };
+          }
+          return item;
+        }),
+      );
+      void refresh();
+    },
+    [user, channels, refresh],
+  );
+
+  const noteChannelActivity = useCallback((_channelId: string, _at: string) => {
+    scheduleRefresh();
+  }, [scheduleRefresh]);
+
+  const noteDmActivity = useCallback((_conversationId: string, _at: string) => {
+    scheduleRefresh();
+  }, [scheduleRefresh]);
+
+  const value = useMemo<UnreadContextValue>(
+    () => ({
+      loading,
+      notifications,
+      channels,
+      dms,
+      channelCountById,
+      serverCountById,
+      dmCountById,
+      totalDmUnread,
+      bellCount,
+      refresh,
+      markNotificationRead,
+      markAllNotificationsRead,
+      markChannelRead,
+      markDmRead,
+      markServerRead,
+      noteChannelActivity,
+      noteDmActivity,
+    }),
+    [
+      loading,
+      notifications,
+      channels,
+      dms,
+      channelCountById,
+      serverCountById,
+      dmCountById,
+      totalDmUnread,
+      bellCount,
+      refresh,
+      markNotificationRead,
+      markAllNotificationsRead,
+      markChannelRead,
+      markDmRead,
+      markServerRead,
+      noteChannelActivity,
+      noteDmActivity,
+    ],
+  );
+
+  return (
+    <UnreadContext.Provider value={value}>{children}</UnreadContext.Provider>
+  );
+}
+
+export function useUnread() {
+  const ctx = useContext(UnreadContext);
+  if (!ctx) {
+    throw new Error("useUnread must be used within UnreadProvider");
+  }
+  return ctx;
+}
+
+export function useOptionalUnread() {
+  return useContext(UnreadContext);
+}

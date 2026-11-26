@@ -12,6 +12,10 @@ type ServerRailProps = {
   servers: Server[];
   activeServerId: string | null;
   unreadServerIds: Set<string>;
+  /** Unread message counts by server id (preferred over boolean set). */
+  unreadServerCounts?: Record<string, number>;
+  /** Unread DM total for the Home button. */
+  homeUnreadCount?: number;
   homeActive: boolean;
   discoverActive: boolean;
   loading: boolean;
@@ -31,6 +35,8 @@ export function ServerRail({
   servers,
   activeServerId,
   unreadServerIds,
+  unreadServerCounts = {},
+  homeUnreadCount = 0,
   homeActive,
   discoverActive,
   loading,
@@ -41,7 +47,13 @@ export function ServerRail({
 }: ServerRailProps) {
   return (
     <aside className="flex w-16 shrink-0 flex-col items-stretch gap-1 overflow-x-hidden overflow-y-auto border-r border-[var(--ms-border)] bg-[var(--ms-rail,#1a1b1e)] py-2.5">
-      <ServerRailButton label="Home" active={homeActive} onClick={onHome}>
+      <ServerRailButton
+        label="Home"
+        active={homeActive}
+        unread={homeUnreadCount > 0}
+        unreadCount={homeUnreadCount}
+        onClick={onHome}
+      >
         <span
           className={`flex h-10 w-10 items-center justify-center transition-all duration-200 ${iconShell(homeActive)}`}
         >
@@ -58,13 +70,15 @@ export function ServerRail({
       {servers.map((server) => {
         const active =
           !homeActive && !discoverActive && server.id === activeServerId;
-        const unread = unreadServerIds.has(server.id);
+        const unreadCount = unreadServerCounts[server.id] ?? 0;
+        const unread = unreadCount > 0 || unreadServerIds.has(server.id);
         return (
           <ServerRailButton
             key={server.id}
             label={server.name}
             active={active}
             unread={unread}
+            unreadCount={unreadCount}
             onClick={() => onSelectServer(server.id)}
           >
             <span

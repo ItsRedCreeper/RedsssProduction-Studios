@@ -124,6 +124,7 @@ import {
   loadIsBlockedBy,
 } from "@/lib/blocking";
 import { previewMissedCallContent } from "@/lib/missed-call";
+import { useOptionalUnread } from "@/components/notifications/UnreadProvider";
 import {
   loadFriendEdges,
   splitFriendEdges,
@@ -289,7 +290,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [threads, setThreads] = useState<DmThread[]>([]);
   const [voiceStates, setVoiceStates] = useState<VoiceState[]>([]);
   const [readAt, setReadAt] = useState<Record<string, string>>({});
+  const [dmReadAt, setDmReadAt] = useState<Record<string, string>>({});
+  /** Read cursor when the channel/DM was opened — used for the New messages divider. */
+  const [dividerFloor, setDividerFloor] = useState<{
+    key: string;
+    at: string | null;
+  } | null>(null);
   const [lastMessageAt, setLastMessageAt] = useState<Record<string, string>>({});
+  const unreadFeed = useOptionalUnread();
   const [channelServerMap, setChannelServerMap] = useState<Record<string, string>>({});
   const [pinnedExtra, setPinnedExtra] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -1043,6 +1051,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         const map: Record<string, string> = {};
         for (const row of data ?? []) map[row.channel_id] = row.last_read_at;
         setReadAt((prev) => ({ ...map, ...prev }));
+      });
+    void supabase
+      .from("user_dm_reads")
+      .select("*")
+      .eq("user_id", user.id)
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        for (const row of (data as { conversation_id: string; last_read_at: string }[] | null) ?? []) {
+          map[row.conversation_id] = row.last_read_at;
+        }
+        setDmReadAt((prev) => ({ ...map, ...prev }));
       });
   }, [user]);
 
@@ -2007,18 +2026,62 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [activeConversationId]);
 
   const activeLast = activeChannelId ? lastMessageAt[activeChannelId] : undefined;
+
+  // Capture unread floor when opening a channel/DM so the divider can show
+  // before auto-mark-as-read clears counts.
   useEffect(() => {
-    if (!user || pane !== "server" || !activeChannelId || activeChannel?.type !== "text") {
+    if (pane === "server" && activeChannelId && activeChannel?.type === "text") {
+      setDividerFloor({
+        key: `channel:${activeChannelId}`,
+        at: readAt[activeChannelId] ?? null,
+      });
       return;
     }
+    if (pane === "home" && activeConversationId) {
+      setDividerFloor({
+        key: `dm:${activeConversationId}`,
+        at: dmReadAt[activeConversationId] ?? null,
+      });
+      return;
+    }
+    setDividerFloor(null);
+    // Only reset floor when the viewed target changes — not when readAt updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pane, activeChannelId, activeChannel?.type, activeConversationId]);
+
+  // Auto-mark channel as read after a short delay so the divider is visible.
+  useEffect(() => {
+    if (
+      !user ||
+      pane !== "server" ||
+      !activeChannelId ||
+      activeChannel?.type !== "text"
+    ) {
+      return;
+    }
+    const channelId = activeChannelId;
     const at = activeLast ?? new Date().toISOString();
-    setReadAt((prev) => {
-      const current = prev[activeChannelId];
-      if (current && Date.parse(current) >= Date.parse(at)) return prev;
-      return { ...prev, [activeChannelId]: at };
-    });
-    void saveChannelRead(user.id, activeChannelId, at);
-  }, [user, pane, activeChannelId, activeChannel?.type, activeLast]);
+    const timer = window.setTimeout(() => {
+      setReadAt((prev) => {
+        const current = prev[channelId];
+        if (current && Date.parse(current) >= Date.parse(at)) return prev;
+        return { ...prev, [channelId]: at };
+      });
+      void saveChannelRead(user.id, channelId, at);
+      void unreadFeed?.markChannelRead(channelId, at);
+      setDividerFloor((prev) =>
+        prev?.key === `channel:${channelId}` ? { key: prev.key, at } : prev,
+      );
+    }, 1600);
+    return () => window.clearTimeout(timer);
+  }, [
+    user,
+    pane,
+    activeChannelId,
+    activeChannel?.type,
+    activeLast,
+    unreadFeed,
+  ]);
 
   function applyTypingBroadcast(
     message: unknown,
@@ -2839,6 +2902,47 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     [dmMessages, isMessageHidden],
   );
 
+  // Auto-mark DM as read after a short delay (after messages are loaded).
+  useEffect(() => {
+    if (!user || pane !== "home" || !activeConversationId) return;
+    const conversationId = activeConversationId;
+    const latest =
+      unblockedDmMessages.length > 0
+        ? unblockedDmMessages[unblockedDmMessages.length - 1]?.created_at
+        : null;
+    if (!latest && unblockedDmMessages.length === 0) return;
+    const at = latest ?? new Date().toISOString();
+    const timer = window.setTimeout(() => {
+      setDmReadAt((prev) => {
+        const current = prev[conversationId];
+        if (current && Date.parse(current) >= Date.parse(at)) return prev;
+        return { ...prev, [conversationId]: at };
+      });
+      void unreadFeed?.markDmRead(conversationId, at);
+      setDividerFloor((prev) =>
+        prev?.key === `dm:${conversationId}` ? { key: prev.key, at } : prev,
+      );
+    }, 1600);
+    return () => window.clearTimeout(timer);
+  }, [user, pane, activeConversationId, unblockedDmMessages, unreadFeed]);
+
+  const firstUnreadMessageId = useMemo(() => {
+    if (!user || !dividerFloor) return null;
+    const list =
+      dividerFloor.key.startsWith("dm:")
+        ? unblockedDmMessages
+        : unblockedMessages;
+    const floorAt = dividerFloor.at;
+    for (const message of list) {
+      if (message.user_id === user.id) continue;
+      if (message.is_system) continue;
+      if (!floorAt || Date.parse(message.created_at) > Date.parse(floorAt)) {
+        return message.id;
+      }
+    }
+    return null;
+  }, [user, dividerFloor, unblockedMessages, unblockedDmMessages]);
+
   const pinList = useMemo(() => {
     const map = new Map<string, ChatMessage>();
     const source = dmMode ? unblockedDmMessages : unblockedMessages;
@@ -3296,6 +3400,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         p_content: pingReply ? notifyContent : text,
       });
     }
+    if (pingReply && replySnapshot) {
+      void supabase.rpc("notify_message_reply", {
+        p_message_id: saved.id,
+        p_author_id: user.id,
+        p_reply_to_id: replySnapshot.id,
+        p_content: text,
+        p_channel_id: channelId,
+        p_conversation_id: null,
+      });
+    }
+    unreadFeed?.noteChannelActivity(channelId, saved.created_at);
     setSending(false);
   }
 
@@ -3479,17 +3594,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         .sort((a, b) => compareDmThreads(a, b)),
     );
 
-    if (otherId) {
-      void supabase.rpc("create_notification", {
-        p_user_id: otherId,
-        p_type: "dm_message",
-        p_title: profile?.username
-          ? `Message from ${profile.username}`
-          : "New direct message",
-        p_body: text.slice(0, 120),
-        p_link: messengerDmPath(conversationId),
+    // DM unread aggregates come from user_dm_reads — no per-message inbox spam.
+    if (replyPing && replySnapshot) {
+      void supabase.rpc("notify_message_reply", {
+        p_message_id: data.id,
+        p_author_id: user.id,
+        p_reply_to_id: replySnapshot.id,
+        p_content: text,
+        p_channel_id: null,
+        p_conversation_id: conversationId,
       });
     }
+    unreadFeed?.noteDmActivity(conversationId, data.created_at);
     setSending(false);
   }
 
@@ -4164,6 +4280,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         servers={servers}
         activeServerId={activeServerId}
         unreadServerIds={unreadServerIds}
+        unreadServerCounts={unreadFeed?.serverCountById ?? {}}
+        homeUnreadCount={unreadFeed?.totalDmUnread ?? 0}
         homeActive={pane === "home"}
         discoverActive={discoverMode}
         loading={loadingServers}
@@ -4222,6 +4340,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             loadingThreads={loadingThreads}
             typingUserIds={dmSidebarTypingIds}
             typingUserIdsKey={typingUserIdsKey}
+            unreadDmCounts={unreadFeed?.dmCountById ?? {}}
+            totalDmUnread={unreadFeed?.totalDmUnread ?? 0}
             openCallIds={
               new Set(
                 Object.keys(call.openCalls).filter(
@@ -4276,6 +4396,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             channels={visibleChannels}
             activeChannelId={activeChannelId}
             unreadChannelIds={previewMode ? new Set() : unreadChannelIds}
+            unreadChannelCounts={
+              previewMode ? {} : unreadFeed?.channelCountById ?? {}
+            }
             voiceStates={displayVoiceStates}
             membersById={membersById}
             speakingUserIds={speakingUserIds}
@@ -4724,6 +4847,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               onLoadOlder={() => void loadOlderDm()}
               preferFriendNickname
               showChannelStart={!searchNeedle}
+              firstUnreadMessageId={
+                searchNeedle ? null : firstUnreadMessageId
+              }
               onReply={setReplyTo}
               onEdit={editDm}
               onDelete={deleteDm}
@@ -4794,6 +4920,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onLoadOlder={() => void loadOlderChannel()}
                 readOnly={previewMode}
                 showChannelStart={!searchNeedle && !activeThreadId}
+                firstUnreadMessageId={
+                  searchNeedle || previewMode ? null : firstUnreadMessageId
+                }
                 pollVotesByMessage={pollVotesByMessage}
                 onReply={setReplyTo}
                 onEdit={editChannel}

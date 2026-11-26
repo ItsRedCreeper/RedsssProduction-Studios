@@ -1,29 +1,31 @@
 # Cursor Status
 
-**Last updated:** 2026-11-25 16:00
+**Last updated:** 2026-11-26 00:55
 
 ## Completed this batch
-- **Status bugs** — StatusPicker portals (no longer clipped by navbar overflow); presence feed refreshes on profile-updated; LiveStatusDot / own chip prefer fresh manual status over stale feed.
-- **Critical GUI redesign** — profile out of Discord-style bottom-left bar into top-nav `UserPresenceBar` chip (avatar + name + status picker). Sidebar footer is voice-only when connected.
-- Shell polish: server rail `w-16` / icon buttons, channel/server headers `h-11`, softer messenger-header accent stub, HomeSidebar Friends row denser, CallOverlay offset for rail, MessageComposer tighter safe padding, Navbar messenger chrome uses `--ms-rail`.
-- Presence chip cleaned (no duplicate settings gear; Account settings stays in Navbar). Status picker opens below.
-- `npx next build` green after this pass.
+- **Live notification + unread system**
+  - `user_dm_reads` table + `get_unread_summary()` RPC + `notify_message_reply()`
+  - Improved mention notification titles/meta (`#channel · Server`)
+  - Shared `UnreadProvider` (realtime on messages, DM messages, reads, notifications)
+  - Bell badge uses live total (`#ed4245`); panel has Unread/Read sections, aggregated server + DM rows, individual mention/reply/friend rows, mark read/unread, mark all as read
+  - Red count badges on server rail, channels, Home/DM list; DMs sort by latest activity
+  - “New messages” divider in `ChatTimeline` (same style as day dividers)
+  - Auto-mark channel/DM read after ~1.6s so the divider is visible first
+  - Removed per-message `dm_message` inbox spam (aggregates from DM reads instead)
 
 ## Still open / broken
-- Live visual QA on production after this deploy (375/768/1440) not re-run in browser this session.
-- Unread “New messages” divider + jump-to-unread not built (no durable read-state UI yet).
-- `↑` edit-last-own not wired through MessageItem (edit state is local); prop exists on composer.
-- Cmd/Ctrl+K quick switcher not built.
-- Server Settings mobile full-screen section nav / type-name delete confirms only partially aligned with the prompt ideal.
-- Account settings still one section (My Account); Profile/Appearance/Voice/Notifications pages not split out.
-- Mentions badge on server rail still unread-dot only (no separate mention count data).
-- Group DM polls still skipped (schema).
+- Live visual QA of notification panel + badges at 375/768/1440 after deploy
+- Mark-as-unread for aggregated server/DM rows (aggregates leave Unread when cleared; individual notifs support toggle)
+- Jump-to-unread pill / scroll-to-divider not built (divider only)
+- `↑` edit-last-own still not fully wired through MessageItem
+- Cmd/Ctrl+K quick switcher not built
+- Account settings still one section; Profile/Appearance/Voice/Notifications pages not split out
+- Group DM polls still skipped (schema)
 
 ## Blockers
 - None
 
 ## Suggested next focus
-- Production browser QA of the new top-nav profile + cleaned shell at 375/768/1440.
-- Wire unread divider/jump using existing or localStorage last-seen message ids.
-- Wire `↑` empty-composer → start edit on last own MessageItem (lift edit target).
-- Finish settings: mobile push nav + danger-zone type-to-confirm; expand account sections.
+- Production QA of bell panel, badges, divider, and multi-tab realtime sync
+- Optional jump-to-first-unread control above the composer
+- Wire empty-composer `↑` → edit last own message

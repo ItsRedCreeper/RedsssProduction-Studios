@@ -601,6 +601,12 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["user_channel_reads"]["Insert"]>
         Relationships: []
       }
+      user_dm_reads: {
+        Row: { user_id: string; conversation_id: string; last_read_at: string }
+        Insert: { user_id: string; conversation_id: string; last_read_at?: string }
+        Update: Partial<Database["public"]["Tables"]["user_dm_reads"]["Insert"]>
+        Relationships: []
+      }
       voice_states: {
         Row: { user_id: string; channel_id: string; server_id: string; muted: boolean; deafened: boolean; updated_at: string }
         Insert: { user_id: string; channel_id: string; server_id: string; muted?: boolean; deafened?: boolean; updated_at?: string }
@@ -617,6 +623,7 @@ export type Database = {
           link: string | null;
           read: boolean;
           created_at: string;
+          meta: Json;
         }
         Insert: {
           id?: string;
@@ -627,6 +634,7 @@ export type Database = {
           link?: string | null;
           read?: boolean;
           created_at?: string;
+          meta?: Json;
         }
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>
         Relationships: []
@@ -693,6 +701,21 @@ export type Database = {
           p_content: string;
         }
         Returns: undefined
+      }
+      notify_message_reply: {
+        Args: {
+          p_message_id: string;
+          p_author_id: string;
+          p_reply_to_id: string;
+          p_content: string;
+          p_channel_id?: string | null;
+          p_conversation_id?: string | null;
+        }
+        Returns: undefined
+      }
+      get_unread_summary: {
+        Args: Record<string, never>
+        Returns: Json
       }
       unblock_user: {
         Args: { target_id: string }

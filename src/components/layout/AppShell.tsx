@@ -10,6 +10,7 @@ import { PresenceController } from "@/components/presence/PresenceController";
 import { PresenceFeedProvider } from "@/components/presence/PresenceFeed";
 import { VoiceSessionProvider } from "@/components/messenger/voice/VoiceSessionProvider";
 import { CallSessionProvider } from "@/components/messenger/voice/CallSessionProvider";
+import { UnreadProvider } from "@/components/notifications/UnreadProvider";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -23,26 +24,28 @@ export function AppShell({ children }: { children: ReactNode }) {
       <CallSessionProvider>
         <PresenceFeedProvider>
           <ProfileProvider>
-            <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden">
-              <PresenceController />
-              <Suspense
-                fallback={
-                  <header className="z-30 h-14 shrink-0 border-b border-[var(--ms-border,#1e1f22)] bg-[var(--ms-rail,#1a1b1e)]/95 backdrop-blur-md" />
-                }
-              >
-                <Navbar />
-              </Suspense>
-              <SiteActivityTracker />
-              <main
-                className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col ${
-                  lockViewport
-                    ? "overflow-hidden border-t-0"
-                    : "overflow-y-auto"
-                }`}
-              >
-                {children}
-              </main>
-            </div>
+            <UnreadProvider>
+              <div className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden">
+                <PresenceController />
+                <Suspense
+                  fallback={
+                    <header className="z-30 h-14 shrink-0 border-b border-[var(--ms-border,#1e1f22)] bg-[var(--ms-rail,#1a1b1e)]/95 backdrop-blur-md" />
+                  }
+                >
+                  <Navbar />
+                </Suspense>
+                <SiteActivityTracker />
+                <main
+                  className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col ${
+                    lockViewport
+                      ? "overflow-hidden border-t-0"
+                      : "overflow-y-auto"
+                  }`}
+                >
+                  {children}
+                </main>
+              </div>
+            </UnreadProvider>
           </ProfileProvider>
         </PresenceFeedProvider>
       </CallSessionProvider>
