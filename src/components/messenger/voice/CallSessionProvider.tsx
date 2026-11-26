@@ -242,7 +242,6 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   );
   const [speakingPeerIds] = useState<Set<string>>(() => new Set());
   const [watchId, setWatchId] = useState<string | null>(null);
-  const [callToast, setCallToast] = useState<string | null>(null);
 
   const meshRef = useRef<VoiceMesh | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -903,10 +902,8 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
 
       if (msg.kind === "decline") {
         if (outgoingRef.current?.conversationId === msg.conversationId) {
-          const peerName = outgoingRef.current.label || "They";
           clearRingTimer();
           setOutgoing(null);
-          setCallToast(`${peerName} declined your call.`);
           void leaveCall();
         }
         return;
@@ -953,12 +950,6 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       stopIncomingAlerts();
     };
   }, [incoming, connection, startIncomingAlerts, stopIncomingAlerts]);
-
-  useEffect(() => {
-    if (!callToast) return;
-    const id = window.setTimeout(() => setCallToast(null), 2800);
-    return () => window.clearTimeout(id);
-  }, [callToast]);
 
   useEffect(() => {
     if (!user || !watchId) return;
@@ -1137,14 +1128,6 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
               Cancel
             </button>
           </div>
-        </div>
-      ) : null}
-      {callToast ? (
-        <div
-          className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 rounded-md border border-[var(--ms-border)] bg-[#111214] px-4 py-2.5 text-sm text-white shadow-lg shadow-black/40"
-          role="status"
-        >
-          {callToast}
         </div>
       ) : null}
     </CallSessionContext.Provider>
