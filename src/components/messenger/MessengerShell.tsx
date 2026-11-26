@@ -5241,6 +5241,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           onServerUpdated={(next) => {
             setServers((prev) => prev.map((server) => (server.id === next.id ? next : server)));
           }}
+          onServerDeleted={(serverId) => {
+            setSettingsOpen(false);
+            setServers((prev) => prev.filter((server) => server.id !== serverId));
+            router.push(messengerHomePath());
+          }}
           onChannelsChanged={(nextChannels, nextCategories) => {
             setChannels(nextChannels);
             setCategories(nextCategories);

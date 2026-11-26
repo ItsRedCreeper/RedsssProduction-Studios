@@ -113,6 +113,8 @@ type ServerSettingsModalProps = {
   actorRoleIds?: string[];
   onClose: () => void;
   onServerUpdated: (server: Server) => void;
+  /** Owner deleted the server — parent should leave settings and refresh rail. */
+  onServerDeleted?: (serverId: string) => void;
   onChannelsChanged: (channels: Channel[], categories: Category[]) => void;
   onMembersChanged: (members: MemberView[]) => void;
   onRolesChanged?: (roles: Role[]) => void;
@@ -139,6 +141,7 @@ export function ServerSettingsModal({
   actorRoleIds = [],
   onClose,
   onServerUpdated,
+  onServerDeleted,
   onChannelsChanged,
   onMembersChanged,
   onRolesChanged,
@@ -152,6 +155,11 @@ export function ServerSettingsModal({
   const [iconBusy, setIconBusy] = useState(false);
   const [iconCropFile, setIconCropFile] = useState<File | null>(null);
   const [transferTo, setTransferTo] = useState("");
+  const [transferQuery, setTransferQuery] = useState("");
+  const [memberQuery, setMemberQuery] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deletingServer, setDeletingServer] = useState(false);
   const [nickEditId, setNickEditId] = useState<string | null>(null);
   const [nickDraft, setNickDraft] = useState("");
   const [timeoutMemberId, setTimeoutMemberId] = useState<string | null>(null);
@@ -251,6 +259,10 @@ export function ServerSettingsModal({
     setDescription(server.description ?? "");
     setIsPublic(server.is_public);
     setTransferTo("");
+    setTransferQuery("");
+    setMemberQuery("");
+    setDeleteConfirmOpen(false);
+    setDeleteConfirmName("");
     setError(null);
     setConfirmChannelId(null);
     setEditingChannelId(null);
@@ -528,6 +540,32 @@ export function ServerSettingsModal({
     });
     onServerUpdated(data);
     setTransferTo("");
+    setTransferQuery("");
+  }
+
+  async function deleteServer() {
+    if (!isOwner) return;
+    if (deleteConfirmName.trim() !== server.name) {
+      setError("Type the exact server name to confirm deletion.");
+      return;
+    }
+    setDeletingServer(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: deleteError } = await supabase
+      .from("servers")
+      .delete()
+      .eq("id", server.id)
+      .eq("owner_id", userId);
+    setDeletingServer(false);
+    if (deleteError) {
+      setError(deleteError.message || "Could not delete server.");
+      return;
+    }
+    setDeleteConfirmOpen(false);
+    setDeleteConfirmName("");
+    onClose();
+    onServerDeleted?.(server.id);
   }
 
   async function saveNickname(memberId: string) {
@@ -1867,36 +1905,131 @@ export function ServerSettingsModal({
                   />
                 </div>
                 {isOwner ? (
-                  <div className="space-y-2 border-t border-[var(--ms-danger)]/30 pt-4">
+                  <div className="space-y-4 border-t border-[var(--ms-danger)]/30 pt-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-danger)]">
                       Danger zone
                     </p>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
-                      Transfer ownership
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <select
-                        value={transferTo}
-                        onChange={(event) => setTransferTo(event.target.value)}
-                        className="min-w-[12rem] flex-1 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm"
-                      >
-                        <option value="">Select a member…</option>
-                        {members
-                          .filter((member) => member.user_id !== userId)
-                          .map((member) => (
-                            <option key={member.user_id} value={member.user_id}>
-                              {member.nickname || member.username}
-                            </option>
-                          ))}
-                      </select>
-                      <button
-                        type="button"
-                        disabled={saving || !transferTo}
-                        onClick={() => void transferOwnership()}
-                        className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        Transfer
-                      </button>
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
+                        Transfer ownership
+                      </p>
+                      <input
+                        value={transferQuery}
+                        onChange={(event) => {
+                          setTransferQuery(event.target.value);
+                          setTransferTo("");
+                        }}
+                        placeholder="Search members…"
+                        className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <select
+                          value={transferTo}
+                          onChange={(event) => setTransferTo(event.target.value)}
+                          className="min-w-[12rem] flex-1 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm"
+                        >
+                          <option value="">Select a member…</option>
+                          {members
+                            .filter((member) => member.user_id !== userId)
+                            .filter((member) => {
+                              const q = transferQuery.trim().toLowerCase();
+                              if (!q) return true;
+                              const label = (
+                                member.nickname ||
+                                member.username ||
+                                ""
+                              ).toLowerCase();
+                              return (
+                                label.includes(q) ||
+                                member.username.toLowerCase().includes(q)
+                              );
+                            })
+                            .map((member) => (
+                              <option
+                                key={member.user_id}
+                                value={member.user_id}
+                              >
+                                {member.nickname || member.username}
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={saving || !transferTo}
+                          onClick={() => void transferOwnership()}
+                          className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          Transfer
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2 border-t border-[#3f4147] pt-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-danger)]">
+                        Delete server
+                      </p>
+                      <p className="text-xs text-[var(--ms-text-muted)]">
+                        Permanently delete this server, channels, and messages.
+                        This cannot be undone.
+                      </p>
+                      {!deleteConfirmOpen ? (
+                        <button
+                          type="button"
+                          disabled={saving || deletingServer}
+                          onClick={() => {
+                            setDeleteConfirmOpen(true);
+                            setDeleteConfirmName("");
+                            setError(null);
+                          }}
+                          className="rounded-md bg-[var(--ms-danger)] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-50"
+                        >
+                          Delete Server
+                        </button>
+                      ) : (
+                        <div className="space-y-2 rounded-md border border-[var(--ms-danger)]/40 bg-[var(--ms-danger)]/10 p-3">
+                          <p className="text-xs text-[var(--ms-text)]">
+                            Type{" "}
+                            <span className="font-semibold text-white">
+                              {server.name}
+                            </span>{" "}
+                            to confirm.
+                          </p>
+                          <input
+                            value={deleteConfirmName}
+                            onChange={(event) =>
+                              setDeleteConfirmName(event.target.value)
+                            }
+                            placeholder={server.name}
+                            className="w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2 text-sm text-white outline-none focus:border-[var(--ms-danger)]/60"
+                            autoFocus
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={deletingServer}
+                              onClick={() => {
+                                setDeleteConfirmOpen(false);
+                                setDeleteConfirmName("");
+                              }}
+                              className="rounded-md px-3 py-2 text-sm text-[var(--ms-text-muted)] hover:bg-white/5"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              disabled={
+                                deletingServer ||
+                                deleteConfirmName.trim() !== server.name
+                              }
+                              onClick={() => void deleteServer()}
+                              className="rounded-md bg-[var(--ms-danger)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                            >
+                              {deletingServer
+                                ? "Deleting…"
+                                : "Delete forever"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : null}
@@ -2011,6 +2144,13 @@ export function ServerSettingsModal({
 
             {tab === "members" &&
               (canManageRoles || canKickMembers || canBanMembers || isOwner) && (
+              <div className="space-y-3">
+                <input
+                  value={memberQuery}
+                  onChange={(event) => setMemberQuery(event.target.value)}
+                  placeholder="Search members…"
+                  className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
+                />
               <ul className="space-y-2">
                 {(canBanMembers || isOwner) && bans.length > 0 && (
                   <li className="mb-1 space-y-2 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3">
@@ -2018,7 +2158,15 @@ export function ServerSettingsModal({
                       Bans
                     </p>
                     <ul className="space-y-1">
-                      {bans.map((ban) => (
+                      {bans
+                        .filter((ban) => {
+                          const q = memberQuery.trim().toLowerCase();
+                          if (!q) return true;
+                          return (ban.username ?? ban.user_id)
+                            .toLowerCase()
+                            .includes(q);
+                        })
+                        .map((ban) => (
                         <li
                           key={ban.user_id}
                           className="flex items-center justify-between gap-2 text-sm text-[var(--ms-text)]"
@@ -2047,7 +2195,21 @@ export function ServerSettingsModal({
                 {members.length === 0 && (
                   <li className="text-sm text-muted">No members loaded.</li>
                 )}
-                {members.map((member) => {
+                {members
+                  .filter((member) => {
+                    const q = memberQuery.trim().toLowerCase();
+                    if (!q) return true;
+                    const label = (
+                      member.nickname ||
+                      member.username ||
+                      ""
+                    ).toLowerCase();
+                    return (
+                      label.includes(q) ||
+                      member.username.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((member) => {
                   const label = member.nickname || member.username;
                   const memberIsOwner = member.user_id === server.owner_id;
                   return (
@@ -2373,7 +2535,24 @@ export function ServerSettingsModal({
                     </li>
                   );
                 })}
+                {members.length > 0 &&
+                  members.filter((member) => {
+                    const q = memberQuery.trim().toLowerCase();
+                    if (!q) return true;
+                    const label = (
+                      member.nickname ||
+                      member.username ||
+                      ""
+                    ).toLowerCase();
+                    return (
+                      label.includes(q) ||
+                      member.username.toLowerCase().includes(q)
+                    );
+                  }).length === 0 && (
+                    <li className="text-sm text-muted">No members match that search.</li>
+                  )}
               </ul>
+              </div>
             )}
 
             {tab === "invites" && (canCreateInvites || isOwner) && (
