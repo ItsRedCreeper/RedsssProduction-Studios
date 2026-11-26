@@ -42,58 +42,261 @@ export const EVERYONE_OVERRIDE_KEY = "@everyone";
 /** Tri-state for Advanced Permissions UI. */
 export type OverrideState = "allow" | "deny" | "inherit";
 
-export const CHANNEL_PERMISSION_OPTIONS: {
+export type PermissionOption = {
   key: Permission;
   label: string;
-  group: "general" | "text" | "voice";
-}[] = [
-  { key: PERMISSIONS.VIEW_CHANNEL, label: "View Channel", group: "general" },
-  { key: PERMISSIONS.MANAGE_CHANNELS, label: "Manage Channel", group: "general" },
-  { key: PERMISSIONS.MANAGE_ROLES, label: "Manage Permissions", group: "general" },
-  { key: PERMISSIONS.CREATE_INVITES, label: "Create Invite", group: "general" },
-  { key: PERMISSIONS.SEND_MESSAGES, label: "Send Messages", group: "text" },
-  { key: PERMISSIONS.EMBED_LINKS, label: "Embed Links", group: "text" },
-  { key: PERMISSIONS.ATTACH_FILES, label: "Attach Files", group: "text" },
-  { key: PERMISSIONS.ADD_REACTIONS, label: "Add Reactions", group: "text" },
-  { key: PERMISSIONS.MENTION_EVERYONE, label: "Mention @everyone", group: "text" },
-  { key: PERMISSIONS.MANAGE_MESSAGES, label: "Manage Messages", group: "text" },
-  { key: PERMISSIONS.READ_MESSAGE_HISTORY, label: "Read Message History", group: "text" },
-  { key: PERMISSIONS.CONNECT, label: "Connect", group: "voice" },
-  { key: PERMISSIONS.SPEAK, label: "Speak", group: "voice" },
-  { key: PERMISSIONS.MUTE_MEMBERS, label: "Mute Members", group: "voice" },
-  { key: PERMISSIONS.DEAFEN_MEMBERS, label: "Deafen Members", group: "voice" },
-  { key: PERMISSIONS.MOVE_MEMBERS, label: "Move Members", group: "voice" },
+  description: string;
+  group: string;
+};
+
+export const CHANNEL_PERMISSION_OPTIONS: PermissionOption[] = [
+  {
+    key: PERMISSIONS.VIEW_CHANNEL,
+    label: "View Channel",
+    description: "Allows members to view this channel by default.",
+    group: "general",
+  },
+  {
+    key: PERMISSIONS.MANAGE_CHANNELS,
+    label: "Manage Channel",
+    description: "Allows members to change this channel’s settings.",
+    group: "general",
+  },
+  {
+    key: PERMISSIONS.MANAGE_ROLES,
+    label: "Manage Permissions",
+    description: "Allows members to change this channel’s permission overrides.",
+    group: "general",
+  },
+  {
+    key: PERMISSIONS.CREATE_INVITES,
+    label: "Create Invite",
+    description: "Allows members to invite new people to this channel.",
+    group: "general",
+  },
+  {
+    key: PERMISSIONS.SEND_MESSAGES,
+    label: "Send Messages",
+    description: "Allows members to send messages in this channel.",
+    group: "text",
+  },
+  {
+    key: PERMISSIONS.EMBED_LINKS,
+    label: "Embed Links",
+    description: "Allows links members share to show embedded content.",
+    group: "text",
+  },
+  {
+    key: PERMISSIONS.ATTACH_FILES,
+    label: "Attach Files",
+    description: "Allows members to upload files and media.",
+    group: "text",
+  },
+  {
+    key: PERMISSIONS.ADD_REACTIONS,
+    label: "Add Reactions",
+    description: "Allows members to add new emoji reactions to messages.",
+    group: "text",
+  },
+  {
+    key: PERMISSIONS.MENTION_EVERYONE,
+    label: "Mention @everyone",
+    description: "Allows members to use @everyone and @here.",
+    group: "text",
+  },
+  {
+    key: PERMISSIONS.MANAGE_MESSAGES,
+    label: "Manage Messages",
+    description: "Allows members to delete or pin other people’s messages.",
+    group: "text",
+  },
+  {
+    key: PERMISSIONS.READ_MESSAGE_HISTORY,
+    label: "Read Message History",
+    description: "Allows members to read previous messages.",
+    group: "text",
+  },
+  {
+    key: PERMISSIONS.CONNECT,
+    label: "Connect",
+    description: "Allows members to join this voice channel.",
+    group: "voice",
+  },
+  {
+    key: PERMISSIONS.SPEAK,
+    label: "Speak",
+    description: "Allows members to talk in this voice channel.",
+    group: "voice",
+  },
+  {
+    key: PERMISSIONS.MUTE_MEMBERS,
+    label: "Mute Members",
+    description: "Allows members to mute others in this voice channel.",
+    group: "voice",
+  },
+  {
+    key: PERMISSIONS.DEAFEN_MEMBERS,
+    label: "Deafen Members",
+    description: "Allows members to deafen others in this voice channel.",
+    group: "voice",
+  },
+  {
+    key: PERMISSIONS.MOVE_MEMBERS,
+    label: "Move Members",
+    description: "Allows members to move others between voice channels.",
+    group: "voice",
+  },
 ];
 
-export const ROLE_PERMISSION_OPTIONS: {
-  key: Permission;
-  label: string;
-  group: string;
-}[] = [
-  { key: PERMISSIONS.ADMINISTRATOR, label: "Administrator", group: "General" },
-  { key: PERMISSIONS.VIEW_CHANNEL, label: "View Channels", group: "General" },
-  { key: PERMISSIONS.MANAGE_SERVER, label: "Manage Server", group: "General" },
-  { key: PERMISSIONS.MANAGE_ROLES, label: "Manage Roles", group: "General" },
-  { key: PERMISSIONS.MANAGE_CHANNELS, label: "Manage Channels", group: "General" },
-  { key: PERMISSIONS.MANAGE_EMOJIS, label: "Manage Emojis", group: "General" },
-  { key: PERMISSIONS.KICK_MEMBERS, label: "Kick Members", group: "General" },
-  { key: PERMISSIONS.BAN_MEMBERS, label: "Ban Members", group: "General" },
-  { key: PERMISSIONS.TIMEOUT_MEMBERS, label: "Timeout Members", group: "General" },
-  { key: PERMISSIONS.CREATE_INVITES, label: "Create Invite", group: "General" },
-  { key: PERMISSIONS.CHANGE_NICKNAME, label: "Change Nickname", group: "General" },
-  { key: PERMISSIONS.MANAGE_NICKNAMES, label: "Manage Nicknames", group: "General" },
-  { key: PERMISSIONS.SEND_MESSAGES, label: "Send Messages", group: "Text" },
-  { key: PERMISSIONS.EMBED_LINKS, label: "Embed Links", group: "Text" },
-  { key: PERMISSIONS.ATTACH_FILES, label: "Attach Files", group: "Text" },
-  { key: PERMISSIONS.ADD_REACTIONS, label: "Add Reactions", group: "Text" },
-  { key: PERMISSIONS.MENTION_EVERYONE, label: "Mention @everyone", group: "Text" },
-  { key: PERMISSIONS.MANAGE_MESSAGES, label: "Manage Messages", group: "Text" },
-  { key: PERMISSIONS.READ_MESSAGE_HISTORY, label: "Read Message History", group: "Text" },
-  { key: PERMISSIONS.CONNECT, label: "Connect", group: "Voice" },
-  { key: PERMISSIONS.SPEAK, label: "Speak", group: "Voice" },
-  { key: PERMISSIONS.MUTE_MEMBERS, label: "Mute Members", group: "Voice" },
-  { key: PERMISSIONS.DEAFEN_MEMBERS, label: "Deafen Members", group: "Voice" },
-  { key: PERMISSIONS.MOVE_MEMBERS, label: "Move Members", group: "Voice" },
+export const ROLE_PERMISSION_OPTIONS: PermissionOption[] = [
+  {
+    key: PERMISSIONS.ADMINISTRATOR,
+    label: "Administrator",
+    description:
+      "Members with this permission have every permission and bypass channel overrides. This is dangerous — grant carefully.",
+    group: "General Server Permissions",
+  },
+  {
+    key: PERMISSIONS.VIEW_CHANNEL,
+    label: "View Channels",
+    description: "Allows members to view channels by default (unless a channel denies it).",
+    group: "General Server Permissions",
+  },
+  {
+    key: PERMISSIONS.MANAGE_SERVER,
+    label: "Manage Server",
+    description:
+      "Allows members to change the server name, description, icon, and other server settings.",
+    group: "General Server Permissions",
+  },
+  {
+    key: PERMISSIONS.MANAGE_ROLES,
+    label: "Manage Roles",
+    description:
+      "Allows members to create and edit roles lower than theirs, and edit channel permissions.",
+    group: "General Server Permissions",
+  },
+  {
+    key: PERMISSIONS.MANAGE_CHANNELS,
+    label: "Manage Channels",
+    description: "Allows members to create, edit, or delete channels.",
+    group: "General Server Permissions",
+  },
+  {
+    key: PERMISSIONS.MANAGE_EMOJIS,
+    label: "Manage Expressions",
+    description: "Allows members to manage server emojis and stickers.",
+    group: "General Server Permissions",
+  },
+  {
+    key: PERMISSIONS.KICK_MEMBERS,
+    label: "Kick Members",
+    description: "Allows members to remove other members from this server.",
+    group: "Membership Permissions",
+  },
+  {
+    key: PERMISSIONS.BAN_MEMBERS,
+    label: "Ban Members",
+    description: "Allows members to permanently ban other members from this server.",
+    group: "Membership Permissions",
+  },
+  {
+    key: PERMISSIONS.TIMEOUT_MEMBERS,
+    label: "Timeout Members",
+    description:
+      "Allows members to temporarily stop someone from chatting or speaking in voice.",
+    group: "Membership Permissions",
+  },
+  {
+    key: PERMISSIONS.CREATE_INVITES,
+    label: "Create Invite",
+    description: "Allows members to invite new people to this server.",
+    group: "Membership Permissions",
+  },
+  {
+    key: PERMISSIONS.CHANGE_NICKNAME,
+    label: "Change Nickname",
+    description: "Allows members to change their own nickname.",
+    group: "Membership Permissions",
+  },
+  {
+    key: PERMISSIONS.MANAGE_NICKNAMES,
+    label: "Manage Nicknames",
+    description: "Allows members to change other members’ nicknames.",
+    group: "Membership Permissions",
+  },
+  {
+    key: PERMISSIONS.SEND_MESSAGES,
+    label: "Send Messages",
+    description: "Allows members to send messages in text channels.",
+    group: "Text Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.EMBED_LINKS,
+    label: "Embed Links",
+    description: "Allows links that members share to show embedded content.",
+    group: "Text Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.ATTACH_FILES,
+    label: "Attach Files",
+    description: "Allows members to upload files and media in messages.",
+    group: "Text Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.ADD_REACTIONS,
+    label: "Add Reactions",
+    description: "Allows members to add new emoji reactions to messages.",
+    group: "Text Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.MENTION_EVERYONE,
+    label: "Mention @everyone, @here, and All Roles",
+    description: "Allows members to use @everyone / @here (can spam-ping the server).",
+    group: "Text Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.MANAGE_MESSAGES,
+    label: "Manage Messages",
+    description: "Allows members to delete or pin messages from other members.",
+    group: "Text Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.READ_MESSAGE_HISTORY,
+    label: "Read Message History",
+    description: "Allows members to read messages sent before they joined the channel.",
+    group: "Text Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.CONNECT,
+    label: "Connect",
+    description: "Allows members to join voice channels.",
+    group: "Voice Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.SPEAK,
+    label: "Speak",
+    description: "Allows members to talk in voice channels.",
+    group: "Voice Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.MUTE_MEMBERS,
+    label: "Mute Members",
+    description: "Allows members to mute others in voice channels.",
+    group: "Voice Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.DEAFEN_MEMBERS,
+    label: "Deafen Members",
+    description: "Allows members to deafen others in voice channels.",
+    group: "Voice Channel Permissions",
+  },
+  {
+    key: PERMISSIONS.MOVE_MEMBERS,
+    label: "Move Members",
+    description: "Allows members to move others between voice channels.",
+    group: "Voice Channel Permissions",
+  },
 ];
 
 export function asChannelOverrides(value: unknown): ChannelOverrides {

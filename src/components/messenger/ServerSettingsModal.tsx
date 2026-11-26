@@ -65,11 +65,6 @@ import type {
   SettingsTab,
 } from "@/components/messenger/types";
 
-const ROLE_PERM_OPTIONS = ROLE_PERMISSION_OPTIONS.map((option) => ({
-  key: option.key,
-  label: option.label,
-}));
-
 type ServerSticker = {
   id: string;
   server_id: string;
@@ -156,6 +151,7 @@ export function ServerSettingsModal({
   const [iconCropFile, setIconCropFile] = useState<File | null>(null);
   const [transferTo, setTransferTo] = useState("");
   const [transferQuery, setTransferQuery] = useState("");
+  const [transferOpen, setTransferOpen] = useState(false);
   const [memberQuery, setMemberQuery] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
@@ -260,6 +256,7 @@ export function ServerSettingsModal({
     setIsPublic(server.is_public);
     setTransferTo("");
     setTransferQuery("");
+    setTransferOpen(false);
     setMemberQuery("");
     setDeleteConfirmOpen(false);
     setDeleteConfirmName("");
@@ -275,6 +272,17 @@ export function ServerSettingsModal({
     setPermsCategoryId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  useEffect(() => {
+    if (!transferOpen) return;
+    function onPointer(event: MouseEvent) {
+      const target = event.target as Element | null;
+      if (target?.closest("[data-transfer-picker]")) return;
+      setTransferOpen(false);
+    }
+    window.addEventListener("mousedown", onPointer);
+    return () => window.removeEventListener("mousedown", onPointer);
+  }, [transferOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -1913,46 +1921,116 @@ export function ServerSettingsModal({
                       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
                         Transfer ownership
                       </p>
-                      <input
-                        value={transferQuery}
-                        onChange={(event) => {
-                          setTransferQuery(event.target.value);
-                          setTransferTo("");
-                        }}
-                        placeholder="Search members…"
-                        className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <select
-                          value={transferTo}
-                          onChange={(event) => setTransferTo(event.target.value)}
-                          className="min-w-[12rem] flex-1 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm"
+                      <div className="flex flex-wrap items-start gap-2">
+                        <div
+                          className="relative min-w-[14rem] flex-1"
+                          data-transfer-picker
                         >
-                          <option value="">Select a member…</option>
-                          {members
-                            .filter((member) => member.user_id !== userId)
-                            .filter((member) => {
-                              const q = transferQuery.trim().toLowerCase();
-                              if (!q) return true;
-                              const label = (
-                                member.nickname ||
-                                member.username ||
-                                ""
-                              ).toLowerCase();
-                              return (
-                                label.includes(q) ||
-                                member.username.toLowerCase().includes(q)
-                              );
-                            })
-                            .map((member) => (
-                              <option
-                                key={member.user_id}
-                                value={member.user_id}
-                              >
-                                {member.nickname || member.username}
-                              </option>
-                            ))}
-                        </select>
+                          <button
+                            type="button"
+                            onClick={() => setTransferOpen((open) => !open)}
+                            className="flex w-full items-center justify-between gap-2 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-left text-sm text-foreground outline-none hover:border-white/20 focus:border-accent/60"
+                            aria-expanded={transferOpen}
+                          >
+                            <span className="min-w-0 truncate">
+                              {transferTo
+                                ? members.find((m) => m.user_id === transferTo)
+                                    ?.nickname ||
+                                  members.find((m) => m.user_id === transferTo)
+                                    ?.username ||
+                                  "Selected member"
+                                : "Select a member…"}
+                            </span>
+                            <ChevronDown
+                              className={`h-4 w-4 shrink-0 text-[var(--ms-text-muted)] transition ${
+                                transferOpen ? "rotate-180" : ""
+                              }`}
+                              strokeWidth={2}
+                            />
+                          </button>
+                          {transferOpen ? (
+                            <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-md border border-[#3f4147] bg-[#111214] shadow-xl shadow-black/50">
+                              <div className="border-b border-[#3f4147] p-2">
+                                <input
+                                  value={transferQuery}
+                                  onChange={(event) =>
+                                    setTransferQuery(event.target.value)
+                                  }
+                                  placeholder="Search members…"
+                                  autoFocus
+                                  className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-accent/60"
+                                />
+                              </div>
+                              <ul className="max-h-48 overflow-y-auto py-1">
+                                {members
+                                  .filter((member) => member.user_id !== userId)
+                                  .filter((member) => {
+                                    const q = transferQuery.trim().toLowerCase();
+                                    if (!q) return true;
+                                    const label = (
+                                      member.nickname ||
+                                      member.username ||
+                                      ""
+                                    ).toLowerCase();
+                                    return (
+                                      label.includes(q) ||
+                                      member.username.toLowerCase().includes(q)
+                                    );
+                                  })
+                                  .map((member) => {
+                                    const label =
+                                      member.nickname || member.username;
+                                    const selected =
+                                      transferTo === member.user_id;
+                                    return (
+                                      <li key={member.user_id}>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setTransferTo(member.user_id);
+                                            setTransferQuery("");
+                                            setTransferOpen(false);
+                                          }}
+                                          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+                                            selected
+                                              ? "bg-accent/20 text-white"
+                                              : "text-[var(--ms-text)] hover:bg-white/5"
+                                          }`}
+                                        >
+                                          <UserAvatar
+                                            username={label}
+                                            avatarUrl={member.avatar_url}
+                                            size="xs"
+                                          />
+                                          <span className="min-w-0 truncate">
+                                            {label}
+                                          </span>
+                                        </button>
+                                      </li>
+                                    );
+                                  })}
+                                {members.filter((member) => {
+                                  if (member.user_id === userId) return false;
+                                  const q = transferQuery.trim().toLowerCase();
+                                  if (!q) return true;
+                                  const label = (
+                                    member.nickname ||
+                                    member.username ||
+                                    ""
+                                  ).toLowerCase();
+                                  return (
+                                    label.includes(q) ||
+                                    member.username.toLowerCase().includes(q)
+                                  );
+                                }).length === 0 && (
+                                  <li className="px-3 py-2 text-sm text-[var(--ms-text-muted)]">
+                                    No members match.
+                                  </li>
+                                )}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </div>
                         <button
                           type="button"
                           disabled={saving || !transferTo}
@@ -3558,7 +3636,7 @@ function RoleRow({
     (color || "#dc2626").toLowerCase() !==
       (role.color || "#dc2626").toLowerCase() ||
     hoist !== Boolean(role.hoist) ||
-    ROLE_PERM_OPTIONS.some(
+    ROLE_PERMISSION_OPTIONS.some(
       (option) => Boolean(perms[option.key]) !== Boolean(baselinePerms[option.key]),
     );
 
@@ -3676,34 +3754,70 @@ function RoleRow({
         ) : null}
       </div>
 
-      <div className="space-y-2 border-t border-black/25 pt-2">
+      <div className="space-y-3 border-t border-black/25 pt-3">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
           Permissions
         </p>
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-          {ROLE_PERM_OPTIONS.map((option) => (
-            <label
-              key={option.key}
-              className={`flex items-center gap-1.5 text-[11px] text-[var(--ms-text)] ${
-                canEdit ? "" : "opacity-50"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={Boolean(perms[option.key])}
-                disabled={!canEdit}
-                onChange={(event) =>
-                  setPerms((current) => ({
-                    ...current,
-                    [option.key]: event.target.checked,
-                  }))
-                }
-                className="h-3.5 w-3.5 accent-[var(--accent)]"
-              />
-              {option.label}
-            </label>
-          ))}
-        </div>
+        {Array.from(
+          ROLE_PERMISSION_OPTIONS.reduce((map, option) => {
+            const list = map.get(option.group) ?? [];
+            list.push(option);
+            map.set(option.group, list);
+            return map;
+          }, new Map<string, typeof ROLE_PERMISSION_OPTIONS>()),
+        ).map(([group, options]) => (
+          <div key={group} className="space-y-1">
+            <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#b5bac1]">
+              {group}
+            </p>
+            <ul className="overflow-hidden rounded-md border border-[#3f4147] bg-[var(--ms-border)]">
+              {options.map((option, index) => (
+                <li
+                  key={option.key}
+                  className={`flex items-start gap-3 px-3 py-2.5 ${
+                    index > 0 ? "border-t border-[#3f4147]" : ""
+                  } ${canEdit ? "" : "opacity-50"}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-white">
+                      {option.label}
+                    </p>
+                    <p className="mt-0.5 text-xs leading-snug text-[var(--ms-text-muted)]">
+                      {option.description}
+                    </p>
+                  </div>
+                  <label className="relative mt-0.5 inline-flex shrink-0 cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(perms[option.key])}
+                      disabled={!canEdit}
+                      onChange={(event) =>
+                        setPerms((current) => ({
+                          ...current,
+                          [option.key]: event.target.checked,
+                        }))
+                      }
+                      className="peer sr-only"
+                    />
+                    <span
+                      className={`h-5 w-9 rounded-full transition-colors ${
+                        perms[option.key]
+                          ? "bg-accent"
+                          : "bg-[#4e5058]"
+                      } peer-focus-visible:ring-2 peer-focus-visible:ring-accent/50 peer-disabled:opacity-50`}
+                    />
+                    <span
+                      className={`pointer-events-none absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                        perms[option.key] ? "translate-x-4" : ""
+                      }`}
+                    />
+                    <span className="sr-only">{option.label}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     </div>
   );

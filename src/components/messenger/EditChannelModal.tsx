@@ -500,15 +500,22 @@ export function EditChannelModal({
                       Can view this channel
                     </label>
                   ) : null}
-                  <ul className="space-y-1">
-                    {permOptions.map((option) => (
+                  <ul className="overflow-hidden rounded-md border border-[#3f4147] bg-[var(--ms-border)]">
+                    {permOptions.map((option, index) => (
                       <li
                         key={option.key}
-                        className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-white/5"
+                        className={`flex items-start justify-between gap-3 px-3 py-2.5 ${
+                          index > 0 ? "border-t border-[#3f4147]" : ""
+                        }`}
                       >
-                        <span className="text-sm text-[var(--ms-text)]">
-                          {option.label}
-                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-white">
+                            {option.label}
+                          </p>
+                          <p className="mt-0.5 text-xs leading-snug text-[var(--ms-text-muted)]">
+                            {option.description}
+                          </p>
+                        </div>
                         <TriState
                           state={getOverrideState(
                             overrides,
