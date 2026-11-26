@@ -69,7 +69,7 @@ export function CreateServerModal({
       return;
     }
 
-    // Default Member role is created by trg_servers_default_member_role —
+    // Default @everyone role is created by trg_servers_default_member_role —
     // do not client-insert a second is_default role.
 
     // Owner membership is required before onCreated; AFTER INSERT trigger

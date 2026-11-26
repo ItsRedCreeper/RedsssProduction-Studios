@@ -746,7 +746,7 @@ export function ServerSettingsModal({
       return;
     }
     // Discord: @everyone name is fixed; Display separately is not offered.
-    const trimmed = role.is_default ? role.name : nextName.trim();
+    const trimmed = role.is_default ? "@everyone" : nextName.trim();
     const hoistValue = role.is_default ? false : nextHoist;
     if (!role.is_default && trimmed.length < ROLE_NAME_MIN) {
       setError(`Role name must be at least ${ROLE_NAME_MIN} characters.`);
@@ -855,7 +855,7 @@ export function ServerSettingsModal({
   async function deleteRole(roleId: string) {
     const target = roles.find((role) => role.id === roleId);
     if (target?.is_default) {
-      setError("The default Member role cannot be deleted.");
+      setError("The @everyone role cannot be deleted.");
       setConfirmRoleId(null);
       return;
     }
@@ -946,7 +946,7 @@ export function ServerSettingsModal({
   async function removeRole(memberId: string, roleId: string) {
     const target = roles.find((role) => role.id === roleId);
     if (target?.is_default) {
-      setError("The default Member role cannot be removed from members.");
+      setError("The @everyone role cannot be removed from members.");
       return;
     }
     if (
@@ -3585,7 +3585,8 @@ function RoleRow({
   onCancelDelete: () => void;
   onDelete: () => void;
 }) {
-  const [name, setName] = useState(role.name);
+  const roleLabel = role.is_default ? "@everyone" : role.name;
+  const [name, setName] = useState(roleLabel);
   const [color, setColor] = useState(role.color || "#dc2626");
   const [hoist, setHoist] = useState(Boolean(role.hoist));
   const [perms, setPerms] = useState<Record<string, boolean>>(() => {
@@ -3596,7 +3597,7 @@ function RoleRow({
   });
 
   useEffect(() => {
-    setName(role.name);
+    setName(role.is_default ? "@everyone" : role.name);
     setColor(role.color || "#dc2626");
     setHoist(Boolean(role.hoist));
     const raw = role.permissions;
@@ -3605,7 +3606,7 @@ function RoleRow({
         ? (raw as Record<string, boolean>)
         : {},
     );
-  }, [role.name, role.color, role.hoist, role.permissions]);
+  }, [role.name, role.color, role.hoist, role.permissions, role.is_default]);
 
   const baselinePerms =
     role.permissions &&
@@ -3614,7 +3615,7 @@ function RoleRow({
       ? (role.permissions as Record<string, boolean>)
       : {};
   const dirty =
-    name.trim() !== role.name ||
+    (!role.is_default && name.trim() !== role.name) ||
     (color || "#dc2626").toLowerCase() !==
       (role.color || "#dc2626").toLowerCase() ||
     hoist !== Boolean(role.hoist) ||

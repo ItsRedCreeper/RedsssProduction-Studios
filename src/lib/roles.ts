@@ -118,7 +118,7 @@ export function memberListGroupRole(
 
 /**
  * Roles to show as pills on profiles (highest first).
- * Never include the default Member / @everyone role — it's the server's base
+ * Never include the default @everyone role — it's the server's base
  * permission set, not a badge. Members still have it for permission checks.
  */
 export function displayRolesForMember(

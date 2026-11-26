@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/client";
 type Supabase = ReturnType<typeof createClient>;
 
 /**
- * Look up the server's default Member / @everyone role.
+ * Look up the server's default @everyone role.
  * Creation is owned by DB triggers (private.ensure_default_member_role);
  * the client must not insert roles or member_roles (RLS blocks joiners).
  */
@@ -24,7 +24,7 @@ export async function ensureServerDefaultRole(
   if (!existing) {
     return {
       role: null,
-      error: "Server has no default Member role yet.",
+      error: "Server has no @everyone role yet.",
     };
   }
   return { role: existing, error: null as string | null };
