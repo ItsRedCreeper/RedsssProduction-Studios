@@ -285,9 +285,8 @@ export function ChannelSidebar({
         {people.length > 0 && (
           <ul className="mb-1 ml-4 space-y-0.5">
             {people.slice(0, 8).map((person) => {
-              // Green speaking ring only if YOU are in this same voice channel.
-              const speaking =
-                connectedHere && speakingUserIds.has(person.user_id);
+              // Green ring whenever someone is speaking — even if you are not connected.
+              const speaking = speakingUserIds.has(person.user_id);
               return (
                 <li key={person.user_id}>
                   <button

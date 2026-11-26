@@ -1681,6 +1681,63 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     };
   }, [activeServerId, previewMode]);
 
+  // Listen for speaking rings on occupied voice channels you are NOT joined to.
+  // (Joined channel is already handled by VoiceSessionProvider's speaking subscription.)
+  const occupiedVoiceChannelKey = useMemo(() => {
+    const ids = new Set<string>();
+    for (const state of displayVoiceStates) ids.add(state.channel_id);
+    return [...ids].sort().join("|");
+  }, [displayVoiceStates]);
+
+  const [watchedSpeakingIds, setWatchedSpeakingIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  useEffect(() => {
+    if (previewMode || !occupiedVoiceChannelKey) {
+      setWatchedSpeakingIds(new Set());
+      return;
+    }
+    const joinedId = connection?.channelId ?? null;
+    const channelIds = occupiedVoiceChannelKey
+      .split("|")
+      .filter((id) => id && id !== joinedId);
+    if (channelIds.length === 0) {
+      setWatchedSpeakingIds(new Set());
+      return;
+    }
+    const supabase = createClient();
+    const speaking = new Map<string, boolean>();
+    const flush = () => {
+      setWatchedSpeakingIds(
+        new Set(
+          [...speaking.entries()]
+            .filter(([, on]) => on)
+            .map(([userId]) => userId),
+        ),
+      );
+    };
+    // Must match VoiceSessionProvider publish topic (`voice-speaking:${id}`).
+    const channels = channelIds.map((channelId) =>
+      supabase
+        .channel(`voice-speaking:${channelId}`)
+        .on("broadcast", { event: "speaking" }, ({ payload }) => {
+          const userId = (payload as { userId?: string })?.userId;
+          if (!userId) return;
+          const on = Boolean((payload as { speaking?: boolean })?.speaking);
+          if (on) speaking.set(userId, true);
+          else speaking.delete(userId);
+          flush();
+        })
+        .subscribe(),
+    );
+    return () => {
+      for (const channel of channels) {
+        void supabase.removeChannel(channel);
+      }
+    };
+  }, [occupiedVoiceChannelKey, previewMode, connection?.channelId]);
+
   useEffect(() => {
     if (!activeChannelId) return;
     // Don't block on server chrome — messages load in parallel with members/roles.
@@ -4272,12 +4329,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   );
 
   const speakingUserIds = useMemo(() => {
-    if (!user || !voice.selfSpeaking) return voice.speakingUserIds;
-    if (voice.speakingUserIds.has(user.id)) return voice.speakingUserIds;
-    const next = new Set(voice.speakingUserIds);
-    next.add(user.id);
+    const next = new Set(watchedSpeakingIds);
+    for (const id of voice.speakingUserIds) next.add(id);
+    if (user && voice.selfSpeaking) next.add(user.id);
     return next;
-  }, [user, voice.selfSpeaking, voice.speakingUserIds]);
+  }, [watchedSpeakingIds, user, voice.selfSpeaking, voice.speakingUserIds]);
 
   const memberUserIds = useMemo(
     () => members.map((member) => member.user_id),

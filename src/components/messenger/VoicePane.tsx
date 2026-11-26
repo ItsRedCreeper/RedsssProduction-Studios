@@ -107,8 +107,23 @@ function MediaVideo({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.srcObject = stream;
-    void el.play().catch(() => undefined);
+    const bind = () => {
+      el.srcObject = stream;
+      void el.play().catch(() => undefined);
+    };
+    bind();
+    // After screen-share restart the track often unmutes without a new MediaStream.
+    const tracks = stream.getTracks();
+    for (const track of tracks) {
+      track.addEventListener("unmute", bind);
+      track.addEventListener("mute", bind);
+    }
+    return () => {
+      for (const track of tracks) {
+        track.removeEventListener("unmute", bind);
+        track.removeEventListener("mute", bind);
+      }
+    };
   }, [stream]);
   return (
     <video

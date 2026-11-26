@@ -309,7 +309,16 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         } else {
           next.camera = null;
         }
+        // Avoid redundant updates that skip remounting <video> on restart.
+        if (
+          next.camera === current.camera &&
+          next.screen === current.screen &&
+          prev[peerId]
+        ) {
+          return prev;
+        }
         if (!next.camera && !next.screen) {
+          if (!prev[peerId]) return prev;
           const copy = { ...prev };
           delete copy[peerId];
           return copy;

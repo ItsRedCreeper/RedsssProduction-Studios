@@ -7,10 +7,10 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun1.l.google.com:19302" },
 ];
 
-function isTrackRenderable(
+function isTrackLive(
   track: MediaStreamTrack | null | undefined,
 ): track is MediaStreamTrack {
-  return !!track && track.readyState === "live" && !track.muted;
+  return !!track && track.readyState === "live";
 }
 
 /** Wait until capture is actually producing (unmuted). Cancel/fail → false. */
@@ -48,6 +48,8 @@ type SignalPayload =
       from: string;
       camera: boolean;
       screen: boolean;
+      /** Bumps every successful screen start so remotes re-bind the receiver track. */
+      screenEpoch?: number;
     }
   | { kind: "offer"; from: string; to: string; sdp: RTCSessionDescriptionInit }
   | { kind: "answer"; from: string; to: string; sdp: RTCSessionDescriptionInit }
@@ -70,6 +72,7 @@ type PeerSlot = {
   /** What the remote peer last announced they are sending. */
   remoteCamera: boolean;
   remoteScreen: boolean;
+  remoteScreenEpoch: number;
 };
 
 export type VoiceMeshOptions = {
@@ -107,6 +110,8 @@ export class VoiceMesh {
   private localScreenTrack: MediaStreamTrack | null = null;
   /** Only true after a screen track is live+unmuted — Discord-like “actually sharing”. */
   private screenLive = false;
+  /** Increments on each successful local screen start (restart-safe for remotes). */
+  private screenEpoch = 0;
   /** Only true after a camera track is live+unmuted. */
   private cameraLive = false;
   private muted = false;
@@ -264,9 +269,9 @@ export class VoiceMesh {
    * Peers are only told `screen: true` after the capture track is literally live
    * (unmuted) — same as Discord, so cancel / failed capture never spawns tiles.
    *
-   * Restart path: announce off → replaceTrack → wait live → re-replace → renegotiate
-   * → announce on. Chromium often leaves the remote receiver muted after a second
-   * replaceTrack without an SDP renegotiation.
+   * Restart path: announce off + clear sender → attach new track → wait live →
+   * re-replace → bump screenEpoch → announce on. Remotes re-bind on epoch change
+   * even when Chromium leaves the receiver track muted after replaceTrack(null).
    */
   async setLocalScreenTrack(track: MediaStreamTrack | null): Promise<boolean> {
     if (this.localScreenTrack && this.localScreenTrack !== track) {
@@ -320,18 +325,26 @@ export class VoiceMesh {
       await this.announceMedia();
       return false;
     }
-    // Fresh replace after live so the second share isn't a no-op on remotes.
+    // Pulse replace so remotes get a fresh RTP flow on restart (not a no-op).
     for (const peerId of this.peers.keys()) {
-      await this.applyVideoToPeer(peerId, "screen");
+      const slot = this.peers.get(peerId);
+      if (!slot) continue;
+      try {
+        await slot.screenTransceiver.sender.replaceTrack(null);
+        await slot.screenTransceiver.sender.replaceTrack(track);
+      } catch (error) {
+        console.warn("[voice-mesh] screen restart replace failed", error);
+        await this.applyVideoToPeer(peerId, "screen");
+      }
     }
+    this.screenEpoch += 1;
     this.screenLive = true;
-    await this.renegotiateAll();
     await this.announceMedia();
-    // Late unmute / renegotiation: nudge remotes once more.
+    // Late unmute: nudge remotes once more after packets start flowing.
     window.setTimeout(() => {
       if (this.closed || !this.screenLive || this.localScreenTrack !== track) return;
       void this.announceMedia();
-    }, 350);
+    }, 400);
     return true;
   }
 
@@ -378,6 +391,7 @@ export class VoiceMesh {
       // Only advertise sources that are actually producing frames.
       camera: this.cameraLive && !!this.localVideoTrack,
       screen: this.screenLive && !!this.localScreenTrack,
+      screenEpoch: this.screenLive ? this.screenEpoch : 0,
     });
   }
 
@@ -440,9 +454,15 @@ export class VoiceMesh {
     peerId: string,
     kind: "camera" | "screen",
     track: MediaStreamTrack | null,
+    opts?: { allowMuted?: boolean },
   ) {
-    // Muted/placeholder receiver tracks must not create Discord-style tiles.
-    if (!isTrackRenderable(track)) {
+    if (!isTrackLive(track)) {
+      this.opts.onRemoteVideo?.(peerId, null, kind);
+      return;
+    }
+    // After a restart the receiver often stays muted until RTP arrives — still bind
+    // so the <video> can show frames as soon as unmute happens.
+    if (!opts?.allowMuted && track.muted) {
       this.opts.onRemoteVideo?.(peerId, null, kind);
       return;
     }
@@ -458,7 +478,7 @@ export class VoiceMesh {
     }
   }
 
-  /** Keep trying until the receiver track unmutes after a restart replaceTrack. */
+  /** Keep trying until the receiver track is live after a restart replaceTrack. */
   private armPendingVideoPublish(peerId: string, kind: "camera" | "screen") {
     this.clearPendingVideoPublish(peerId, kind);
     const key = `${peerId}:${kind}`;
@@ -478,15 +498,16 @@ export class VoiceMesh {
         kind === "screen"
           ? slot.screenTransceiver.receiver.track
           : slot.cameraTransceiver.receiver.track;
-      if (isTrackRenderable(track)) {
-        this.publishRemoteVideo(peerId, kind, track);
+      if (isTrackLive(track)) {
+        // Bind once (even while muted). Unmute handler / MediaVideo rebinds frames.
+        this.publishRemoteVideo(peerId, kind, track, { allowMuted: true });
         this.clearPendingVideoPublish(peerId, kind);
         return;
       }
-      if (Date.now() - started > 6000) {
+      if (Date.now() - started > 8000) {
         this.clearPendingVideoPublish(peerId, kind);
       }
-    }, 200);
+    }, 150);
     this.pendingVideoPublish.set(key, timer);
   }
 
@@ -494,20 +515,23 @@ export class VoiceMesh {
     peerId: string,
     camera: boolean,
     screen: boolean,
+    screenEpoch = 0,
   ) {
     const slot = this.peers.get(peerId);
     if (!slot) return;
     slot.remoteCamera = camera;
     slot.remoteScreen = screen;
+    const epochBumped = screen && screenEpoch > slot.remoteScreenEpoch;
+    if (screen && screenEpoch > 0) slot.remoteScreenEpoch = screenEpoch;
 
     if (!camera) {
       this.clearPendingVideoPublish(peerId, "camera");
       this.publishRemoteVideo(peerId, "camera", null);
     } else {
       const track = slot.cameraTransceiver.receiver.track;
-      if (isTrackRenderable(track)) {
+      if (isTrackLive(track)) {
         this.clearPendingVideoPublish(peerId, "camera");
-        this.publishRemoteVideo(peerId, "camera", track);
+        this.publishRemoteVideo(peerId, "camera", track, { allowMuted: true });
       } else {
         this.armPendingVideoPublish(peerId, "camera");
       }
@@ -518,22 +542,16 @@ export class VoiceMesh {
       this.publishRemoteVideo(peerId, "screen", null);
     } else {
       const track = slot.screenTransceiver.receiver.track;
-      if (isTrackRenderable(track)) {
-        this.clearPendingVideoPublish(peerId, "screen");
-        this.publishRemoteVideo(peerId, "screen", track);
+      if (isTrackLive(track)) {
+        // Epoch bump forces a new MediaStream bind even if the track object is reused.
+        this.publishRemoteVideo(peerId, "screen", track, { allowMuted: true });
+        if (epochBumped || !track.muted) {
+          this.clearPendingVideoPublish(peerId, "screen");
+        }
+        if (track.muted) this.armPendingVideoPublish(peerId, "screen");
       } else {
-        // Announce can beat unmute / renegotiation on a restarted share.
         this.armPendingVideoPublish(peerId, "screen");
       }
-    }
-  }
-
-  private async renegotiateAll() {
-    for (const [peerId, slot] of this.peers) {
-      if (slot.makingOffer) continue;
-      if (slot.pc.signalingState !== "stable") continue;
-      // Impolite peers always offer; polite peers may also offer — glare is handled.
-      await this.makeOffer(peerId, slot);
     }
   }
 
@@ -598,6 +616,7 @@ export class VoiceMesh {
         payload.from,
         !!payload.camera,
         !!payload.screen,
+        typeof payload.screenEpoch === "number" ? payload.screenEpoch : 0,
       );
       return;
     }
@@ -675,6 +694,7 @@ export class VoiceMesh {
       screenTransceiver,
       remoteCamera: false,
       remoteScreen: false,
+      remoteScreenEpoch: 0,
     };
     this.peers.set(peerId, slot);
     this.opts.onPeerCount?.(this.peers.size);
@@ -721,15 +741,19 @@ export class VoiceMesh {
           else if (index === 0) kind = "camera";
         }
 
-        // Only surface video once announced AND the track is actually renderable.
+        // Surface once announced; muted is OK — MediaVideo rebinds on unmute.
         const announced =
           kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
-        if (announced && isTrackRenderable(track)) {
-          this.publishRemoteVideo(peerId, kind, track);
+        if (announced && isTrackLive(track)) {
+          this.publishRemoteVideo(peerId, kind, track, { allowMuted: true });
         }
 
         track.addEventListener("ended", () => {
-          this.publishRemoteVideo(peerId, kind, null);
+          const wanted =
+            kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
+          // Renegotiation can end a track while share is still wanted — wait for the next.
+          if (!wanted) this.publishRemoteVideo(peerId, kind, null);
+          else this.armPendingVideoPublish(peerId, kind);
         });
         track.addEventListener("mute", () => {
           // replaceTrack(null) mutes without ending — only clear if share was announced off.
@@ -740,8 +764,9 @@ export class VoiceMesh {
         track.addEventListener("unmute", () => {
           const stillWanted =
             kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
-          if (stillWanted && isTrackRenderable(track)) {
-            this.publishRemoteVideo(peerId, kind, track);
+          if (stillWanted && isTrackLive(track)) {
+            this.publishRemoteVideo(peerId, kind, track, { allowMuted: true });
+            this.clearPendingVideoPublish(peerId, kind);
           }
         });
         return;
