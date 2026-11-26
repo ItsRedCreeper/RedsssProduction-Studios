@@ -3039,36 +3039,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       );
       return;
     }
-    if (
-      activeServer &&
-      !isServerOwner &&
-      !myPerms.ADMINISTRATOR &&
-      (activeServer.verification_level ?? 0) > 0
-    ) {
-      const level = activeServer.verification_level ?? 0;
-      const accountAgeMs = profile?.created_at
-        ? Date.now() - Date.parse(profile.created_at)
-        : 0;
-      const memberAgeMs = me?.joined_at
-        ? Date.now() - Date.parse(me.joined_at)
-        : 0;
-      if (level >= 1 && accountAgeMs < 60_000) {
-        setError("This server requires a verified account age to chat.");
-        return;
-      }
-      if (level >= 2 && accountAgeMs < 5 * 60_000) {
-        setError(
-          "This server requires your account to be at least 5 minutes old.",
-        );
-        return;
-      }
-      if (level >= 3 && memberAgeMs < 10 * 60_000) {
-        setError(
-          "This server requires you to be a member for at least 10 minutes.",
-        );
-        return;
-      }
-    }
     const slowmode = activeChannel.slowmode_seconds ?? 0;
     if (
       slowmode > 0 &&

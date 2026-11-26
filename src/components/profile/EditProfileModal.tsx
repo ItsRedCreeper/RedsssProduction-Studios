@@ -20,6 +20,10 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DirtySaveButton } from "@/components/ui/DirtySaveButton";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { ProfileBanner } from "@/components/profile/ProfileBanner";
+import {
+  ImageCropModal,
+  type ImageCropKind,
+} from "@/components/ui/ImageCropModal";
 
 type EditProfileModalProps = {
   open: boolean;
@@ -44,6 +48,10 @@ export function EditProfileModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<"avatar" | "banner" | null>(null);
+  const [crop, setCrop] = useState<{
+    kind: ImageCropKind;
+    file: File;
+  } | null>(null);
 
   // Seed drafts only when the editor opens (or the profile identity changes).
   // Presence heartbeats refresh `profile` every few seconds — do not wipe unsaved edits.
@@ -68,8 +76,18 @@ export function EditProfileModal({
 
   if (!open) return null;
 
-  async function onPick(kind: "avatar" | "banner", file: File | null) {
+  function onPick(kind: "avatar" | "banner", file: File | null) {
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+    setError(null);
+    setCrop({ kind, file });
+  }
+
+  async function uploadCropped(kind: "avatar" | "banner", file: File) {
+    setCrop(null);
     setUploading(kind);
     setError(null);
     const { url, error: uploadError } = await uploadProfileAsset(
@@ -153,6 +171,17 @@ export function EditProfileModal({
         aria-label="Close"
         onClick={onClose}
         disabled={saving}
+      />
+      <ImageCropModal
+        open={!!crop}
+        file={crop?.file ?? null}
+        kind={crop?.kind ?? "avatar"}
+        onCancel={() => setCrop(null)}
+        onCropped={(cropped) => {
+          if (!crop) return;
+          const kind = crop.kind === "banner" ? "banner" : "avatar";
+          void uploadCropped(kind, cropped);
+        }}
       />
       <form
         onSubmit={(event) => void onSubmit(event)}

@@ -22,6 +22,7 @@ import { compareRolePositionDesc } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DirtySaveButton } from "@/components/ui/DirtySaveButton";
+import { ImageCropModal } from "@/components/ui/ImageCropModal";
 import { CustomEmoji } from "@/components/messenger/CustomEmoji";
 import {
   byPosition,
@@ -148,10 +149,8 @@ export function ServerSettingsModal({
   const [name, setName] = useState(server.name);
   const [description, setDescription] = useState(server.description ?? "");
   const [isPublic, setIsPublic] = useState(server.is_public);
-  const [verificationLevel, setVerificationLevel] = useState(
-    server.verification_level ?? 0,
-  );
   const [iconBusy, setIconBusy] = useState(false);
+  const [iconCropFile, setIconCropFile] = useState<File | null>(null);
   const [transferTo, setTransferTo] = useState("");
   const [nickEditId, setNickEditId] = useState<string | null>(null);
   const [nickDraft, setNickDraft] = useState("");
@@ -251,7 +250,6 @@ export function ServerSettingsModal({
     setName(server.name);
     setDescription(server.description ?? "");
     setIsPublic(server.is_public);
-    setVerificationLevel(server.verification_level ?? 0);
     setTransferTo("");
     setError(null);
     setConfirmChannelId(null);
@@ -415,14 +413,10 @@ export function ServerSettingsModal({
 
   if (!open) return null;
 
-  const safetyVerificationDirty =
-    verificationLevel !== (server.verification_level ?? 0);
-
   const overviewDirty =
     name.trim() !== server.name ||
     (description.trim() || "") !== (server.description?.trim() || "") ||
-    isPublic !== server.is_public ||
-    verificationLevel !== (server.verification_level ?? 0);
+    isPublic !== server.is_public;
 
   async function saveOverview(event: FormEvent) {
     event.preventDefault();
@@ -444,7 +438,6 @@ export function ServerSettingsModal({
         name: trimmed,
         description: description.trim() || null,
         is_public: isPublic,
-        verification_level: verificationLevel,
       })
       .eq("id", server.id)
       .select("*")
@@ -452,25 +445,6 @@ export function ServerSettingsModal({
     setSaving(false);
     if (updateError || !data) {
       setError(updateError?.message ?? "Could not save server.");
-      return;
-    }
-    onServerUpdated(data);
-  }
-
-  async function saveSafetyVerification() {
-    if (!canManageServer && !isOwner) return;
-    setSaving(true);
-    setError(null);
-    const supabase = createClient();
-    const { data, error: updateError } = await supabase
-      .from("servers")
-      .update({ verification_level: verificationLevel })
-      .eq("id", server.id)
-      .select("*")
-      .single();
-    setSaving(false);
-    if (updateError || !data) {
-      setError(updateError?.message ?? "Could not save verification level.");
       return;
     }
     onServerUpdated(data);
@@ -1726,6 +1700,16 @@ export function ServerSettingsModal({
         aria-label="Close settings"
         onClick={onClose}
       />
+      <ImageCropModal
+        open={!!iconCropFile}
+        file={iconCropFile}
+        kind="icon"
+        onCancel={() => setIconCropFile(null)}
+        onCropped={(cropped) => {
+          setIconCropFile(null);
+          void uploadServerIcon(cropped);
+        }}
+      />
       <div
         role="dialog"
         aria-modal="true"
@@ -1808,7 +1792,9 @@ export function ServerSettingsModal({
                       className="hidden"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
-                        if (file) void uploadServerIcon(file);
+                        if (file?.type.startsWith("image/")) {
+                          setIconCropFile(file);
+                        }
                         event.target.value = "";
                       }}
                     />
@@ -1821,7 +1807,7 @@ export function ServerSettingsModal({
                       {iconBusy ? "Uploading…" : "Change Icon"}
                     </button>
                     <p className="text-[11px] text-[var(--ms-text-muted)]">
-                      PNG, JPG, GIF, or WebP · max 512 KB
+                      Crop after upload · PNG, JPG, GIF, or WebP · max 512 KB
                     </p>
                   </div>
                 </div>
@@ -1848,28 +1834,6 @@ export function ServerSettingsModal({
                     maxLength={SERVER_DESCRIPTION_MAX}
                     className="w-full resize-none rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60"
                   />
-                </label>
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Verification level
-                  </span>
-                  <select
-                    value={verificationLevel}
-                    onChange={(event) =>
-                      setVerificationLevel(Number(event.target.value))
-                    }
-                    className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
-                  >
-                    <option value={0}>None</option>
-                    <option value={1}>Low — verified account age</option>
-                    <option value={2}>Medium — account older than 5 minutes</option>
-                    <option value={3}>
-                      High — member of server for 10+ minutes
-                    </option>
-                    <option value={4}>
-                      Highest — member of server for 10+ minutes
-                    </option>
-                  </select>
                 </label>
                 <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-3">
                   <input
@@ -3310,8 +3274,8 @@ export function ServerSettingsModal({
             {tab === "safety" && (canManageServer || isOwner) && (
               <div className="space-y-5">
                 <p className="text-sm text-[#b5bac1]">
-                  Control who can join and how new members are verified. Keyword
-                  blocking is configured in the{" "}
+                  Control invites for this server. Keyword blocking is configured
+                  in the{" "}
                   <button
                     type="button"
                     onClick={() => setTab("automod")}
@@ -3322,36 +3286,7 @@ export function ServerSettingsModal({
                   tab.
                 </p>
                 <div className="space-y-4 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3">
-                  <label className="block space-y-1.5">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
-                      Verification level
-                    </span>
-                    <select
-                      value={verificationLevel}
-                      onChange={(event) =>
-                        setVerificationLevel(Number(event.target.value))
-                      }
-                      className="w-full rounded-md border border-[#3f4147] bg-[#111214] px-3 py-2.5 text-sm text-[var(--ms-text)] outline-none focus:border-accent/60"
-                    >
-                      <option value={0}>None</option>
-                      <option value={1}>Low — verified account age</option>
-                      <option value={2}>Medium — account older than 5 minutes</option>
-                      <option value={3}>
-                        High — member of server for 10+ minutes
-                      </option>
-                      <option value={4}>
-                        Highest — member of server for 10+ minutes
-                      </option>
-                    </select>
-                  </label>
-                  <DirtySaveButton
-                    type="button"
-                    dirty={safetyVerificationDirty}
-                    saving={saving}
-                    onClick={() => void saveSafetyVerification()}
-                    label="Save verification"
-                  />
-                  <label className="flex cursor-pointer items-start gap-2 border-t border-[#3f4147] pt-3">
+                  <label className="flex cursor-pointer items-start gap-2">
                     <input
                       type="checkbox"
                       checked={Boolean(server.invites_paused)}
@@ -3369,10 +3304,6 @@ export function ServerSettingsModal({
                     </span>
                   </label>
                 </div>
-                <p className="text-xs text-[var(--ms-text-muted)]">
-                  Overview also includes verification when you save server
-                  details there — both use the same setting.
-                </p>
               </div>
             )}
           </div>
