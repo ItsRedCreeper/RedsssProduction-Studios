@@ -118,19 +118,14 @@ export function memberListGroupRole(
 
 /**
  * Roles to show as pills on profiles (highest first).
- * Like Discord: hide the default Member / @everyone pill when the person has
- * any other role — they still *have* Member for permissions, it just isn't
- * shown as a badge. If they only have Member, show it when its color was
- * customized so recoloring Member is visible.
+ * Never include the default Member / @everyone role — it's the server's base
+ * permission set, not a badge. Members still have it for permission checks.
  */
 export function displayRolesForMember(
   roles: Role[],
   roleIds: string[],
 ): Role[] {
-  const owned = rolesForMember(roles, roleIds);
-  const custom = owned.filter((role) => !role.is_default);
-  if (custom.length > 0) return custom;
-  return owned.filter((role) => hasCustomRoleColor(role));
+  return rolesForMember(roles, roleIds).filter((role) => !role.is_default);
 }
 
 /** Normalize a role hex for display — exact chosen color, no lightening. */

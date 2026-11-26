@@ -2515,27 +2515,8 @@ export function ServerSettingsModal({
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {member.roleIds.map((roleId) => {
                           const role = roleById.get(roleId);
-                          if (!role) return null;
-                          if (role.is_default) {
-                            return (
-                              <span
-                                key={roleId}
-                                className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium text-white"
-                                style={{
-                                  backgroundColor: `${role.color || "#99aab5"}33`,
-                                }}
-                                title="Default role"
-                              >
-                                <span
-                                  className="h-2 w-2 rounded-full"
-                                  style={{
-                                    backgroundColor: role.color || "#99aab5",
-                                  }}
-                                />
-                                {role.name}
-                              </span>
-                            );
-                          }
+                          // Default Member / @everyone is a permission baseline, not a badge.
+                          if (!role || role.is_default) return null;
                           if (!canManageRoles && !isOwner) {
                             return (
                               <span
