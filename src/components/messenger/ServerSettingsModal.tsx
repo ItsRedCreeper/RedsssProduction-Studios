@@ -54,7 +54,11 @@ import {
   type Permission,
   type PermissionMap,
 } from "@/lib/permissions";
-import { canManageRoleTarget, canModerateMember } from "@/lib/roles";
+import {
+  canManageRoleTarget,
+  canModerateMember,
+  NEUTRAL_ROLE_COLOR,
+} from "@/lib/roles";
 import type {
   Category,
   Channel,
@@ -745,8 +749,9 @@ export function ServerSettingsModal({
       setError("You can only edit roles below your highest role.");
       return;
     }
-    // Discord: @everyone name is fixed; Display separately is not offered.
+    // @everyone: name/color/hoist are fixed — it's a permission baseline only.
     const trimmed = role.is_default ? "@everyone" : nextName.trim();
+    const colorValue = role.is_default ? NEUTRAL_ROLE_COLOR : nextColor;
     const hoistValue = role.is_default ? false : nextHoist;
     if (!role.is_default && trimmed.length < ROLE_NAME_MIN) {
       setError(`Role name must be at least ${ROLE_NAME_MIN} characters.`);
@@ -788,7 +793,7 @@ export function ServerSettingsModal({
       .from("roles")
       .update({
         name: trimmed,
-        color: nextColor,
+        color: colorValue,
         permissions: sanitized,
         hoist: hoistValue,
       })
@@ -3616,9 +3621,10 @@ function RoleRow({
       : {};
   const dirty =
     (!role.is_default && name.trim() !== role.name) ||
-    (color || "#dc2626").toLowerCase() !==
-      (role.color || "#dc2626").toLowerCase() ||
-    hoist !== Boolean(role.hoist) ||
+    (!role.is_default &&
+      (color || "#dc2626").toLowerCase() !==
+        (role.color || "#dc2626").toLowerCase()) ||
+    (!role.is_default && hoist !== Boolean(role.hoist)) ||
     ROLE_PERMISSION_OPTIONS.some(
       (option) => Boolean(perms[option.key]) !== Boolean(baselinePerms[option.key]),
     );
@@ -3700,24 +3706,24 @@ function RoleRow({
         )}
       </div>
 
-      <div className="space-y-2 border-t border-black/25 pt-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
-          Display
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-xs text-[var(--ms-text)]">
-            <span className="text-[var(--ms-text-muted)]">Role color</span>
-            <input
-              type="color"
-              value={color}
-              onChange={(event) => setColor(event.target.value)}
-              aria-label={`${role.name} color`}
-              disabled={!canEdit}
-              className="h-8 w-10 cursor-pointer rounded-md border border-[#3f4147] bg-transparent disabled:opacity-50"
-            />
-          </label>
-        </div>
-        {!role.is_default ? (
+      {!role.is_default ? (
+        <div className="space-y-2 border-t border-black/25 pt-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
+            Display
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-[var(--ms-text)]">
+              <span className="text-[var(--ms-text-muted)]">Role color</span>
+              <input
+                type="color"
+                value={color}
+                onChange={(event) => setColor(event.target.value)}
+                aria-label={`${role.name} color`}
+                disabled={!canEdit}
+                className="h-8 w-10 cursor-pointer rounded-md border border-[#3f4147] bg-transparent disabled:opacity-50"
+              />
+            </label>
+          </div>
           <label
             className={`flex items-start gap-2 text-xs text-[var(--ms-text)] ${
               canEdit ? "" : "opacity-50"
@@ -3734,8 +3740,8 @@ function RoleRow({
               Display role members separately from online members
             </span>
           </label>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <div className="space-y-3 border-t border-black/25 pt-3">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
