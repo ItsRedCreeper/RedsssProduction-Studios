@@ -51,6 +51,23 @@ const CATEGORIES: GifCategory[] = [
 
 const PAGE_SIZE = 12;
 
+/** Discord-style: drop each GIF into the currently shortest column. */
+function masonryColumns(items: GifResult[], columnCount: number) {
+  const cols: GifResult[][] = Array.from({ length: columnCount }, () => []);
+  const heights = Array.from({ length: columnCount }, () => 0);
+  for (const item of items) {
+    const ratio =
+      item.width > 0 && item.height > 0 ? item.height / item.width : 0.75;
+    let best = 0;
+    for (let i = 1; i < columnCount; i += 1) {
+      if (heights[i] < heights[best]) best = i;
+    }
+    cols[best].push(item);
+    heights[best] += ratio;
+  }
+  return cols;
+}
+
 export function GifPicker({ onPick, className = "" }: GifPickerProps) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -190,6 +207,8 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
 
   const showGrid = !loading && items.length > 0;
   const browsingCategories = !debounced;
+  // Two columns matches Discord's GIF picker density in a side panel.
+  const columns = masonryColumns(items, 2);
 
   return (
     <div
@@ -250,27 +269,40 @@ export function GifPicker({ onPick, className = "" }: GifPickerProps) {
         )}
         {showGrid && (
           <>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {items.map((gif) => (
-                <button
-                  key={gif.id}
-                  type="button"
-                  onClick={() => onPick(gif)}
-                  className="relative aspect-square overflow-hidden rounded-md bg-[var(--ms-border)] hover:ring-2 hover:ring-accent/70"
+            <div className="flex items-start gap-1.5">
+              {columns.map((column, colIndex) => (
+                <div
+                  key={colIndex}
+                  className="flex min-w-0 flex-1 flex-col gap-1.5"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={gif.previewUrl}
-                    alt=""
-                    className="h-full w-full object-contain"
-                    loading="lazy"
-                    decoding="async"
-                    onError={(event) => {
-                      // Hide broken thumbs — square cell stays as a muted tile.
-                      event.currentTarget.style.visibility = "hidden";
-                    }}
-                  />
-                </button>
+                  {column.map((gif) => {
+                    const ratio =
+                      gif.width > 0 && gif.height > 0
+                        ? gif.width / gif.height
+                        : 4 / 3;
+                    return (
+                      <button
+                        key={gif.id}
+                        type="button"
+                        onClick={() => onPick(gif)}
+                        className="relative w-full overflow-hidden rounded-md bg-[var(--ms-border)] hover:ring-2 hover:ring-accent/70"
+                        style={{ aspectRatio: String(ratio) }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={gif.previewUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          onError={(event) => {
+                            event.currentTarget.style.visibility = "hidden";
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
               ))}
             </div>
             {moreError && (
