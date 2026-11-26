@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { MessageEmoji } from "@/components/messenger/EmojiInfo";
 import { SpoilerText } from "@/components/messenger/SpoilerText";
 import {
-  findEmojiByName,
   isEmojiOnlyMessage,
   MESSAGE_EMOJI_INLINE_PX,
   MESSAGE_EMOJI_JUMBO_PX,
@@ -222,7 +221,6 @@ function parseInline(
 ): ReactNode[] {
   const parts: ReactNode[] = [];
   const maps = opts.mentionMaps;
-  const customList = opts.customEmojis ?? [];
   let i = 0;
 
   while (i < content.length) {
@@ -269,28 +267,8 @@ function parseInline(
       continue;
     }
 
-    const shortcode = slice.match(/^:([a-zA-Z0-9_]{2,32}):/);
-    if (shortcode) {
-      const hit = findEmojiByName(
-        shortcode[1],
-        customList,
-        opts.preferredServerId,
-      );
-      if (hit) {
-        parts.push(
-          <MessageEmoji
-            key={nextKey()}
-            emoji={hit}
-            catalog={opts.emojiCatalog}
-            serverNamesById={opts.serverNamesById}
-            size={emojiSize}
-            className="mx-0.5"
-          />,
-        );
-        i += shortcode[0].length;
-        continue;
-      }
-    }
+    // Bare `:name:` stays plain text for everyone (Discord). Only send-time
+    // resolve turns shortcodes into <:name:id> tokens the author can use.
 
     const idUser = slice.match(/^<@(?!&)([0-9a-f-]{36})>/i);
     if (idUser) {
