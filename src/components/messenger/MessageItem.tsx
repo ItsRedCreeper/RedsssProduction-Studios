@@ -49,7 +49,10 @@ import {
   QUICK_REACTION_EMOJIS,
   type ServerEmoji,
 } from "@/lib/emoji";
-import { formatMissedCallLabel } from "@/lib/missed-call";
+import {
+  formatMissedCallLabel,
+  isMissedCallPayload,
+} from "@/lib/missed-call";
 import {
   type ChatMessage,
   type ReactionGroup,
@@ -314,17 +317,21 @@ export function MessageItem({
     </>
   );
 
-  if (message.is_system) {
-    const missed = formatMissedCallLabel(message.content, {
-      currentUserId,
-      messageUserId: message.user_id,
-    });
-    const SystemIcon = missed
-      ? missed.withVideo
+  const missedCall = formatMissedCallLabel(message.content, {
+    currentUserId,
+    messageUserId: message.user_id,
+  });
+  // Always render missed-call payloads as system notices (even if is_system
+  // failed to persist), so the raw [[missed_call]]|… string never leaks.
+  if (message.is_system || missedCall || isMissedCallPayload(message.content)) {
+    const SystemIcon = missedCall
+      ? missedCall.withVideo
         ? VideoOff
         : PhoneMissed
       : Pin;
-    const label = missed?.text ?? message.content;
+    const label =
+      missedCall?.text ??
+      (isMissedCallPayload(message.content) ? "Missed call" : message.content);
 
     return (
       <article

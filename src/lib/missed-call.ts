@@ -1,5 +1,8 @@
-/** Structured DM system payload for unanswered calls. */
-export const MISSED_CALL_PREFIX = "__missed_call__";
+/**
+ * Structured DM system payload for unanswered calls.
+ * Avoid `__…__` — that collides with Discord-style underline markdown.
+ */
+export const MISSED_CALL_PREFIX = "[[missed_call]]";
 
 export type MissedCallInfo = {
   withVideo: boolean;
@@ -10,7 +13,6 @@ export type MissedCallInfo = {
 
 export function encodeMissedCallMessage(info: MissedCallInfo): string {
   const kind = info.withVideo ? "video" : "voice";
-  // Pipe-delimited; names shouldn't contain | in practice.
   return [
     MISSED_CALL_PREFIX,
     kind,
@@ -20,10 +22,19 @@ export function encodeMissedCallMessage(info: MissedCallInfo): string {
   ].join("|");
 }
 
+export function isMissedCallPayload(content: string | null | undefined): boolean {
+  if (!content) return false;
+  return (
+    content.startsWith(`${MISSED_CALL_PREFIX}|`) ||
+    // Legacy payloads from the first structured format.
+    content.startsWith("__missed_call__|")
+  );
+}
+
 export function parseMissedCallMessage(content: string): MissedCallInfo | null {
-  if (!content.startsWith(`${MISSED_CALL_PREFIX}|`)) return null;
+  if (!isMissedCallPayload(content)) return null;
   const parts = content.split("|");
-  // __missed_call__|voice|Caller|Peer|30
+  // [[missed_call]]|voice|Caller|Peer|30
   if (parts.length < 5) return null;
   const kind = parts[1];
   const callerName = parts[2]?.trim() || "Someone";
@@ -38,7 +49,7 @@ export function parseMissedCallMessage(content: string): MissedCallInfo | null {
   };
 }
 
-/** Sidebar / list preview — never show the raw `__missed_call__|…` payload. */
+/** Sidebar / list preview — never show the raw payload. */
 export function previewMissedCallContent(
   content: string | null | undefined,
   opts: {
@@ -48,11 +59,11 @@ export function previewMissedCallContent(
 ): string | null {
   if (!content) return null;
   const missed = formatMissedCallLabel(content, opts);
-  return missed?.text ?? content;
+  return missed?.text ?? (isMissedCallPayload(content) ? "Missed call" : content);
 }
 
 /**
- * Discord-style: callee sees "You missed…"; caller sees they weren't answered.
+ * Viewer-aware label: callee sees "You missed…"; caller sees they weren't answered.
  * `messageUserId` is the caller (who inserted the system row).
  */
 export function formatMissedCallLabel(
