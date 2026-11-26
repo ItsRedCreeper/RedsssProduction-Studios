@@ -115,6 +115,7 @@ import {
   friendlyBlockDmMessage,
   loadIsBlockedBy,
 } from "@/lib/blocking";
+import { previewMissedCallContent } from "@/lib/missed-call";
 import {
   loadFriendEdges,
   splitFriendEdges,
@@ -691,7 +692,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         ids.map(async (conversationId) => {
           const { data: last } = await supabase
             .from("dm_messages")
-            .select("content, created_at")
+            .select("content, created_at, user_id")
             .eq("conversation_id", conversationId)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -722,7 +723,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             status: "offline",
             last_seen_at: null,
             status_text: null,
-            preview: last?.content ?? null,
+            preview: previewMissedCallContent(last?.content, {
+              currentUserId: user.id,
+              messageUserId: last?.user_id,
+            }),
             previewAt: last?.created_at ?? null,
             isGroup: true,
             groupName: convo.name,
@@ -739,7 +743,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           status: other?.status ?? "offline",
           last_seen_at: other?.last_seen_at ?? null,
           status_text: other?.status_text ?? null,
-          preview: last?.content ?? null,
+          preview: previewMissedCallContent(last?.content, {
+            currentUserId: user.id,
+            messageUserId: last?.user_id,
+          }),
           previewAt: last?.created_at ?? null,
           isGroup: false,
         } satisfies DmThread;
@@ -798,12 +805,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   // Keep the DM list live without remounting people on every message.
   useEffect(() => {
     if (!user) return;
+    const uid = user.id;
     const supabase = createClient();
 
     function patchThreadPreview(row: {
       conversation_id?: string;
       content?: string | null;
       created_at?: string | null;
+      user_id?: string | null;
     }) {
       const conversationId = row.conversation_id;
       if (!conversationId) return;
@@ -811,7 +820,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setThreads((prev) => {
         known = prev.some((thread) => thread.id === conversationId);
         if (!known) return prev;
-        const nextPreview = row.content ?? null;
+        const nextPreview = previewMissedCallContent(row.content, {
+          currentUserId: uid,
+          messageUserId: row.user_id,
+        });
         const nextAt = row.created_at ?? null;
         // Skip if this insert is already reflected (e.g. local send patched first).
         const current = prev.find((thread) => thread.id === conversationId);

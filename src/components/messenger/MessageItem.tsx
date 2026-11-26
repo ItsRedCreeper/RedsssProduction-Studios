@@ -49,6 +49,7 @@ import {
   QUICK_REACTION_EMOJIS,
   type ServerEmoji,
 } from "@/lib/emoji";
+import { formatMissedCallLabel } from "@/lib/missed-call";
 import {
   type ChatMessage,
   type ReactionGroup,
@@ -314,17 +315,16 @@ export function MessageItem({
   );
 
   if (message.is_system) {
-    const missedVideo = /missed a video call/i.test(message.content);
-    const missedVoice =
-      !missedVideo &&
-      /missed a(?:n)? voice call|missed (?:a )?voice call|missed a call from/i.test(
-        message.content,
-      );
-    const SystemIcon = missedVideo
-      ? VideoOff
-      : missedVoice
-        ? PhoneMissed
-        : Pin;
+    const missed = formatMissedCallLabel(message.content, {
+      currentUserId,
+      messageUserId: message.user_id,
+    });
+    const SystemIcon = missed
+      ? missed.withVideo
+        ? VideoOff
+        : PhoneMissed
+      : Pin;
+    const label = missed?.text ?? message.content;
 
     return (
       <article
@@ -341,7 +341,7 @@ export function MessageItem({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm text-[var(--ms-text-muted)]">
-            {message.content}
+            {label}
             <time
               dateTime={message.created_at}
               title={formatTimestamp(message.created_at)}

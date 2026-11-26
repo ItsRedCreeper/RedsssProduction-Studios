@@ -17,6 +17,7 @@ import { useVoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import { VoiceMesh } from "@/components/messenger/voice/webrtcMesh";
 import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
+import { encodeMissedCallMessage } from "@/lib/missed-call";
 
 /** Discord-style: ~30s ring, then missed-call notice. Decline ends earlier with no chat message. */
 const RING_TIMEOUT_MS = 30_000;
@@ -630,12 +631,17 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
             outgoingRef.current?.conversationId === args.conversationId;
           if (!stillOutgoing) return;
           const callerName = profile?.username ?? "Someone";
+          const peerName =
+            args.peerNames?.[peerUserId] ?? args.label ?? "Someone";
           await supabase.from("dm_messages").insert({
             conversation_id: args.conversationId,
             user_id: user.id,
-            content: withVideo
-              ? `You missed a video call from ${callerName}.`
-              : `You missed a voice call from ${callerName}.`,
+            content: encodeMissedCallMessage({
+              withVideo,
+              callerName,
+              peerName,
+              durationSec: Math.round(RING_TIMEOUT_MS / 1000),
+            }),
             is_system: true,
             pinned: false,
           });
