@@ -207,6 +207,24 @@ body::before {
   border-bottom: 1px solid var(--ms-border);
 }
 
+/* Soft accent under headers — fades out so it doesn't end as a hard stub. */
+.messenger-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--accent) 90%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 55%, transparent) 12%,
+    color-mix(in srgb, var(--accent) 18%, transparent) 32%,
+    transparent 55%
+  );
+  pointer-events: none;
+}
+
 .messenger-row-active {
   background: var(--ms-active);
   box-shadow: inset 2px 0 0 var(--accent);
