@@ -281,15 +281,16 @@ export class VoiceMesh {
         /* ignore */
       }
     }
-    this.localScreenTrack = track;
+    // Clear senders + announce off before attaching a new share (restart-safe).
+    this.localScreenTrack = null;
     this.screenLive = false;
-    // Always announce "off" first so remotes clear any stale tile before a new share.
     for (const peerId of this.peers.keys()) {
       await this.applyVideoToPeer(peerId, "screen");
     }
     await this.announceMedia();
     if (!track) return true;
 
+    this.localScreenTrack = track;
     if ("contentHint" in track) {
       try {
         (track as MediaStreamTrack & { contentHint: string }).contentHint =
@@ -307,9 +308,6 @@ export class VoiceMesh {
       },
       { once: true },
     );
-    for (const peerId of this.peers.keys()) {
-      await this.applyVideoToPeer(peerId, "screen");
-    }
     const ok = await waitUntilTrackLive(track);
     if (!ok || this.localScreenTrack !== track || this.closed) {
       if (this.localScreenTrack === track) this.localScreenTrack = null;
@@ -325,26 +323,18 @@ export class VoiceMesh {
       await this.announceMedia();
       return false;
     }
-    // Pulse replace so remotes get a fresh RTP flow on restart (not a no-op).
+    // Attach + ensure sendrecv so remotes get real RTP (not a muted black track).
     for (const peerId of this.peers.keys()) {
-      const slot = this.peers.get(peerId);
-      if (!slot) continue;
-      try {
-        await slot.screenTransceiver.sender.replaceTrack(null);
-        await slot.screenTransceiver.sender.replaceTrack(track);
-      } catch (error) {
-        console.warn("[voice-mesh] screen restart replace failed", error);
-        await this.applyVideoToPeer(peerId, "screen");
-      }
+      await this.applyVideoToPeer(peerId, "screen");
     }
     this.screenEpoch += 1;
     this.screenLive = true;
     await this.announceMedia();
-    // Late unmute: nudge remotes once more after packets start flowing.
+    // Late unmute / negotiation: nudge remotes once packets are flowing.
     window.setTimeout(() => {
       if (this.closed || !this.screenLive || this.localScreenTrack !== track) return;
       void this.announceMedia();
-    }, 400);
+    }, 500);
     return true;
   }
 
@@ -445,24 +435,26 @@ export class VoiceMesh {
       kind === "camera" ? slot.cameraTransceiver : slot.screenTransceiver;
     try {
       await transceiver.sender.replaceTrack(track);
+      // Null replaceTrack often flips the m-line to recvonly; restore send so
+      // remotes actually receive RTP (otherwise they get a black / muted track).
+      const nextDir: RTCRtpTransceiverDirection = track
+        ? "sendrecv"
+        : "recvonly";
+      if (transceiver.direction !== nextDir) {
+        transceiver.direction = nextDir;
+      }
     } catch (error) {
       console.warn("[voice-mesh] replaceTrack failed", kind, error);
     }
   }
 
+  /** Only publish when the receiver is producing frames — muted = black tile. */
   private publishRemoteVideo(
     peerId: string,
     kind: "camera" | "screen",
     track: MediaStreamTrack | null,
-    opts?: { allowMuted?: boolean },
   ) {
-    if (!isTrackLive(track)) {
-      this.opts.onRemoteVideo?.(peerId, null, kind);
-      return;
-    }
-    // After a restart the receiver often stays muted until RTP arrives — still bind
-    // so the <video> can show frames as soon as unmute happens.
-    if (!opts?.allowMuted && track.muted) {
+    if (!isTrackLive(track) || track.muted) {
       this.opts.onRemoteVideo?.(peerId, null, kind);
       return;
     }
@@ -478,7 +470,7 @@ export class VoiceMesh {
     }
   }
 
-  /** Keep trying until the receiver track is live after a restart replaceTrack. */
+  /** Poll until the receiver track unmutes (frames flowing) after replaceTrack. */
   private armPendingVideoPublish(peerId: string, kind: "camera" | "screen") {
     this.clearPendingVideoPublish(peerId, kind);
     const key = `${peerId}:${kind}`;
@@ -498,16 +490,15 @@ export class VoiceMesh {
         kind === "screen"
           ? slot.screenTransceiver.receiver.track
           : slot.cameraTransceiver.receiver.track;
-      if (isTrackLive(track)) {
-        // Bind once (even while muted). Unmute handler / MediaVideo rebinds frames.
-        this.publishRemoteVideo(peerId, kind, track, { allowMuted: true });
+      if (isTrackLive(track) && !track.muted) {
+        this.publishRemoteVideo(peerId, kind, track);
         this.clearPendingVideoPublish(peerId, kind);
         return;
       }
-      if (Date.now() - started > 8000) {
+      if (Date.now() - started > 10000) {
         this.clearPendingVideoPublish(peerId, kind);
       }
-    }, 150);
+    }, 100);
     this.pendingVideoPublish.set(key, timer);
   }
 
@@ -521,7 +512,6 @@ export class VoiceMesh {
     if (!slot) return;
     slot.remoteCamera = camera;
     slot.remoteScreen = screen;
-    const epochBumped = screen && screenEpoch > slot.remoteScreenEpoch;
     if (screen && screenEpoch > 0) slot.remoteScreenEpoch = screenEpoch;
 
     if (!camera) {
@@ -529,10 +519,11 @@ export class VoiceMesh {
       this.publishRemoteVideo(peerId, "camera", null);
     } else {
       const track = slot.cameraTransceiver.receiver.track;
-      if (isTrackLive(track)) {
+      if (isTrackLive(track) && !track.muted) {
         this.clearPendingVideoPublish(peerId, "camera");
-        this.publishRemoteVideo(peerId, "camera", track, { allowMuted: true });
+        this.publishRemoteVideo(peerId, "camera", track);
       } else {
+        // Keep existing tile if any; wait for unmute instead of binding black.
         this.armPendingVideoPublish(peerId, "camera");
       }
     }
@@ -542,13 +533,9 @@ export class VoiceMesh {
       this.publishRemoteVideo(peerId, "screen", null);
     } else {
       const track = slot.screenTransceiver.receiver.track;
-      if (isTrackLive(track)) {
-        // Epoch bump forces a new MediaStream bind even if the track object is reused.
-        this.publishRemoteVideo(peerId, "screen", track, { allowMuted: true });
-        if (epochBumped || !track.muted) {
-          this.clearPendingVideoPublish(peerId, "screen");
-        }
-        if (track.muted) this.armPendingVideoPublish(peerId, "screen");
+      if (isTrackLive(track) && !track.muted) {
+        this.clearPendingVideoPublish(peerId, "screen");
+        this.publishRemoteVideo(peerId, "screen", track);
       } else {
         this.armPendingVideoPublish(peerId, "screen");
       }
@@ -741,11 +728,13 @@ export class VoiceMesh {
           else if (index === 0) kind = "camera";
         }
 
-        // Surface once announced; muted is OK — MediaVideo rebinds on unmute.
+        // Only surface once announced AND unmuted (frames flowing).
         const announced =
           kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
-        if (announced && isTrackLive(track)) {
-          this.publishRemoteVideo(peerId, kind, track, { allowMuted: true });
+        if (announced && isTrackLive(track) && !track.muted) {
+          this.publishRemoteVideo(peerId, kind, track);
+        } else if (announced) {
+          this.armPendingVideoPublish(peerId, kind);
         }
 
         track.addEventListener("ended", () => {
@@ -764,8 +753,8 @@ export class VoiceMesh {
         track.addEventListener("unmute", () => {
           const stillWanted =
             kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
-          if (stillWanted && isTrackLive(track)) {
-            this.publishRemoteVideo(peerId, kind, track, { allowMuted: true });
+          if (stillWanted && isTrackLive(track) && !track.muted) {
+            this.publishRemoteVideo(peerId, kind, track);
             this.clearPendingVideoPublish(peerId, kind);
           }
         });

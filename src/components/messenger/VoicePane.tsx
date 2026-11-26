@@ -107,21 +107,32 @@ function MediaVideo({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const bind = () => {
-      el.srcObject = stream;
+    let cancelled = false;
+    const bind = (force = false) => {
+      if (cancelled) return;
+      // Chrome often keeps a black frame if the first bind happened while muted;
+      // tear down and reattach a fresh MediaStream wrapper to force paint.
+      if (force) el.srcObject = null;
+      el.srcObject = new MediaStream(stream.getTracks());
       void el.play().catch(() => undefined);
     };
-    bind();
-    // After screen-share restart the track often unmutes without a new MediaStream.
+    bind(true);
     const tracks = stream.getTracks();
+    const onUnmute = () => bind(true);
     for (const track of tracks) {
-      track.addEventListener("unmute", bind);
-      track.addEventListener("mute", bind);
+      track.addEventListener("unmute", onUnmute);
     }
+    const iv = window.setInterval(() => {
+      const video = stream.getVideoTracks()[0];
+      if (!video || video.muted) return;
+      if (el.videoWidth === 0 || el.readyState < 2) bind(true);
+      else window.clearInterval(iv);
+    }, 250);
     return () => {
+      cancelled = true;
+      window.clearInterval(iv);
       for (const track of tracks) {
-        track.removeEventListener("unmute", bind);
-        track.removeEventListener("mute", bind);
+        track.removeEventListener("unmute", onUnmute);
       }
     };
   }, [stream]);
