@@ -43,9 +43,11 @@ function gridClass(count: number) {
 function MediaVideo({
   stream,
   mirrored,
+  fit = "cover",
 }: {
   stream: MediaStream;
   mirrored?: boolean;
+  fit?: "cover" | "contain";
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
@@ -60,9 +62,9 @@ function MediaVideo({
       autoPlay
       playsInline
       muted
-      className={`absolute inset-0 h-full w-full object-cover ${
-        mirrored ? "-scale-x-100" : ""
-      }`}
+      className={`absolute inset-0 h-full w-full ${
+        fit === "contain" ? "object-contain bg-black" : "object-cover"
+      } ${mirrored ? "-scale-x-100" : ""}`}
     />
   );
 }
@@ -100,6 +102,7 @@ function CallTile({
           <MediaVideo
             stream={item.stream}
             mirrored={item.isSelf && item.kind === "user"}
+            fit={item.kind === "screen" ? "contain" : "cover"}
           />
         ) : (
           <div
@@ -159,6 +162,7 @@ export function CallOverlay() {
   const call = useCallSession();
   const [peerNames, setPeerNames] = useState<Record<string, string>>({});
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const focusedHadMediaRef = useRef(false);
 
   const peers = useMemo(() => {
     if (!call.connection) return [] as string[];
@@ -265,16 +269,31 @@ export function CallOverlay() {
   ]);
 
   useEffect(() => {
-    if (!focusedKey) return;
-    if (!stageItems.some((item) => item.key === focusedKey)) {
+    if (!focusedKey) {
+      focusedHadMediaRef.current = false;
+      return;
+    }
+    const item = stageItems.find((entry) => entry.key === focusedKey);
+    if (!item) {
       setFocusedKey(null);
+      focusedHadMediaRef.current = false;
+      return;
+    }
+    const hasMedia = !!item.stream;
+    if (hasMedia) focusedHadMediaRef.current = true;
+    if (focusedHadMediaRef.current && !hasMedia) {
+      setFocusedKey(null);
+      focusedHadMediaRef.current = false;
     }
   }, [focusedKey, stageItems]);
 
   useEffect(() => {
     if (!focusedKey) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setFocusedKey(null);
+      if (event.key === "Escape") {
+        focusedHadMediaRef.current = false;
+        setFocusedKey(null);
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -361,7 +380,15 @@ export function CallOverlay() {
         }
         size={size}
         onSelect={() =>
-          setFocusedKey((prev) => (prev === item.key ? null : item.key))
+          setFocusedKey((prev) => {
+            if (prev === item.key) {
+              focusedHadMediaRef.current = false;
+              return null;
+            }
+            focusedHadMediaRef.current =
+              item.kind === "screen" || !!item.stream;
+            return item.key;
+          })
         }
       />
     );

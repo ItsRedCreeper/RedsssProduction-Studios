@@ -96,9 +96,12 @@ function preferredAvatarPx(size: "focus" | "grid" | "strip") {
 function MediaVideo({
   stream,
   mirrored,
+  fit = "cover",
 }: {
   stream: MediaStream;
   mirrored?: boolean;
+  /** Screen shares use contain so the full frame (including the top) stays visible. */
+  fit?: "cover" | "contain";
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
@@ -113,9 +116,9 @@ function MediaVideo({
       autoPlay
       playsInline
       muted
-      className={`absolute inset-0 h-full w-full object-cover ${
-        mirrored ? "-scale-x-100" : ""
-      }`}
+      className={`absolute inset-0 h-full w-full ${
+        fit === "contain" ? "object-contain bg-black" : "object-cover"
+      } ${mirrored ? "-scale-x-100" : ""}`}
     />
   );
 }
@@ -196,7 +199,11 @@ function VoiceTile({
     >
       <div className="absolute inset-0 bg-[var(--ms-sidebar)]">
         {hasVideo && stream ? (
-          <MediaVideo stream={stream} mirrored={isSelf && !isScreen} />
+          <MediaVideo
+            stream={stream}
+            mirrored={isSelf && !isScreen}
+            fit={isScreen ? "contain" : "cover"}
+          />
         ) : (
           <>
             {hasPhoto ? (
@@ -355,6 +362,8 @@ export function VoicePane({
   remoteMedia = {},
 }: VoicePaneProps) {
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  /** True once the focused tile had live camera/screen during this focus session. */
+  const focusedHadMediaRef = useRef(false);
 
   const ordered = [...participants].sort((a, b) =>
     voiceDisplayName(a, membersById).localeCompare(
@@ -410,11 +419,26 @@ export function VoicePane({
   useEffect(() => {
     if (!joined) {
       setFocusedKey(null);
+      focusedHadMediaRef.current = false;
       return;
     }
-    if (!focusedKey) return;
-    if (!stageItems.some((item) => item.key === focusedKey)) {
+    if (!focusedKey) {
+      focusedHadMediaRef.current = false;
+      return;
+    }
+    const item = stageItems.find((entry) => entry.key === focusedKey);
+    // Person left, or their screen-share tile was removed → back to grid.
+    if (!item) {
       setFocusedKey(null);
+      focusedHadMediaRef.current = false;
+      return;
+    }
+    const hasMedia = !!item.stream;
+    if (hasMedia) focusedHadMediaRef.current = true;
+    // Camera/screen stopped while in big-focus view → back to grid.
+    if (focusedHadMediaRef.current && !hasMedia) {
+      setFocusedKey(null);
+      focusedHadMediaRef.current = false;
     }
   }, [focusedKey, joined, stageItems]);
 
@@ -523,7 +547,15 @@ export function VoicePane({
         }
         size={size}
         onSelect={() =>
-          setFocusedKey((prev) => (prev === item.key ? null : item.key))
+          setFocusedKey((prev) => {
+            if (prev === item.key) {
+              focusedHadMediaRef.current = false;
+              return null;
+            }
+            focusedHadMediaRef.current =
+              item.kind === "screen" || !!item.stream;
+            return item.key;
+          })
         }
       />
     );
