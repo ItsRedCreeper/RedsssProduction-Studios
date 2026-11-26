@@ -68,6 +68,7 @@ export function shouldGroupWithPrevious(
         created_at: string;
         reply_to_id?: string | null;
         reply_to?: unknown;
+        is_system?: boolean | null;
       }
     | null
     | undefined,
@@ -76,9 +77,12 @@ export function shouldGroupWithPrevious(
     created_at: string;
     reply_to_id?: string | null;
     reply_to?: unknown;
+    is_system?: boolean | null;
   },
 ) {
   if (!previous) return false;
+  // System notices (missed calls, pin alerts) never group under a user.
+  if (previous.is_system || current.is_system) return false;
   if (previous.user_id !== current.user_id) return false;
   // Replies start a new group so the reply preview sits under a full header.
   if (current.reply_to_id || current.reply_to) return false;

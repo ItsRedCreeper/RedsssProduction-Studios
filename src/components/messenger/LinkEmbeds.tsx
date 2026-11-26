@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Play } from "lucide-react";
-import { SpoilerMedia } from "@/components/messenger/SpoilerMedia";
 import {
   extractEmbeddableUrlInfos,
   extractYoutubeId,
@@ -23,13 +22,15 @@ type LinkEmbedsProps = {
 };
 
 /**
- * Discord-style unfurl: inline URL stays in the message; this is the preview card.
- * URLs wrapped in ||spoilers|| get a blurred card until revealed — then the
- * full preview (title, description, thumbnail / YouTube player) shows.
+ * Discord-style unfurl for non-spoilered URLs.
+ * Spoilered URLs are rendered inside SpoilerText (one reveal → link + preview).
  */
 export function LinkEmbeds({ content }: LinkEmbedsProps) {
   const urls = useMemo(
-    () => extractEmbeddableUrlInfos(content).slice(0, 2),
+    () =>
+      extractEmbeddableUrlInfos(content)
+        .filter((item) => !item.spoiler)
+        .slice(0, 2),
     [content],
   );
 
@@ -38,23 +39,13 @@ export function LinkEmbeds({ content }: LinkEmbedsProps) {
   return (
     <div className="mt-1.5 flex flex-col gap-2">
       {urls.map((item) => (
-        <LinkPreviewCard
-          key={`${item.url}:${item.spoiler ? "s" : "n"}`}
-          url={item.url}
-          spoiler={item.spoiler}
-        />
+        <LinkPreviewCard key={item.url} url={item.url} />
       ))}
     </div>
   );
 }
 
-function LinkPreviewCard({
-  url,
-  spoiler,
-}: {
-  url: string;
-  spoiler: boolean;
-}) {
+export function LinkPreviewCard({ url }: { url: string }) {
   const youtubeId = useMemo(() => extractYoutubeId(url), [url]);
   const [open, setOpen] = useState(false);
   const [meta, setMeta] = useState<LinkPreview | null>(null);
@@ -96,78 +87,73 @@ function LinkPreviewCard({
     meta?.thumbnail_url ||
     (youtubeId ? `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg` : null);
 
-  // Still show a minimal card when OG fails so spoilered links aren't blank.
   if (!loading && !meta && !youtubeId && !safeHostname(url)) return null;
 
-  const card = youtubeId ? (
-    <div className="max-w-md overflow-hidden rounded-[4px] bg-[var(--ms-sidebar)]">
-      <div className="flex">
-        <div className="w-1 shrink-0 bg-accent" aria-hidden />
-        <div className="min-w-0 flex-1 px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
-            {site}
-          </p>
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-0.5 line-clamp-2 text-base font-semibold text-[var(--ms-link)] hover:underline"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {title}
-          </a>
-          {meta?.author_name && (
-            <p className="mt-1 line-clamp-1 text-sm text-[var(--ms-text)]">
-              {meta.author_name}
+  if (youtubeId) {
+    return (
+      <div className="max-w-md overflow-hidden rounded-[4px] bg-[var(--ms-sidebar)]">
+        <div className="flex">
+          <div className="w-1 shrink-0 bg-accent" aria-hidden />
+          <div className="min-w-0 flex-1 px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
+              {site}
             </p>
-          )}
-          <div className="mt-2 overflow-hidden rounded">
-            {open ? (
-              <div className="aspect-video w-full bg-black">
-                <iframe
-                  title={title}
-                  src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
-                  className="h-full w-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setOpen(true);
-                }}
-                className="group relative block w-full text-left"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={image ?? undefined}
-                  alt=""
-                  className="aspect-video w-full object-cover"
-                />
-                <span className="absolute inset-0 flex items-center justify-center bg-black/35 transition group-hover:bg-black/45">
-                  <span className="rounded-full bg-accent p-3 text-white shadow-lg">
-                    <Play className="h-5 w-5 fill-current" strokeWidth={0} />
-                  </span>
-                </span>
-              </button>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-0.5 line-clamp-2 text-base font-semibold text-[var(--ms-link)] hover:underline"
+            >
+              {title}
+            </a>
+            {meta?.author_name && (
+              <p className="mt-1 line-clamp-1 text-sm text-[var(--ms-text)]">
+                {meta.author_name}
+              </p>
             )}
+            <div className="mt-2 overflow-hidden rounded">
+              {open ? (
+                <div className="aspect-video w-full bg-black">
+                  <iframe
+                    title={title}
+                    src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
+                    className="h-full w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setOpen(true)}
+                  className="group relative block w-full text-left"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image ?? undefined}
+                    alt=""
+                    className="aspect-video w-full object-cover"
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/35 transition group-hover:bg-black/45">
+                    <span className="rounded-full bg-accent p-3 text-white shadow-lg">
+                      <Play className="h-5 w-5 fill-current" strokeWidth={0} />
+                    </span>
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  ) : (
+    );
+  }
+
+  return (
     <a
       href={url}
       target="_blank"
       rel="noreferrer"
       className="block max-w-md overflow-hidden rounded-[4px] bg-[var(--ms-sidebar)] transition hover:bg-[#2e3035]"
-      onClick={(event) => {
-        // While covered by SpoilerMedia, pointer-events are off; after reveal, navigate.
-        if (spoiler) event.stopPropagation();
-      }}
     >
       <div className="flex">
         <div className="w-1 shrink-0 bg-accent" aria-hidden />
@@ -195,11 +181,6 @@ function LinkPreviewCard({
       </div>
     </a>
   );
-
-  if (!spoiler) return card;
-
-  // Discord: blur the real preview until clicked, then show it fully.
-  return <SpoilerMedia className="max-w-md">{card}</SpoilerMedia>;
 }
 
 function safeHostname(url: string) {

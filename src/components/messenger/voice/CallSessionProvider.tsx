@@ -631,7 +631,9 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
           await supabase.from("dm_messages").insert({
             conversation_id: args.conversationId,
             user_id: user.id,
-            content: withVideo ? "Missed video call." : "Missed voice call.",
+            content: withVideo
+              ? "Missed a video call."
+              : "Missed a voice call.",
             is_system: true,
             pinned: false,
           });

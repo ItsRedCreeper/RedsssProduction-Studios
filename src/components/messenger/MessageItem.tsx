@@ -18,12 +18,14 @@ import {
   MessagesSquare,
   MoreHorizontal,
   Pencil,
+  PhoneMissed,
   Pin,
   PinOff,
   Plus,
   Reply,
   SmilePlus,
   Trash2,
+  VideoOff,
   X,
 } from "lucide-react";
 import { PollCard, type PollData } from "@/components/messenger/PollCard";
@@ -310,6 +312,45 @@ export function MessageItem({
       )}
     </>
   );
+
+  if (message.is_system) {
+    const missedVideo = /missed a video call/i.test(message.content);
+    const missedVoice =
+      !missedVideo && /missed a(?:n)? voice call|missed voice call/i.test(message.content);
+    const SystemIcon = missedVideo
+      ? VideoOff
+      : missedVoice
+        ? PhoneMissed
+        : Pin;
+
+    return (
+      <article
+        id={`message-${message.id}`}
+        data-message-id={message.id}
+        className="group relative flex items-center gap-3 px-2 py-1 sm:gap-4 sm:px-4"
+      >
+        <div className="flex w-10 shrink-0 justify-center">
+          <SystemIcon
+            className="h-4 w-4 text-[var(--ms-text-muted)]"
+            strokeWidth={2}
+            aria-hidden
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-[var(--ms-text-muted)]">
+            {message.content}
+            <time
+              dateTime={message.created_at}
+              title={formatTimestamp(message.created_at)}
+              className="ml-2 text-[11px] text-[var(--ms-text-muted)]/70"
+            >
+              {formatMessageTime(message.created_at)}
+            </time>
+          </p>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <>

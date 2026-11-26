@@ -8,6 +8,7 @@ import {
   isCustomEmojiOnlyMessage,
   type ServerEmoji,
 } from "@/lib/emoji";
+import { extractEmbeddableUrlInfos } from "@/lib/message-media";
 import type { MentionMaps } from "@/lib/mentions";
 
 type FormatOpts = {
@@ -389,19 +390,17 @@ function parseInline(
       continue;
     }
 
-    // Spoilers ||text||
+    // Spoilers ||text|| — URLs inside share one reveal with their preview card.
     if (slice.startsWith("||")) {
       const end = slice.indexOf("||", 2);
       if (end > 2) {
+        const inner = slice.slice(2, end);
+        const urlsInBlock = extractEmbeddableUrlInfos(inner).map(
+          (item) => item.url,
+        );
         parts.push(
-          <SpoilerText key={nextKey()}>
-            {parseInline(
-              slice.slice(2, end),
-              opts,
-              namedPatterns,
-              emojiSize,
-              nextKey,
-            )}
+          <SpoilerText key={nextKey()} embedUrls={urlsInBlock}>
+            {parseInline(inner, opts, namedPatterns, emojiSize, nextKey)}
           </SpoilerText>,
         );
         i += end + 2;

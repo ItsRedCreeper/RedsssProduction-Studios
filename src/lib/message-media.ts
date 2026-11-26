@@ -128,8 +128,8 @@ export function extractUrls(text: string): string[] {
 /**
  * URLs that should generate a Discord-style link preview.
  * Skips `<https://...>` (no-embed), fenced/inline code.
- * URLs inside `||...||` still unfurl, but marked `spoiler: true` so the
- * preview stays hidden until clicked (Discord behavior).
+ * URLs inside `||...||` are marked `spoiler: true` so LinkEmbeds skips them;
+ * SpoilerText owns the single reveal that shows the URL + preview together.
  */
 export function extractEmbeddableUrlInfos(text: string): EmbeddableUrl[] {
   // Strip fenced + inline code so URLs inside don't unfurl.
