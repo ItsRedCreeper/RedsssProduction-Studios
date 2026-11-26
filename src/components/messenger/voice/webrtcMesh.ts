@@ -10,6 +10,12 @@ const ICE_SERVERS: RTCIceServer[] = [
 type SignalPayload =
   | { kind: "hello"; from: string }
   | { kind: "goodbye"; from: string }
+  | {
+      kind: "media";
+      from: string;
+      camera: boolean;
+      screen: boolean;
+    }
   | { kind: "offer"; from: string; to: string; sdp: RTCSessionDescriptionInit }
   | { kind: "answer"; from: string; to: string; sdp: RTCSessionDescriptionInit }
   | {
@@ -25,6 +31,12 @@ type PeerSlot = {
   ignoreOffer: boolean;
   polite: boolean;
   audioEl: HTMLAudioElement;
+  /** Dedicated video m-lines — first camera, second screen (same order on every peer). */
+  cameraTransceiver: RTCRtpTransceiver;
+  screenTransceiver: RTCRtpTransceiver;
+  /** What the remote peer last announced they are sending. */
+  remoteCamera: boolean;
+  remoteScreen: boolean;
 };
 
 export type VoiceMeshOptions = {
@@ -49,6 +61,9 @@ export type VoiceMeshOptions = {
 /**
  * Simple WebRTC mesh for a voice channel.
  * Signaling via Supabase Realtime broadcast. Lower userId is the impolite (offer) peer.
+ *
+ * Camera and screen each get a dedicated transceiver so remotes can tell them apart,
+ * plus an explicit `media` announce because replaceTrack(null) does not fire `ended`.
  */
 export class VoiceMesh {
   private opts: VoiceMeshOptions;
@@ -89,6 +104,7 @@ export class VoiceMesh {
         for (const peerId of existingPeerIds) {
           if (peerId !== userId) void this.ensurePeer(peerId);
         }
+        void this.announceMedia();
       });
   }
 
@@ -167,9 +183,18 @@ export class VoiceMesh {
       }
     }
     this.localVideoTrack = track;
+    if (track && "contentHint" in track) {
+      try {
+        (track as MediaStreamTrack & { contentHint: string }).contentHint =
+          "motion";
+      } catch {
+        /* ignore */
+      }
+    }
     for (const peerId of this.peers.keys()) {
       await this.applyVideoToPeer(peerId, "camera");
     }
+    await this.announceMedia();
   }
 
   /** Screen share or null to stop. */
@@ -183,6 +208,14 @@ export class VoiceMesh {
     }
     this.localScreenTrack = track;
     if (track) {
+      if ("contentHint" in track) {
+        try {
+          (track as MediaStreamTrack & { contentHint: string }).contentHint =
+            "detail";
+        } catch {
+          /* ignore */
+        }
+      }
       track.addEventListener(
         "ended",
         () => {
@@ -196,6 +229,7 @@ export class VoiceMesh {
     for (const peerId of this.peers.keys()) {
       await this.applyVideoToPeer(peerId, "screen");
     }
+    await this.announceMedia();
   }
 
   setDeafened(deafened: boolean) {
@@ -234,6 +268,15 @@ export class VoiceMesh {
     return this.blockedPeerIds.has(peerId);
   }
 
+  private async announceMedia() {
+    await this.send({
+      kind: "media",
+      from: this.opts.userId,
+      camera: !!this.localVideoTrack,
+      screen: !!this.localScreenTrack,
+    });
+  }
+
   private async applyOutboundToPeer(peerId: string) {
     const slot = this.peers.get(peerId);
     if (!slot) return;
@@ -244,12 +287,20 @@ export class VoiceMesh {
         : null;
     if (track) track.enabled = !this.muted;
 
-    const sender = slot.pc
-      .getSenders()
-      .find((s) => s.track?.kind === "audio");
-    if (sender) {
+    const senders = slot.pc.getSenders();
+    const micSender =
+      senders.find((s) => s.track?.kind === "audio") ??
+      senders.find(
+        (s) =>
+          !s.track &&
+          s !== slot.cameraTransceiver.sender &&
+          s !== slot.screenTransceiver.sender,
+      ) ??
+      null;
+
+    if (micSender) {
       try {
-        await sender.replaceTrack(track);
+        await micSender.replaceTrack(track);
       } catch {
         /* ignore */
       }
@@ -272,56 +323,54 @@ export class VoiceMesh {
     if (!slot) return;
     const track =
       kind === "camera" ? this.localVideoTrack : this.localScreenTrack;
-    const contentHint = kind === "screen" ? "detail" : "motion";
-    if (track && "contentHint" in track) {
-      try {
-        (track as MediaStreamTrack & { contentHint: string }).contentHint =
-          contentHint;
-      } catch {
-        /* ignore */
-      }
+    const transceiver =
+      kind === "camera" ? slot.cameraTransceiver : slot.screenTransceiver;
+    try {
+      await transceiver.sender.replaceTrack(track);
+    } catch (error) {
+      console.warn("[voice-mesh] replaceTrack failed", kind, error);
     }
+  }
 
-    const senders = slot.pc.getSenders().filter((s) => s.track?.kind === "video");
-    // Prefer matching by existing track identity / contentHint when possible.
-    let sender =
-      senders.find((s) =>
-        kind === "camera"
-          ? s.track === this.localVideoTrack ||
-            (s.track &&
-              s.track !== this.localScreenTrack &&
-              (s.track as MediaStreamTrack & { contentHint?: string })
-                .contentHint !== "detail")
-          : s.track === this.localScreenTrack ||
-            (s.track as MediaStreamTrack & { contentHint?: string } | null)
-              ?.contentHint === "detail",
-      ) ?? null;
-
-    if (!sender && kind === "camera") {
-      sender = senders[0] ?? null;
-    }
-    if (!sender && kind === "screen" && senders.length > 1) {
-      sender = senders[1] ?? null;
-    }
-
-    if (sender) {
-      try {
-        await sender.replaceTrack(track);
-      } catch {
-        /* ignore */
-      }
+  private publishRemoteVideo(
+    peerId: string,
+    kind: "camera" | "screen",
+    track: MediaStreamTrack | null,
+  ) {
+    if (!track || track.readyState === "ended") {
+      this.opts.onRemoteVideo?.(peerId, null, kind);
       return;
     }
-    if (track) {
-      try {
-        const stream = new MediaStream([track]);
-        slot.pc.addTrack(track, stream);
-      } catch {
-        try {
-          slot.pc.addTransceiver(track, { direction: "sendrecv" });
-        } catch {
-          /* ignore */
-        }
+    this.opts.onRemoteVideo?.(peerId, new MediaStream([track]), kind);
+  }
+
+  private syncRemoteMediaFromAnnounce(
+    peerId: string,
+    camera: boolean,
+    screen: boolean,
+  ) {
+    const slot = this.peers.get(peerId);
+    if (!slot) return;
+    const prevCamera = slot.remoteCamera;
+    const prevScreen = slot.remoteScreen;
+    slot.remoteCamera = camera;
+    slot.remoteScreen = screen;
+
+    if (!camera) {
+      this.publishRemoteVideo(peerId, "camera", null);
+    } else if (camera && (!prevCamera || slot.cameraTransceiver.receiver.track)) {
+      const track = slot.cameraTransceiver.receiver.track;
+      if (track && track.readyState === "live") {
+        this.publishRemoteVideo(peerId, "camera", track);
+      }
+    }
+
+    if (!screen) {
+      this.publishRemoteVideo(peerId, "screen", null);
+    } else if (screen && (!prevScreen || slot.screenTransceiver.receiver.track)) {
+      const track = slot.screenTransceiver.receiver.track;
+      if (track && track.readyState === "live") {
+        this.publishRemoteVideo(peerId, "screen", track);
       }
     }
   }
@@ -363,7 +412,6 @@ export class VoiceMesh {
     if (payload.kind === "hello") {
       const existing = this.peers.get(payload.from);
       if (existing) {
-        // Resend offer if the first one was missed before they subscribed.
         if (
           !existing.polite &&
           existing.pc.connectionState !== "connected" &&
@@ -371,13 +419,24 @@ export class VoiceMesh {
         ) {
           await this.makeOffer(payload.from, existing);
         }
+        await this.announceMedia();
         return;
       }
       await this.ensurePeer(payload.from);
+      await this.announceMedia();
       return;
     }
     if (payload.kind === "goodbye") {
       this.closePeer(payload.from);
+      return;
+    }
+    if (payload.kind === "media") {
+      await this.ensurePeer(payload.from);
+      this.syncRemoteMediaFromAnnounce(
+        payload.from,
+        !!payload.camera,
+        !!payload.screen,
+      );
       return;
     }
     if (payload.kind === "offer" || payload.kind === "answer" || payload.kind === "ice") {
@@ -436,50 +495,30 @@ export class VoiceMesh {
     audioEl.dataset.peerId = peerId;
     document.body.appendChild(audioEl);
 
+    // Always create camera then screen video m-lines in the same order so peers align.
+    const cameraTransceiver = pc.addTransceiver("video", {
+      direction: "sendrecv",
+    });
+    const screenTransceiver = pc.addTransceiver("video", {
+      direction: "sendrecv",
+    });
+
     const slot: PeerSlot = {
       pc,
       makingOffer: false,
       ignoreOffer: false,
       polite,
       audioEl,
+      cameraTransceiver,
+      screenTransceiver,
+      remoteCamera: false,
+      remoteScreen: false,
     };
     this.peers.set(peerId, slot);
     this.opts.onPeerCount?.(this.peers.size);
     this.opts.onPeerJoined?.(peerId);
     this.applyRemoteAudio();
 
-    const localTrack =
-      !this.isAudioBlocked(peerId) && this.localStream
-        ? (this.localStream.getAudioTracks()[0] ?? null)
-        : null;
-    if (localTrack && this.localStream) {
-      localTrack.enabled = !this.muted;
-      try {
-        pc.addTrack(localTrack, this.localStream);
-      } catch {
-        /* ignore */
-      }
-    } else {
-      // Transceiver so we can receive even before mic is ready (or while blocked).
-      try {
-        pc.addTransceiver("audio", { direction: "sendrecv" });
-      } catch {
-        /* ignore */
-      }
-    }
-    try {
-      pc.addTransceiver("video", { direction: "recvonly" });
-    } catch {
-      /* ignore */
-    }
-    if (this.localVideoTrack) {
-      await this.applyVideoToPeer(peerId, "camera");
-    }
-    if (this.localScreenTrack) {
-      await this.applyVideoToPeer(peerId, "screen");
-    }
-
-    // Perfect negotiation: both peers may offer; glare is handled in onSignal.
     pc.onnegotiationneeded = () => {
       if (slot.makingOffer) return;
       void this.makeOffer(peerId, slot);
@@ -497,23 +536,55 @@ export class VoiceMesh {
     pc.ontrack = (event) => {
       const track = event.track;
       if (track.kind === "video") {
-        const ms = new MediaStream([track]);
-        const hint = (track as MediaStreamTrack & { contentHint?: string })
-          .contentHint;
-        // contentHint often does not survive the wire — fall back to arrival order
-        // (first video = camera, second = screen).
-        let kind: "camera" | "screen" | "unknown" =
-          hint === "detail" ? "screen" : hint === "motion" ? "camera" : "unknown";
-        if (kind === "unknown") {
-          const videoReceivers = pc
-            .getReceivers()
-            .filter((r) => r.track?.kind === "video" && r.track);
-          const index = videoReceivers.findIndex((r) => r.track?.id === track.id);
-          kind = index <= 0 ? "camera" : "screen";
+        const transceiver = event.transceiver;
+        let kind: "camera" | "screen" =
+          transceiver === slot.screenTransceiver ||
+          transceiver?.sender === slot.screenTransceiver.sender
+            ? "screen"
+            : "camera";
+        if (
+          transceiver !== slot.cameraTransceiver &&
+          transceiver !== slot.screenTransceiver
+        ) {
+          const videoTx = pc
+            .getTransceivers()
+            .filter(
+              (t) =>
+                t === slot.cameraTransceiver ||
+                t === slot.screenTransceiver ||
+                t.receiver.track?.kind === "video",
+            );
+          const index = videoTx.indexOf(transceiver);
+          if (index >= 1) kind = "screen";
+          else if (index === 0) kind = "camera";
         }
-        this.opts.onRemoteVideo?.(peerId, ms, kind);
+
+        // Only surface video once the peer announced that source is on
+        // (avoids empty placeholder tracks from sendrecv m-lines).
+        const announced =
+          kind === "screen" ? slot.remoteScreen : slot.remoteCamera;
+        if (announced) {
+          this.publishRemoteVideo(peerId, kind, track);
+        }
+
         track.addEventListener("ended", () => {
-          this.opts.onRemoteVideo?.(peerId, null, kind);
+          this.publishRemoteVideo(peerId, kind, null);
+        });
+        track.addEventListener("mute", () => {
+          if (kind === "screen" && !slot.remoteScreen) {
+            this.publishRemoteVideo(peerId, "screen", null);
+          }
+          if (kind === "camera" && !slot.remoteCamera) {
+            this.publishRemoteVideo(peerId, "camera", null);
+          }
+        });
+        track.addEventListener("unmute", () => {
+          if (kind === "screen" && slot.remoteScreen) {
+            this.publishRemoteVideo(peerId, "screen", track);
+          }
+          if (kind === "camera" && slot.remoteCamera) {
+            this.publishRemoteVideo(peerId, "camera", track);
+          }
         });
         return;
       }
@@ -530,21 +601,38 @@ export class VoiceMesh {
     };
 
     pc.onconnectionstatechange = () => {
-      if (
-        pc.connectionState === "failed" ||
-        pc.connectionState === "closed" ||
-        pc.connectionState === "disconnected"
-      ) {
-        // Soft disconnect: keep peer briefly; failed → recreate later via hello.
-        if (pc.connectionState === "failed") {
-          this.closePeer(peerId);
-          // Re-announce so a fresh negotiation can start.
-          void this.send({ kind: "hello", from: this.opts.userId });
-        }
+      if (pc.connectionState === "failed") {
+        this.closePeer(peerId);
+        void this.send({ kind: "hello", from: this.opts.userId });
       }
     };
 
-    // Impolite (lower id) peer creates the initial offer.
+    const localTrack =
+      !this.isAudioBlocked(peerId) && this.localStream
+        ? (this.localStream.getAudioTracks()[0] ?? null)
+        : null;
+    if (localTrack && this.localStream) {
+      localTrack.enabled = !this.muted;
+      try {
+        pc.addTrack(localTrack, this.localStream);
+      } catch {
+        try {
+          pc.addTransceiver("audio", { direction: "sendrecv" });
+        } catch {
+          /* ignore */
+        }
+      }
+    } else {
+      try {
+        pc.addTransceiver("audio", { direction: "sendrecv" });
+      } catch {
+        /* ignore */
+      }
+    }
+
+    await this.applyVideoToPeer(peerId, "camera");
+    await this.applyVideoToPeer(peerId, "screen");
+
     if (!polite) {
       await this.makeOffer(peerId, slot);
     }
@@ -576,6 +664,8 @@ export class VoiceMesh {
     const slot = this.peers.get(peerId);
     if (!slot) return;
     this.peers.delete(peerId);
+    this.opts.onRemoteVideo?.(peerId, null, "camera");
+    this.opts.onRemoteVideo?.(peerId, null, "screen");
     try {
       slot.pc.close();
     } catch {
