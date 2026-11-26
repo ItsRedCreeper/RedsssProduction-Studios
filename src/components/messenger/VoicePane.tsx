@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { HeadphoneOff, MicOff, PhoneOff, Volume2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { HeadphoneOff, MicOff, MonitorUp, PhoneOff, Volume2 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
 import { avatarAccentColor } from "@/lib/avatar";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import type { MemberView, VoiceState } from "@/components/messenger/types";
+import type { VoiceRemoteMedia } from "@/components/messenger/voice/VoiceSessionProvider";
 
 /** Discord lists voice members A→Z by nickname/username and keeps that order stable. */
 function voiceDisplayName(
@@ -22,6 +23,24 @@ type DeviceOption = {
   deviceId: string;
   label: string;
 };
+
+type StageItem =
+  | {
+      key: string;
+      kind: "user";
+      userId: string;
+      state: VoiceState;
+      stream: MediaStream | null;
+    }
+  | {
+      key: string;
+      kind: "screen";
+      userId: string;
+      label: string;
+      stream: MediaStream;
+      muted?: boolean;
+      deafened?: boolean;
+    };
 
 type VoicePaneProps = {
   channelName: string;
@@ -50,6 +69,13 @@ type VoicePaneProps = {
   onOpenDeviceMenus?: () => void;
   micLevel?: number;
   micError?: string | null;
+  cameraOn?: boolean;
+  screenSharing?: boolean;
+  onToggleCamera?: () => void;
+  onToggleScreenShare?: () => void;
+  localVideoStream?: MediaStream | null;
+  localScreenStream?: MediaStream | null;
+  remoteMedia?: Record<string, VoiceRemoteMedia>;
 };
 
 function gridClass(count: number) {
@@ -67,23 +93,55 @@ function preferredAvatarPx(size: "focus" | "grid" | "strip") {
   return 80;
 }
 
+function MediaVideo({
+  stream,
+  mirrored,
+}: {
+  stream: MediaStream;
+  mirrored?: boolean;
+}) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.srcObject = stream;
+    void el.play().catch(() => undefined);
+  }, [stream]);
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted
+      className={`absolute inset-0 h-full w-full object-cover ${
+        mirrored ? "-scale-x-100" : ""
+      }`}
+    />
+  );
+}
+
 function VoiceTile({
-  state,
+  item,
   member,
   currentUserId,
   speaking,
   size,
   onSelect,
 }: {
-  state: VoiceState;
+  item: StageItem;
   member: MemberView | undefined;
   currentUserId: string | null;
   speaking: boolean;
   size: "focus" | "grid" | "strip";
   onSelect: () => void;
 }) {
-  const name = member?.nickname || member?.username || "Unknown";
-  const isSelf = state.user_id === currentUserId;
+  const isScreen = item.kind === "screen";
+  const name = isScreen
+    ? item.label
+    : member?.nickname || member?.username || "Unknown";
+  const isSelf = item.userId === currentUserId;
+  const stream = item.kind === "user" ? item.stream : item.stream;
+  const hasVideo = !!stream;
   const hasPhoto = !!member?.avatar_url;
   const accent = hasPhoto
     ? avatarAccentColor(member?.username || name, member?.banner_color)
@@ -92,6 +150,8 @@ function VoiceTile({
   const preferred = preferredAvatarPx(size);
   const fitRef = useRef<HTMLDivElement | null>(null);
   const [avatarPx, setAvatarPx] = useState(preferred);
+  const muted = item.kind === "user" ? item.state.muted : !!item.muted;
+  const deafened = item.kind === "user" ? item.state.deafened : !!item.deafened;
 
   useEffect(() => {
     const el = fitRef.current;
@@ -101,7 +161,6 @@ function VoiceTile({
     }
     const sync = () => {
       const { width, height } = el.getBoundingClientRect();
-      // Keep clear of the name bar / mute chip so the face never clips.
       const maxByHeight = Math.max(0, height - (compact ? 22 : 36));
       const maxByWidth = Math.max(0, width - (compact ? 16 : 24));
       const next = Math.max(
@@ -136,46 +195,51 @@ function VoiceTile({
       }`}
     >
       <div className="absolute inset-0 bg-[var(--ms-sidebar)]">
-        {hasPhoto ? (
+        {hasVideo && stream ? (
+          <MediaVideo stream={stream} mirrored={isSelf && !isScreen} />
+        ) : (
           <>
+            {hasPhoto ? (
+              <>
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: `radial-gradient(ellipse 70% 60% at 50% 42%, ${accent}40 0%, ${accent}18 42%, #1e1f22 72%)`,
+                  }}
+                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={member!.avatar_url!}
+                  alt=""
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl"
+                />
+              </>
+            ) : null}
             <div
-              className="absolute inset-0"
-              style={{
-                background: `radial-gradient(ellipse 70% 60% at 50% 42%, ${accent}40 0%, ${accent}18 42%, #1e1f22 72%)`,
-              }}
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={member!.avatar_url!}
-              alt=""
-              aria-hidden
-              className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-2xl"
-            />
+              ref={fitRef}
+              className={`absolute inset-0 flex items-center justify-center ${
+                compact ? "px-2 pb-6 pt-2" : "px-3 pb-9 pt-3"
+              }`}
+            >
+              <span
+                className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full"
+                style={{ width: avatarPx, height: avatarPx, fontSize: letterPx }}
+              >
+                <UserAvatar
+                  username={name}
+                  avatarUrl={member?.avatar_url}
+                  size="lg"
+                  speaking={false}
+                  className="!h-full !w-full !text-[length:inherit]"
+                />
+              </span>
+            </div>
           </>
-        ) : null}
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
 
-        <div
-          ref={fitRef}
-          className={`absolute inset-0 flex items-center justify-center ${
-            compact ? "px-2 pb-6 pt-2" : "px-3 pb-9 pt-3"
-          }`}
-        >
-          <span
-            className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full"
-            style={{ width: avatarPx, height: avatarPx, fontSize: letterPx }}
-          >
-            <UserAvatar
-              username={name}
-              avatarUrl={member?.avatar_url}
-              size="lg"
-              speaking={false}
-              className="!h-full !w-full !text-[length:inherit]"
-            />
-          </span>
-        </div>
-
-        {(state.muted || state.deafened) && (
+        {(muted || deafened) && !isScreen && (
           <span
             className={`absolute flex items-center justify-center rounded-full bg-[var(--ms-border)]/90 text-[var(--ms-danger)] ring-2 ring-black/40 ${
               compact
@@ -183,7 +247,7 @@ function VoiceTile({
                 : "right-3 top-3 h-8 w-8"
             }`}
           >
-            {state.deafened ? (
+            {deafened ? (
               <HeadphoneOff
                 className={compact ? "h-3 w-3" : "h-4 w-4"}
                 strokeWidth={2}
@@ -196,6 +260,20 @@ function VoiceTile({
             )}
           </span>
         )}
+        {isScreen ? (
+          <span
+            className={`absolute flex items-center justify-center rounded-full bg-[#ed4245] text-white ring-2 ring-black/40 ${
+              compact
+                ? "right-1.5 top-1.5 h-6 w-6"
+                : "right-3 top-3 h-8 w-8"
+            }`}
+          >
+            <MonitorUp
+              className={compact ? "h-3 w-3" : "h-4 w-4"}
+              strokeWidth={2}
+            />
+          </span>
+        ) : null}
         <div
           className={`absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 ${
             compact ? "px-2 py-1.5" : "px-3 py-2"
@@ -222,10 +300,15 @@ function VoiceTile({
           </HoverTip>
           {!compact && (
             <div className="flex shrink-0 items-center gap-1.5 text-[var(--ms-text)]">
-              {(state.muted || state.deafened) && (
+              {isScreen ? (
+                <span className="rounded bg-[#ed4245] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                  Live
+                </span>
+              ) : null}
+              {(muted || deafened) && !isScreen && (
                 <MicOff className="h-3.5 w-3.5" strokeWidth={2} />
               )}
-              {state.deafened && (
+              {deafened && !isScreen && (
                 <HeadphoneOff className="h-3.5 w-3.5" strokeWidth={2} />
               )}
             </div>
@@ -263,8 +346,15 @@ export function VoicePane({
   onOpenDeviceMenus,
   micLevel,
   micError,
+  cameraOn = false,
+  screenSharing = false,
+  onToggleCamera,
+  onToggleScreenShare,
+  localVideoStream = null,
+  localScreenStream = null,
+  remoteMedia = {},
 }: VoicePaneProps) {
-  const [focusedUserId, setFocusedUserId] = useState<string | null>(null);
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
   const ordered = [...participants].sort((a, b) =>
     voiceDisplayName(a, membersById).localeCompare(
@@ -274,31 +364,74 @@ export function VoicePane({
     ),
   );
 
-  useEffect(() => {
-    if (!joined) {
-      setFocusedUserId(null);
-      return;
+  const stageItems = useMemo(() => {
+    const items: StageItem[] = [];
+    for (const state of ordered) {
+      const isSelf = state.user_id === currentUserId;
+      const media = remoteMedia[state.user_id];
+      const cameraStream = isSelf
+        ? localVideoStream
+        : (media?.camera ?? null);
+      items.push({
+        key: `user:${state.user_id}`,
+        kind: "user",
+        userId: state.user_id,
+        state,
+        stream: cameraStream,
+      });
+      const screenStream = isSelf
+        ? localScreenStream
+        : (media?.screen ?? null);
+      if (screenStream) {
+        const member = membersById.get(state.user_id);
+        const base =
+          member?.nickname || member?.username || (isSelf ? "You" : "Someone");
+        items.push({
+          key: `screen:${state.user_id}`,
+          kind: "screen",
+          userId: state.user_id,
+          label: `${base}'s Screen`,
+          stream: screenStream,
+          muted: state.muted,
+          deafened: state.deafened,
+        });
+      }
     }
-    if (!focusedUserId) return;
-    if (!ordered.some((state) => state.user_id === focusedUserId)) {
-      setFocusedUserId(null);
-    }
-  }, [focusedUserId, joined, ordered]);
+    return items;
+  }, [
+    ordered,
+    currentUserId,
+    localVideoStream,
+    localScreenStream,
+    remoteMedia,
+    membersById,
+  ]);
 
   useEffect(() => {
-    if (!focusedUserId) return;
+    if (!joined) {
+      setFocusedKey(null);
+      return;
+    }
+    if (!focusedKey) return;
+    if (!stageItems.some((item) => item.key === focusedKey)) {
+      setFocusedKey(null);
+    }
+  }, [focusedKey, joined, stageItems]);
+
+  useEffect(() => {
+    if (!focusedKey) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setFocusedUserId(null);
+      if (event.key === "Escape") setFocusedKey(null);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [focusedUserId]);
+  }, [focusedKey]);
 
-  const focusedState = focusedUserId
-    ? (ordered.find((state) => state.user_id === focusedUserId) ?? null)
+  const focusedItem = focusedKey
+    ? (stageItems.find((item) => item.key === focusedKey) ?? null)
     : null;
-  const stripStates = focusedState
-    ? ordered.filter((state) => state.user_id !== focusedState.user_id)
+  const stripItems = focusedItem
+    ? stageItems.filter((item) => item.key !== focusedItem.key)
     : [];
 
   // Preview before joining: title + stacked avatars + count + Join (centered, not docked).
@@ -376,11 +509,30 @@ export function VoicePane({
     </div>
   );
 
+  function renderTile(item: StageItem, size: "focus" | "grid" | "strip") {
+    return (
+      <VoiceTile
+        item={item}
+        member={membersById.get(item.userId)}
+        currentUserId={currentUserId}
+        speaking={
+          joined
+            ? (speakingUserIds?.has(item.userId) ?? false) &&
+              item.kind === "user"
+            : false
+        }
+        size={size}
+        onSelect={() =>
+          setFocusedKey((prev) => (prev === item.key ? null : item.key))
+        }
+      />
+    );
+  }
+
   const stage =
-    ordered.length === 0 ? (
+    stageItems.length === 0 ? (
       emptyStage
-    ) : focusedState ? (
-      // Filmstrip sits under the focused tile (not the viewport bottom), like Discord.
+    ) : focusedItem ? (
       <div className="flex min-h-0 flex-1 items-center justify-center">
         <div
           className="flex w-full max-w-4xl flex-col gap-2"
@@ -388,37 +540,15 @@ export function VoicePane({
             width: "min(100%, 56rem, calc((100dvh - 14rem) * 16 / 9))",
           }}
         >
-          <VoiceTile
-            state={focusedState}
-            member={membersById.get(focusedState.user_id)}
-            currentUserId={currentUserId}
-            speaking={
-              joined
-                ? (speakingUserIds?.has(focusedState.user_id) ?? false)
-                : false
-            }
-            size="focus"
-            onSelect={() => setFocusedUserId(null)}
-          />
-          {stripStates.length > 0 && (
+          {renderTile(focusedItem, "focus")}
+          {stripItems.length > 0 && (
             <ul className="flex w-full justify-center gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]">
-              {stripStates.map((state) => (
+              {stripItems.map((item) => (
                 <li
-                  key={state.user_id}
+                  key={item.key}
                   className="w-[30%] min-w-[7.5rem] max-w-[11rem] shrink-0"
                 >
-                  <VoiceTile
-                    state={state}
-                    member={membersById.get(state.user_id)}
-                    currentUserId={currentUserId}
-                    speaking={
-                      joined
-                        ? (speakingUserIds?.has(state.user_id) ?? false)
-                        : false
-                    }
-                    size="strip"
-                    onSelect={() => setFocusedUserId(state.user_id)}
-                  />
+                  {renderTile(item, "strip")}
                 </li>
               ))}
             </ul>
@@ -427,22 +557,9 @@ export function VoicePane({
       </div>
     ) : (
       <div className="flex min-h-0 flex-1 items-center justify-center">
-        <ul className={`grid w-full gap-3 ${gridClass(ordered.length)}`}>
-          {ordered.map((state) => (
-            <li key={state.user_id}>
-              <VoiceTile
-                state={state}
-                member={membersById.get(state.user_id)}
-                currentUserId={currentUserId}
-                speaking={
-                  joined
-                    ? (speakingUserIds?.has(state.user_id) ?? false)
-                    : false
-                }
-                size="grid"
-                onSelect={() => setFocusedUserId(state.user_id)}
-              />
-            </li>
+        <ul className={`grid w-full gap-3 ${gridClass(stageItems.length)}`}>
+          {stageItems.map((item) => (
+            <li key={item.key}>{renderTile(item, "grid")}</li>
           ))}
         </ul>
       </div>
@@ -476,6 +593,10 @@ export function VoicePane({
           micLevel={micLevel}
           micError={micError}
           showLeave={false}
+          cameraOn={cameraOn}
+          screenSharing={screenSharing}
+          onToggleCamera={onToggleCamera}
+          onToggleScreenShare={onToggleScreenShare}
         />
         <button
           type="button"

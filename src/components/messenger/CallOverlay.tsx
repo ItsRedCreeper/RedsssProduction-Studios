@@ -2,93 +2,164 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Maximize2, Minimize2, PhoneOff } from "lucide-react";
+import {
+  Maximize2,
+  Minimize2,
+  MonitorUp,
+  PhoneOff,
+} from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
 import { useCallSession } from "@/components/messenger/voice/CallSessionProvider";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { createClient } from "@/lib/supabase/client";
 
-function VideoTile({
+type StageItem =
+  | {
+      key: string;
+      kind: "user";
+      userId: string;
+      label: string;
+      stream: MediaStream | null;
+      isSelf: boolean;
+    }
+  | {
+      key: string;
+      kind: "screen";
+      userId: string;
+      label: string;
+      stream: MediaStream;
+      isSelf: boolean;
+    };
+
+function gridClass(count: number) {
+  if (count <= 1) return "mx-auto grid-cols-1 max-w-3xl";
+  if (count === 2) return "mx-auto grid-cols-1 sm:grid-cols-2 max-w-5xl";
+  if (count <= 4) return "mx-auto grid-cols-2 max-w-5xl";
+  if (count <= 6) return "mx-auto grid-cols-2 lg:grid-cols-3 max-w-6xl";
+  return "mx-auto grid-cols-2 md:grid-cols-3 xl:grid-cols-4 max-w-6xl";
+}
+
+function MediaVideo({
   stream,
-  label,
-  muted,
-  speaking,
-  cameraOff,
-  live,
-  onWatch,
-  watching,
+  mirrored,
 }: {
-  stream: MediaStream | null;
-  label: string;
-  muted?: boolean;
-  speaking?: boolean;
-  cameraOff?: boolean;
-  live?: boolean;
-  onWatch?: () => void;
-  watching?: boolean;
+  stream: MediaStream;
+  mirrored?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.srcObject = stream;
-    if (stream) void el.play().catch(() => undefined);
+    void el.play().catch(() => undefined);
   }, [stream]);
-
   return (
-    <div
-      className={`relative min-h-[9rem] overflow-hidden rounded-2xl bg-[var(--ms-border)] ${
-        watching
-          ? "ring-2 ring-accent/70"
-          : speaking
-            ? "ring-2 ring-[#23a559]"
-            : "ring-1 ring-white/10"
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted
+      className={`absolute inset-0 h-full w-full object-cover ${
+        mirrored ? "-scale-x-100" : ""
+      }`}
+    />
+  );
+}
+
+function CallTile({
+  item,
+  speaking,
+  size,
+  onSelect,
+}: {
+  item: StageItem;
+  speaking: boolean;
+  size: "focus" | "grid" | "strip";
+  onSelect: () => void;
+}) {
+  const compact = size === "strip";
+  const hasVideo = !!item.stream;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={
+        size === "focus" ? `Exit focus on ${item.label}` : `Focus ${item.label}`
+      }
+      className={`relative aspect-video w-full overflow-hidden rounded-2xl bg-[var(--ms-border)] text-left ring-2 transition-[box-shadow,filter] duration-200 hover:brightness-110 ${
+        speaking
+          ? "ring-[#23a559]"
+          : item.isSelf
+            ? "ring-accent/50"
+            : "ring-transparent hover:ring-white/10"
       }`}
     >
-      {stream ? (
-        <video
-          ref={ref}
-          autoPlay
-          playsInline
-          muted={muted}
-          className={`h-full w-full object-cover ${muted ? "-scale-x-100" : ""}`}
-        />
-      ) : (
-        <div className="flex h-full min-h-[9rem] flex-col items-center justify-center gap-2 px-3 text-sm text-[var(--ms-text-muted)]">
-          {cameraOff ? (
-            <UserAvatar username={label} size="lg" className="!h-16 !w-16" />
-          ) : null}
-          <span>{label}</span>
-        </div>
-      )}
-      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/70 to-transparent p-2">
-        <span className="truncate text-[11px] font-medium text-white">
-          {label}
-          {live ? (
-            <span className="ml-1 rounded bg-[#ed4245] px-1 py-0.5 text-[9px] font-bold uppercase">
+      <div className="absolute inset-0 bg-[var(--ms-sidebar)]">
+        {hasVideo && item.stream ? (
+          <MediaVideo
+            stream={item.stream}
+            mirrored={item.isSelf && item.kind === "user"}
+          />
+        ) : (
+          <div
+            className={`absolute inset-0 flex flex-col items-center justify-center gap-2 ${
+              compact ? "px-2 pb-6 pt-2" : "px-3 pb-9 pt-3"
+            }`}
+          >
+            <UserAvatar
+              username={item.label}
+              size="lg"
+              className={compact ? "!h-10 !w-10" : "!h-16 !w-16"}
+            />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+        {item.kind === "screen" ? (
+          <span
+            className={`absolute flex items-center justify-center rounded-full bg-[#ed4245] text-white ring-2 ring-black/40 ${
+              compact ? "right-1.5 top-1.5 h-6 w-6" : "right-3 top-3 h-8 w-8"
+            }`}
+          >
+            <MonitorUp
+              className={compact ? "h-3 w-3" : "h-4 w-4"}
+              strokeWidth={2}
+            />
+          </span>
+        ) : null}
+        <div
+          className={`absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 ${
+            compact ? "px-2 py-1.5" : "px-3 py-2"
+          }`}
+        >
+          <p
+            className={`min-w-0 truncate font-semibold text-white drop-shadow ${
+              compact ? "text-[11px]" : "text-sm"
+            }`}
+          >
+            {item.label}
+            {item.isSelf ? (
+              <span className="ml-1 text-[10px] font-normal text-[var(--ms-text)]">
+                (You)
+              </span>
+            ) : null}
+          </p>
+          {item.kind === "screen" && !compact ? (
+            <span className="rounded bg-[#ed4245] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
               Live
             </span>
           ) : null}
-        </span>
-        {onWatch ? (
-          <button
-            type="button"
-            onClick={onWatch}
-            className="rounded bg-black/50 p-1 text-white hover:bg-black/70"
-            aria-label={watching ? "Stop watching" : "Watch stream"}
-          >
-            <Eye className="h-3.5 w-3.5" strokeWidth={2} />
-          </button>
-        ) : null}
+        </div>
       </div>
-    </div>
+    </button>
   );
 }
 
 export function CallOverlay() {
   const call = useCallSession();
   const [peerNames, setPeerNames] = useState<Record<string, string>>({});
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
+
   const peers = useMemo(() => {
     if (!call.connection) return [] as string[];
     const ids = new Set<string>([
@@ -137,21 +208,91 @@ export function CallOverlay() {
     );
   }
 
+  const stageItems = useMemo(() => {
+    if (!call.connection) return [] as StageItem[];
+    const items: StageItem[] = [
+      {
+        key: "user:self",
+        kind: "user",
+        userId: "self",
+        label: "You",
+        stream: call.localVideoStream,
+        isSelf: true,
+      },
+    ];
+    if (call.localScreenStream) {
+      items.push({
+        key: "screen:self",
+        kind: "screen",
+        userId: "self",
+        label: "Your Screen",
+        stream: call.localScreenStream,
+        isSelf: true,
+      });
+    }
+    for (const peerId of peers) {
+      const media = call.remoteMedia[peerId];
+      const name = labelFor(peerId);
+      items.push({
+        key: `user:${peerId}`,
+        kind: "user",
+        userId: peerId,
+        label: name,
+        stream: media?.camera ?? null,
+        isSelf: false,
+      });
+      if (media?.screen) {
+        items.push({
+          key: `screen:${peerId}`,
+          kind: "screen",
+          userId: peerId,
+          label: `${name}'s Screen`,
+          stream: media.screen,
+          isSelf: false,
+        });
+      }
+    }
+    return items;
+    // labelFor depends on peerNames/connection — included via peers + peerNames
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    call.connection,
+    call.localVideoStream,
+    call.localScreenStream,
+    call.remoteMedia,
+    peers,
+    peerNames,
+  ]);
+
+  useEffect(() => {
+    if (!focusedKey) return;
+    if (!stageItems.some((item) => item.key === focusedKey)) {
+      setFocusedKey(null);
+    }
+  }, [focusedKey, stageItems]);
+
+  useEffect(() => {
+    if (!focusedKey) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setFocusedKey(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [focusedKey]);
+
   if (!call.connection) return null;
 
   const ringing = !!call.outgoing && connectedPeers.length === 0;
-  const statusLabel = ringing
-    ? "Ringing…"
-    : call.connection.withVideo
-      ? "Video Connected"
-      : "Voice Connected";
-  const inCallCount = 1 + (ringing ? 0 : call.outgoing ? connectedPeers.length : peers.length);
+  const statusLabel = ringing ? "Ringing…" : "Voice Connected";
+  const inCallCount =
+    1 + (ringing ? 0 : call.outgoing ? connectedPeers.length : peers.length);
 
-  const focused =
-    call.watchingPeerId && call.remoteMedia[call.watchingPeerId]
-      ? call.remoteMedia[call.watchingPeerId]
-      : null;
-  const focusedStream = focused?.screen ?? focused?.camera ?? null;
+  const focusedItem = focusedKey
+    ? (stageItems.find((item) => item.key === focusedKey) ?? null)
+    : null;
+  const stripItems = focusedItem
+    ? stageItems.filter((item) => item.key !== focusedItem.key)
+    : [];
 
   if (!call.stageExpanded) {
     return (
@@ -209,12 +350,71 @@ export function CallOverlay() {
     );
   }
 
-  const gridCols =
-    peers.length <= 1
-      ? "grid-cols-1 sm:grid-cols-2"
-      : peers.length <= 3
-        ? "grid-cols-2"
-        : "grid-cols-2 lg:grid-cols-3";
+  function renderTile(item: StageItem, size: "focus" | "grid" | "strip") {
+    return (
+      <CallTile
+        item={item}
+        speaking={
+          item.kind === "user" &&
+          !item.isSelf &&
+          call.speakingPeerIds.has(item.userId)
+        }
+        size={size}
+        onSelect={() =>
+          setFocusedKey((prev) => (prev === item.key ? null : item.key))
+        }
+      />
+    );
+  }
+
+  const stageBody =
+    ringing && stageItems.length <= 1 ? (
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+        <div>
+          <p className="text-lg font-semibold text-white">
+            {call.outgoing
+              ? "Ringing…"
+              : call.connection.isGroup
+                ? "Waiting for others to join…"
+                : "Waiting for answer…"}
+          </p>
+          <p className="mt-2 text-sm text-[var(--ms-text-muted)]">
+            {call.connection.label}
+          </p>
+        </div>
+      </div>
+    ) : focusedItem ? (
+      <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-5">
+        <div
+          className="flex w-full max-w-4xl flex-col gap-2"
+          style={{
+            width: "min(100%, 56rem, calc((100dvh - 14rem) * 16 / 9))",
+          }}
+        >
+          {renderTile(focusedItem, "focus")}
+          {stripItems.length > 0 ? (
+            <ul className="flex w-full justify-center gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]">
+              {stripItems.map((item) => (
+                <li
+                  key={item.key}
+                  className="w-[30%] min-w-[7.5rem] max-w-[11rem] shrink-0"
+                >
+                  {renderTile(item, "strip")}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
+    ) : (
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-4 py-5">
+        <ul className={`grid w-full gap-3 ${gridClass(stageItems.length)}`}>
+          {stageItems.map((item) => (
+            <li key={item.key}>{renderTile(item, "grid")}</li>
+          ))}
+        </ul>
+      </div>
+    );
 
   const stage = (
     <div className="fixed inset-x-0 bottom-0 top-14 z-[45] flex flex-col bg-[#111214] isolate">
@@ -251,95 +451,9 @@ export function CallOverlay() {
         </div>
       </div>
 
-      {focusedStream ? (
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-          <VideoTile
-            stream={focusedStream}
-            label="Watching stream"
-            live
-            watching
-            onWatch={() => call.setWatchingPeerId(null)}
-          />
-          <div className={`grid gap-3 ${gridCols}`}>
-            <VideoTile
-              stream={call.localVideoStream}
-              label="You"
-              muted
-              cameraOff={!call.cameraOn}
-              live={call.screenSharing}
-            />
-            {peers.map((peerId) => {
-              const media = call.remoteMedia[peerId];
-              const stream = media?.camera ?? null;
-              const hasScreen = !!media?.screen;
-              return (
-                <VideoTile
-                  key={peerId}
-                  stream={stream}
-                  label={labelFor(peerId)}
-                  cameraOff={!stream}
-                  live={hasScreen}
-                  speaking={call.speakingPeerIds.has(peerId)}
-                  onWatch={
-                    hasScreen
-                      ? () => call.setWatchingPeerId(peerId)
-                      : undefined
-                  }
-                  watching={call.watchingPeerId === peerId}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div
-          className={`grid min-h-0 flex-1 gap-3 overflow-y-auto p-4 ${gridCols}`}
-        >
-          <VideoTile
-            stream={call.localVideoStream}
-            label="You"
-            muted
-            cameraOff={!call.cameraOn}
-            live={call.screenSharing}
-          />
-          {peers.length === 0 || ringing ? (
-            <VideoTile
-              stream={null}
-              label={
-                call.outgoing
-                  ? "Ringing…"
-                  : call.connection.isGroup
-                    ? "Waiting for others to join…"
-                    : "Waiting for answer…"
-              }
-            />
-          ) : (
-            peers.map((peerId) => {
-              const media = call.remoteMedia[peerId];
-              const stream = media?.camera ?? null;
-              const hasScreen = !!media?.screen;
-              return (
-                <VideoTile
-                  key={peerId}
-                  stream={stream}
-                  label={labelFor(peerId)}
-                  cameraOff={!stream}
-                  live={hasScreen}
-                  speaking={call.speakingPeerIds.has(peerId)}
-                  onWatch={
-                    hasScreen
-                      ? () => call.setWatchingPeerId(peerId)
-                      : undefined
-                  }
-                  watching={call.watchingPeerId === peerId}
-                />
-              );
-            })
-          )}
-        </div>
-      )}
+      {stageBody}
 
-      <div className="flex shrink-0 flex-wrap items-center justify-center gap-1 border-t border-black/40 bg-[var(--ms-elevated)] px-3 py-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-t border-black/40 bg-[#292b2f] px-4 py-3">
         <VoiceChannelControls
           muted={call.muted}
           deafened={call.deafened}
@@ -349,23 +463,20 @@ export function CallOverlay() {
           onLeave={() => void call.leaveCall()}
           micLevel={call.micLevel}
           micError={call.micError}
-          compact
           showLeave={false}
           cameraOn={call.cameraOn}
           screenSharing={call.screenSharing}
           onToggleCamera={() => void call.toggleCamera()}
           onToggleScreenShare={() => void call.toggleScreenShare()}
         />
-        <HoverTip label="Disconnect">
-          <button
-            type="button"
-            onClick={() => void call.leaveCall()}
-            className="rounded-md bg-[#ed4245] p-2 text-white hover:bg-[#c03537]"
-            aria-label="Disconnect"
-          >
-            <PhoneOff className="h-5 w-5" strokeWidth={1.75} />
-          </button>
-        </HoverTip>
+        <button
+          type="button"
+          onClick={() => void call.leaveCall()}
+          className="inline-flex items-center gap-2 rounded-md bg-[#ed4245] px-3 py-2 text-sm font-semibold text-white hover:bg-[#c03537]"
+        >
+          <PhoneOff className="h-4 w-4" strokeWidth={2} />
+          Disconnect
+        </button>
       </div>
     </div>
   );

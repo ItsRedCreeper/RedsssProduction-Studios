@@ -74,6 +74,7 @@ type CallSessionContextValue = {
   setWatchingPeerId: (peerId: string | null) => void;
   quality: VoiceConnectionQuality;
   localVideoStream: MediaStream | null;
+  localScreenStream: MediaStream | null;
   remoteMedia: Record<string, RemoteMedia>;
   speakingPeerIds: ReadonlySet<string>;
   micError: string | null;
@@ -227,6 +228,8 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(
     null,
   );
+  const [localScreenStream, setLocalScreenStream] =
+    useState<MediaStream | null>(null);
   const [remoteMedia, setRemoteMedia] = useState<Record<string, RemoteMedia>>(
     {},
   );
@@ -266,6 +269,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     cameraTrackRef.current = null;
     screenTrackRef.current = null;
     setLocalVideoStream(null);
+    setLocalScreenStream(null);
     setCameraOn(false);
     setScreenSharing(false);
     setRemoteMedia({});
@@ -487,7 +491,15 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
             const current = prev[peerId] ?? { camera: null, screen: null };
             const next = { ...current };
             if (kind === "screen") next.screen = remoteStream;
-            else next.camera = remoteStream;
+            else if (kind === "camera") next.camera = remoteStream;
+            else if (remoteStream) {
+              if (!current.camera) next.camera = remoteStream;
+              else next.screen = remoteStream;
+            } else if (current.screen && !current.camera) {
+              next.screen = null;
+            } else {
+              next.camera = null;
+            }
             if (!next.camera && !next.screen) {
               const copy = { ...prev };
               delete copy[peerId];
@@ -819,6 +831,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       screenTrackRef.current.stop();
       screenTrackRef.current = null;
       setScreenSharing(false);
+      setLocalScreenStream(null);
       await persistMediaFlags(cameraOn, false);
       return;
     }
@@ -831,6 +844,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       if (!track) return;
       screenTrackRef.current = track;
       setScreenSharing(true);
+      setLocalScreenStream(new MediaStream([track]));
       track.addEventListener(
         "ended",
         () => {
@@ -838,6 +852,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
             await meshRef.current?.setLocalScreenTrack(null);
             screenTrackRef.current = null;
             setScreenSharing(false);
+            setLocalScreenStream(null);
             await persistMediaFlags(!!cameraTrackRef.current, false);
           })();
         },
@@ -1100,6 +1115,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       setWatchingPeerId,
       quality,
       localVideoStream,
+      localScreenStream,
       remoteMedia,
       speakingPeerIds,
       micError,
@@ -1130,6 +1146,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       watchingPeerId,
       quality,
       localVideoStream,
+      localScreenStream,
       remoteMedia,
       speakingPeerIds,
       micError,
@@ -1171,7 +1188,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
                 </span>
               </div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
-                Incoming {incoming.withVideo ? "video" : "voice"} call
+                Incoming call
               </p>
               <p className="mt-2 text-xl font-semibold text-white">
                 {incoming.fromUsername}

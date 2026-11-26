@@ -4289,6 +4289,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     screenSharing: voice.screenSharing,
     onToggleCamera: () => void voice.toggleCamera(),
     onToggleScreenShare: () => void voice.toggleScreenShare(),
+    localVideoStream: voice.localVideoStream,
+    localScreenStream: voice.localScreenStream,
+    remoteMedia: voice.remoteMedia,
   };
 
   const voiceFooter = connection ? (
@@ -4709,30 +4712,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                           },
                       isGroup: !!activeThread.isGroup,
                       withVideo: false,
-                    })
-                : undefined
-            }
-            onStartVideoCall={
-              dmMode && activeThread && activeConversationId
-                ? () =>
-                    void call.startCall({
-                      conversationId: activeConversationId,
-                      label:
-                        activeThread.groupName ||
-                        activeThread.username ||
-                        "Direct Call",
-                      peerUserIds: activeThread.isGroup
-                        ? activeThread.participantIds ?? []
-                        : [activeThread.otherUserId],
-                      peerNames: activeThread.isGroup
-                        ? {}
-                        : {
-                            [activeThread.otherUserId]:
-                              profileUi?.nicknameFor(activeThread.otherUserId) ||
-                              activeThread.username,
-                          },
-                      isGroup: !!activeThread.isGroup,
-                      withVideo: true,
                     })
                 : undefined
             }

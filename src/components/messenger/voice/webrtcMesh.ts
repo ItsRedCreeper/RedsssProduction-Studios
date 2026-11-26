@@ -479,8 +479,9 @@ export class VoiceMesh {
       await this.applyVideoToPeer(peerId, "screen");
     }
 
+    // Perfect negotiation: both peers may offer; glare is handled in onSignal.
     pc.onnegotiationneeded = () => {
-      if (slot.polite) return;
+      if (slot.makingOffer) return;
       void this.makeOffer(peerId, slot);
     };
 
@@ -499,13 +500,19 @@ export class VoiceMesh {
         const ms = new MediaStream([track]);
         const hint = (track as MediaStreamTrack & { contentHint?: string })
           .contentHint;
-        const kind =
+        // contentHint often does not survive the wire — fall back to arrival order
+        // (first video = camera, second = screen).
+        let kind: "camera" | "screen" | "unknown" =
           hint === "detail" ? "screen" : hint === "motion" ? "camera" : "unknown";
+        if (kind === "unknown") {
+          const videoReceivers = pc
+            .getReceivers()
+            .filter((r) => r.track?.kind === "video" && r.track);
+          const index = videoReceivers.findIndex((r) => r.track?.id === track.id);
+          kind = index <= 0 ? "camera" : "screen";
+        }
         this.opts.onRemoteVideo?.(peerId, ms, kind);
         track.addEventListener("ended", () => {
-          this.opts.onRemoteVideo?.(peerId, null, kind);
-        });
-        track.addEventListener("mute", () => {
           this.opts.onRemoteVideo?.(peerId, null, kind);
         });
         return;

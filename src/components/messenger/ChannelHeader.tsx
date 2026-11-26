@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode, Ref } from "react";
-import { Menu, MessageSquare, Phone, Pin, Search, Users, Video } from "lucide-react";
+import { Menu, MessageSquare, Phone, Pin, Search, Users } from "lucide-react";
 import { HoverTip } from "@/components/ui/HoverTip";
 
 type ChannelHeaderProps = {
@@ -24,7 +24,6 @@ type ChannelHeaderProps = {
   onToggleMembers: () => void;
   onToggleChat?: () => void;
   onStartCall?: () => void;
-  onStartVideoCall?: () => void;
   onJoinCall?: () => void;
   onOpenList?: () => void;
   pinsButtonRef?: Ref<HTMLButtonElement>;
@@ -60,7 +59,6 @@ export function ChannelHeader({
   onToggleMembers,
   onToggleChat,
   onStartCall,
-  onStartVideoCall,
   onJoinCall,
   onOpenList,
   pinsButtonRef,
@@ -123,26 +121,14 @@ export function ChannelHeader({
           </HoverTip>
         ) : null}
         {showCall && !joinCallAvailable && onStartCall && (
-          <HoverTip label="Start Voice Call" delayMs={40}>
+          <HoverTip label="Start Call" delayMs={40}>
             <button
               type="button"
               className={toolClass(false)}
-              aria-label="Start voice call"
+              aria-label="Start call"
               onClick={onStartCall}
             >
               <Phone className="h-5 w-5" strokeWidth={1.75} />
-            </button>
-          </HoverTip>
-        )}
-        {showCall && !joinCallAvailable && onStartVideoCall && (
-          <HoverTip label="Start Video Call" delayMs={40}>
-            <button
-              type="button"
-              className={toolClass(false)}
-              aria-label="Start video call"
-              onClick={onStartVideoCall}
-            >
-              <Video className="h-5 w-5" strokeWidth={1.75} />
             </button>
           </HoverTip>
         )}

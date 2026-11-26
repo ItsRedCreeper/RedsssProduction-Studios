@@ -29,6 +29,11 @@ export type VoiceConnection = {
   serverName: string;
 };
 
+export type VoiceRemoteMedia = {
+  camera: MediaStream | null;
+  screen: MediaStream | null;
+};
+
 type JoinVoiceArgs = {
   channelId: string;
   serverId: string;
@@ -59,6 +64,9 @@ type VoiceSessionContextValue = {
   toggleDeafen: () => void;
   cameraOn: boolean;
   screenSharing: boolean;
+  localVideoStream: MediaStream | null;
+  localScreenStream: MediaStream | null;
+  remoteMedia: Record<string, VoiceRemoteMedia>;
   toggleCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
   setInputDeviceId: (deviceId: string) => void;
@@ -134,6 +142,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const [micError, setMicError] = useState<string | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [localVideoStream, setLocalVideoStream] =
+    useState<MediaStream | null>(null);
+  const [localScreenStream, setLocalScreenStream] =
+    useState<MediaStream | null>(null);
+  const [remoteMedia, setRemoteMedia] = useState<
+    Record<string, VoiceRemoteMedia>
+  >({});
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
 
@@ -272,7 +287,38 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const mesh = meshRef.current;
     meshRef.current = null;
     if (mesh) await mesh.stop();
+    setRemoteMedia({});
   }, []);
+
+  const applyRemoteVideo = useCallback(
+    (
+      peerId: string,
+      remoteStream: MediaStream | null,
+      kind: "camera" | "screen" | "unknown",
+    ) => {
+      setRemoteMedia((prev) => {
+        const current = prev[peerId] ?? { camera: null, screen: null };
+        const next = { ...current };
+        if (kind === "screen") next.screen = remoteStream;
+        else if (kind === "camera") next.camera = remoteStream;
+        else if (remoteStream) {
+          if (!current.camera) next.camera = remoteStream;
+          else next.screen = remoteStream;
+        } else if (!current.camera) {
+          next.screen = null;
+        } else {
+          next.camera = null;
+        }
+        if (!next.camera && !next.screen) {
+          const copy = { ...prev };
+          delete copy[peerId];
+          return copy;
+        }
+        return { ...prev, [peerId]: next };
+      });
+    },
+    [],
+  );
 
   const startMesh = useCallback(
     async (channelId: string) => {
@@ -303,6 +349,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         onPeerJoined: (peerId) => {
           void checkPeerBlock(peerId);
         },
+        onRemoteVideo: applyRemoteVideo,
         onError: (message) => setMicError(message),
       });
       mesh.setMuted(mutedRef.current);
@@ -315,11 +362,17 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       meshRef.current = mesh;
       await mesh.start(peerIds);
       if (streamRef.current) await mesh.setLocalStream(streamRef.current);
+      if (cameraTrackRef.current) {
+        await mesh.setLocalVideoTrack(cameraTrackRef.current);
+      }
+      if (screenTrackRef.current) {
+        await mesh.setLocalScreenTrack(screenTrackRef.current);
+      }
       for (const peerId of peerIds) {
         void checkPeerBlock(peerId);
       }
     },
-    [stopMesh, checkPeerBlock],
+    [stopMesh, checkPeerBlock, applyRemoteVideo],
   );
 
   const publishSpeaking = useCallback((speaking: boolean) => {
@@ -592,6 +645,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     screenTrackRef.current = null;
     setCameraOn(false);
     setScreenSharing(false);
+    setLocalVideoStream(null);
+    setLocalScreenStream(null);
+    setRemoteMedia({});
     stopMicMonitor();
     await stopMesh();
     detachBroadcast();
@@ -682,17 +738,23 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       cameraTrackRef.current.stop();
       cameraTrackRef.current = null;
       setCameraOn(false);
+      setLocalVideoStream(null);
       return;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
         audio: false,
       });
       const track = stream.getVideoTracks()[0];
       if (!track) return;
       cameraTrackRef.current = track;
       setCameraOn(true);
+      setLocalVideoStream(new MediaStream([track]));
       await mesh.setLocalVideoTrack(track);
     } catch {
       setMicError("Camera permission denied.");
@@ -707,6 +769,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       screenTrackRef.current.stop();
       screenTrackRef.current = null;
       setScreenSharing(false);
+      setLocalScreenStream(null);
       return;
     }
     try {
@@ -718,6 +781,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (!track) return;
       screenTrackRef.current = track;
       setScreenSharing(true);
+      setLocalScreenStream(new MediaStream([track]));
       track.addEventListener(
         "ended",
         () => {
@@ -725,6 +789,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
             await meshRef.current?.setLocalScreenTrack(null);
             screenTrackRef.current = null;
             setScreenSharing(false);
+            setLocalScreenStream(null);
           })();
         },
         { once: true },
@@ -984,6 +1049,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       toggleDeafen,
       cameraOn,
       screenSharing,
+      localVideoStream,
+      localScreenStream,
+      remoteMedia,
       toggleCamera,
       toggleScreenShare,
       setInputDeviceId: devices.setInputDeviceId,
@@ -1021,6 +1089,9 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       toggleDeafen,
       cameraOn,
       screenSharing,
+      localVideoStream,
+      localScreenStream,
+      remoteMedia,
       toggleCamera,
       toggleScreenShare,
       shouldSkipAutoJoin,
