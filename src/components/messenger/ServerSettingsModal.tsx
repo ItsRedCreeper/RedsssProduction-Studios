@@ -1760,9 +1760,9 @@ export function ServerSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="server-settings-title"
-        className="messenger-shell relative z-10 flex max-h-[min(90dvh,52rem)] w-full max-w-4xl overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
+        className="messenger-shell relative z-10 flex h-[min(90dvh,52rem)] w-full max-w-4xl overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
       >
-        <aside className="flex w-40 shrink-0 flex-col border-r border-[var(--ms-border)] bg-[var(--ms-sidebar)] p-3 sm:w-52">
+        <aside className="flex w-40 shrink-0 flex-col overflow-y-auto border-r border-[var(--ms-border)] bg-[var(--ms-sidebar)] p-3 sm:w-52">
           <p
             id="server-settings-title"
             className="mb-3 truncate px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]"
@@ -1792,8 +1792,8 @@ export function ServerSettingsModal({
           </nav>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="messenger-header flex items-center justify-between bg-[var(--ms-chat)] px-5 py-3">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="messenger-header flex shrink-0 items-center justify-between bg-[var(--ms-chat)] px-5 py-3">
             <h2 className="text-base font-semibold tracking-tight text-white">
               {visibleTabs.find((item) => item.id === tab)?.label ??
                 TABS.find((item) => item.id === tab)?.label}
