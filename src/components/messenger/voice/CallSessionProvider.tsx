@@ -256,9 +256,12 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   const ringtoneRef = useRef<RingtoneHandle | null>(null);
   const titleBaseRef = useRef<string | null>(null);
   const desktopNotifRef = useRef<Notification | null>(null);
+  const incomingRef = useRef<IncomingCall | null>(null);
+  const inviteResendRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   connectionRef.current = connection;
   outgoingRef.current = outgoing;
+  incomingRef.current = incoming;
   mutedRef.current = muted;
   userIdRef.current = user?.id ?? null;
 
@@ -284,6 +287,10 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     if (ringTimerRef.current != null) {
       clearTimeout(ringTimerRef.current);
       ringTimerRef.current = null;
+    }
+    if (inviteResendRef.current != null) {
+      clearInterval(inviteResendRef.current);
+      inviteResendRef.current = null;
     }
   }, []);
 
@@ -623,8 +630,23 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
         withVideo,
         label: profile?.username ?? "Someone",
       };
-      void broadcastCtrl(args.conversationId, invitePayload);
-      void broadcastInbox(peerUserId, invitePayload);
+      const sendInvite = () => {
+        void broadcastCtrl(args.conversationId, invitePayload);
+        void broadcastInbox(peerUserId, invitePayload);
+      };
+      sendInvite();
+      // Background tabs often drop the first broadcast — keep pinging while ringing.
+      if (inviteResendRef.current != null) clearInterval(inviteResendRef.current);
+      inviteResendRef.current = setInterval(() => {
+        if (outgoingRef.current?.conversationId !== args.conversationId) {
+          if (inviteResendRef.current != null) {
+            clearInterval(inviteResendRef.current);
+            inviteResendRef.current = null;
+          }
+          return;
+        }
+        sendInvite();
+      }, 2500);
       ringTimerRef.current = setTimeout(() => {
         void (async () => {
           const stillOutgoing =
@@ -950,6 +972,85 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       stopIncomingAlerts();
     };
   }, [incoming, connection, startIncomingAlerts, stopIncomingAlerts]);
+
+  /**
+   * Background tabs often miss ephemeral invite broadcasts. When the user
+   * returns, discover any still-ringing 1:1 call from the DB and show the modal.
+   */
+  const recoverMissedInvites = useCallback(async () => {
+    if (!user) return;
+    if (connectionRef.current || outgoingRef.current) return;
+    if (incomingRef.current) {
+      // Already have an invite — restart sound/title (blocked while hidden).
+      startIncomingAlerts(incomingRef.current.fromUsername);
+      return;
+    }
+
+    const supabase = createClient();
+    const { data: mine } = await supabase
+      .from("dm_participants")
+      .select("conversation_id")
+      .eq("user_id", user.id);
+    const ids = [...new Set((mine ?? []).map((row) => row.conversation_id))];
+    if (ids.length === 0) return;
+
+    const { data: sessions } = await supabase
+      .from("dm_call_sessions")
+      .select("conversation_id, with_video, started_by, created_at, updated_at")
+      .in("conversation_id", ids)
+      .neq("started_by", user.id);
+    if (!sessions?.length) return;
+
+    const cutoff = Date.now() - (RING_TIMEOUT_MS + 8_000);
+    for (const session of sessions) {
+      const stamped = Date.parse(session.updated_at || session.created_at);
+      if (!Number.isNaN(stamped) && stamped < cutoff) continue;
+
+      const { data: parts } = await supabase
+        .from("dm_call_participants")
+        .select("user_id")
+        .eq("conversation_id", session.conversation_id);
+      const participants = parts ?? [];
+      if (participants.some((row) => row.user_id === user.id)) continue;
+      // 1:1 ring: only the caller is in the call so far.
+      if (participants.length !== 1) continue;
+      if (participants[0]?.user_id !== session.started_by) continue;
+
+      const { data: caller } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", session.started_by)
+        .maybeSingle();
+      const name = caller?.username?.trim() || "Someone";
+      setIncoming({
+        conversationId: session.conversation_id,
+        fromUserId: session.started_by,
+        fromUsername: name,
+        withVideo: !!session.with_video,
+        label: name,
+      });
+      return;
+    }
+  }, [startIncomingAlerts, user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    function onReturnToTab() {
+      if (document.visibilityState === "hidden") return;
+      void recoverMissedInvites();
+    }
+
+    document.addEventListener("visibilitychange", onReturnToTab);
+    window.addEventListener("focus", onReturnToTab);
+    // Catch invites that started before this client finished subscribing.
+    void recoverMissedInvites();
+
+    return () => {
+      document.removeEventListener("visibilitychange", onReturnToTab);
+      window.removeEventListener("focus", onReturnToTab);
+    };
+  }, [recoverMissedInvites, user]);
 
   useEffect(() => {
     if (!user || !watchId) return;
