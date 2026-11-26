@@ -55,6 +55,7 @@ import {
   isAllowedStaticImage,
   isAllowedStickerImage,
 } from "@/lib/upload-image-types";
+import { fitEmojiImageToMaxBytes } from "@/lib/fit-emoji-image";
 import type { AutomodRule } from "@/lib/automod";
 import {
   DEFAULT_MEMBER_PERMISSIONS,
@@ -1475,27 +1476,36 @@ export function ServerSettingsModal({
       setError("Emoji name must be at least 2 characters.");
       return;
     }
-    if (emojiFile.size > SERVER_EMOJI_MAX_BYTES) {
-      setError(`Emoji must be ${SERVER_EMOJI_MAX_LABEL} or smaller.`);
-      return;
-    }
     setEmojiBusy(true);
     setError(null);
+    const fitted = await fitEmojiImageToMaxBytes(
+      emojiFile,
+      SERVER_EMOJI_MAX_BYTES,
+    );
+    if (fitted.error || fitted.file.size > SERVER_EMOJI_MAX_BYTES) {
+      setEmojiBusy(false);
+      setError(
+        fitted.error ??
+          `Emoji must be ${SERVER_EMOJI_MAX_LABEL} or smaller.`,
+      );
+      return;
+    }
+    const uploadFile = fitted.file;
     const supabase = createClient();
     const ext =
-      emojiFile.type === "image/gif"
+      uploadFile.type === "image/gif"
         ? "gif"
-        : emojiFile.type === "image/webp"
+        : uploadFile.type === "image/webp"
           ? "webp"
-          : emojiFile.type === "image/png"
+          : uploadFile.type === "image/png"
             ? "png"
             : "jpg";
     const id = crypto.randomUUID();
     const path = `${server.id}/${id}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("server-emojis")
-      .upload(path, emojiFile, {
-        contentType: emojiFile.type || "image/png",
+      .upload(path, uploadFile, {
+        contentType: uploadFile.type || "image/png",
         upsert: false,
       });
     if (uploadError) {
@@ -1513,7 +1523,7 @@ export function ServerSettingsModal({
         server_id: server.id,
         name,
         url: publicUrl.publicUrl,
-        animated: emojiFile.type === "image/gif",
+        animated: uploadFile.type === "image/gif",
         created_by: userId,
       })
       .select("*")
@@ -3294,8 +3304,9 @@ export function ServerSettingsModal({
                       </button>
                     </div>
                     <p className="text-[11px] text-[var(--ms-text-muted)]">
-                      PNG, JPG, GIF, or WebP · max {SERVER_EMOJI_MAX_LABEL} ·
-                      names use letters, numbers, and underscores
+                      PNG, JPG, GIF, or WebP · max {SERVER_EMOJI_MAX_LABEL}{" "}
+                      (larger GIFs are resized) · names use letters, numbers,
+                      and underscores
                     </p>
                   </form>
                 ) : (
