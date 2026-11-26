@@ -192,13 +192,7 @@ export function Navbar() {
               )}
               {user ? (
                 <>
-                  <UserPresenceBar
-                    className={
-                      speaking
-                        ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-background"
-                        : ""
-                    }
-                  />
+                  <UserPresenceBar speaking={speaking} />
                   <HoverTip label="Log Out" delayMs={40}>
                     <button
                       type="button"

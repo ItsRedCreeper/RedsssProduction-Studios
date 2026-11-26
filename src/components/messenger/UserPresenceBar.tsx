@@ -20,12 +20,15 @@ type UserPresenceBarProps = {
   className?: string;
   /** Top-nav chip (default). Bottom Discord-style bar is no longer used. */
   variant?: "nav";
+  /** Green ring on the avatar while you are speaking in voice. */
+  speaking?: boolean;
 };
 
 /** Compact account + status control for the site top nav. */
 export function UserPresenceBar({
   className = "",
   variant = "nav",
+  speaking = false,
 }: UserPresenceBarProps) {
   void variant;
   const { user, profile } = useCurrentProfile();
@@ -95,7 +98,12 @@ export function UserPresenceBar({
         className="relative shrink-0 rounded-full"
         aria-label="Open profile"
       >
-        <UserAvatar username={name} avatarUrl={profile.avatar_url} size="sm" />
+        <UserAvatar
+          username={name}
+          avatarUrl={profile.avatar_url}
+          size="sm"
+          speaking={speaking}
+        />
         <LiveStatusDot
           userId={user.id}
           status={mergedStatus}
