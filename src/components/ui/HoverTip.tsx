@@ -54,8 +54,12 @@ const EDGE = 8;
 const MAX_TIP = 320;
 const TIP_BG = "#111214";
 const TIP_BORDER = "#3f4147";
+const CARET = 6;
 
-/** Real triangle caret (border trick) — not a rotated square that reads as a block. */
+/**
+ * Triangle caret sitting flush on the outside of the tip edge, aimed at the
+ * anchor. Uses the CSS border triangle (not a rotated square).
+ */
 function TipCaret({
   side,
   offset,
@@ -63,83 +67,96 @@ function TipCaret({
   side: HoverTipSide;
   offset: number;
 }) {
+  // `side` = which side of the anchor the tip sits on.
+  // Caret attaches to the opposite edge of the tip and points at the anchor.
   const wrap: CSSProperties =
     side === "top"
-      ? { left: offset, bottom: -6, transform: "translateX(-50%)" }
+      ? { left: offset, top: "100%", transform: "translateX(-50%)" }
       : side === "bottom"
-        ? { left: offset, top: -6, transform: "translateX(-50%)" }
+        ? { left: offset, bottom: "100%", transform: "translateX(-50%)" }
         : side === "left"
-          ? { top: offset, right: -6, transform: "translateY(-50%)" }
-          : { top: offset, left: -6, transform: "translateY(-50%)" };
+          ? { top: offset, left: "100%", transform: "translateY(-50%)" }
+          : { top: offset, right: "100%", transform: "translateY(-50%)" };
 
-  // Outer triangle = border color; inner = fill, inset 1px toward the tip.
+  // Pull 1px back over the tip border so the seam disappears.
+  const pull: CSSProperties =
+    side === "top"
+      ? { marginTop: -1 }
+      : side === "bottom"
+        ? { marginBottom: -1 }
+        : side === "left"
+          ? { marginLeft: -1 }
+          : { marginRight: -1 };
+
   const outer: CSSProperties =
     side === "top"
       ? {
-          borderLeft: "6px solid transparent",
-          borderRight: "6px solid transparent",
-          borderTop: `6px solid ${TIP_BORDER}`,
+          borderLeft: `${CARET}px solid transparent`,
+          borderRight: `${CARET}px solid transparent`,
+          borderTop: `${CARET}px solid ${TIP_BORDER}`,
         }
       : side === "bottom"
         ? {
-            borderLeft: "6px solid transparent",
-            borderRight: "6px solid transparent",
-            borderBottom: `6px solid ${TIP_BORDER}`,
+            borderLeft: `${CARET}px solid transparent`,
+            borderRight: `${CARET}px solid transparent`,
+            borderBottom: `${CARET}px solid ${TIP_BORDER}`,
           }
         : side === "left"
           ? {
-              borderTop: "6px solid transparent",
-              borderBottom: "6px solid transparent",
-              borderLeft: `6px solid ${TIP_BORDER}`,
+              borderTop: `${CARET}px solid transparent`,
+              borderBottom: `${CARET}px solid transparent`,
+              borderLeft: `${CARET}px solid ${TIP_BORDER}`,
             }
           : {
-              borderTop: "6px solid transparent",
-              borderBottom: "6px solid transparent",
-              borderRight: `6px solid ${TIP_BORDER}`,
+              borderTop: `${CARET}px solid transparent`,
+              borderBottom: `${CARET}px solid transparent`,
+              borderRight: `${CARET}px solid ${TIP_BORDER}`,
             };
 
-  const innerPos: CSSProperties =
+  const inset = CARET - 1;
+  const innerShift: CSSProperties =
     side === "top"
-      ? { left: -5, top: -6 }
+      ? { left: 1, top: 0 }
       : side === "bottom"
-        ? { left: -5, bottom: -6 }
+        ? { left: 1, bottom: 0 }
         : side === "left"
-          ? { top: -5, left: -6 }
-          : { top: -5, right: -6 };
+          ? { top: 1, left: 0 }
+          : { top: 1, right: 0 };
 
   const inner: CSSProperties =
     side === "top"
       ? {
-          borderLeft: "5px solid transparent",
-          borderRight: "5px solid transparent",
-          borderTop: `5px solid ${TIP_BG}`,
+          borderLeft: `${inset}px solid transparent`,
+          borderRight: `${inset}px solid transparent`,
+          borderTop: `${inset}px solid ${TIP_BG}`,
         }
       : side === "bottom"
         ? {
-            borderLeft: "5px solid transparent",
-            borderRight: "5px solid transparent",
-            borderBottom: `5px solid ${TIP_BG}`,
+            borderLeft: `${inset}px solid transparent`,
+            borderRight: `${inset}px solid transparent`,
+            borderBottom: `${inset}px solid ${TIP_BG}`,
           }
         : side === "left"
           ? {
-              borderTop: "5px solid transparent",
-              borderBottom: "5px solid transparent",
-              borderLeft: `5px solid ${TIP_BG}`,
+              borderTop: `${inset}px solid transparent`,
+              borderBottom: `${inset}px solid transparent`,
+              borderLeft: `${inset}px solid ${TIP_BG}`,
             }
           : {
-              borderTop: "5px solid transparent",
-              borderBottom: "5px solid transparent",
-              borderRight: `5px solid ${TIP_BG}`,
+              borderTop: `${inset}px solid transparent`,
+              borderBottom: `${inset}px solid transparent`,
+              borderRight: `${inset}px solid ${TIP_BG}`,
             };
 
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute h-0 w-0"
-      style={wrap}
+      className="pointer-events-none absolute"
+      style={{ ...wrap, ...pull }}
     >
-      <span className="absolute left-0 top-0 h-0 w-0" style={outer} />
-      <span className="absolute h-0 w-0" style={{ ...innerPos, ...inner }} />
+      <span className="relative block h-0 w-0" style={outer}>
+        <span className="absolute h-0 w-0" style={{ ...innerShift, ...inner }} />
+      </span>
     </span>
   );
 }
