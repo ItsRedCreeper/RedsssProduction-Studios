@@ -208,16 +208,6 @@ function startRingtone(): RingtoneHandle {
   };
 }
 
-function flashDocumentTitle(active: boolean, fromUsername: string) {
-  if (typeof document === "undefined") return;
-  const base = document.title.replace(/^\(\d+\)\s*/, "").replace(/^📞\s*/, "");
-  if (!active) {
-    document.title = base;
-    return;
-  }
-  document.title = `📞 ${fromUsername} is calling…`;
-}
-
 export function CallSessionProvider({ children }: { children: ReactNode }) {
   const { user, profile } = useCurrentProfile();
   const voice = useOptionalVoiceSession();
@@ -254,7 +244,6 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   const userIdRef = useRef(user?.id ?? null);
   const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ringtoneRef = useRef<RingtoneHandle | null>(null);
-  const titleBaseRef = useRef<string | null>(null);
   const desktopNotifRef = useRef<Notification | null>(null);
   const incomingRef = useRef<IncomingCall | null>(null);
   const inviteResendRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -297,20 +286,12 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   const stopIncomingAlerts = useCallback(() => {
     ringtoneRef.current?.stop();
     ringtoneRef.current = null;
-    if (titleBaseRef.current != null) {
-      document.title = titleBaseRef.current;
-      titleBaseRef.current = null;
-    } else {
-      flashDocumentTitle(false, "");
-    }
     desktopNotifRef.current?.close();
     desktopNotifRef.current = null;
   }, []);
 
   const startIncomingAlerts = useCallback((fromUsername: string) => {
     stopIncomingAlerts();
-    titleBaseRef.current = document.title.replace(/^\(\d+\)\s*/, "").replace(/^📞\s*/, "");
-    flashDocumentTitle(true, fromUsername);
     ringtoneRef.current = startRingtone();
     try {
       if (
