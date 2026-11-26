@@ -435,13 +435,11 @@ export class VoiceMesh {
       kind === "camera" ? slot.cameraTransceiver : slot.screenTransceiver;
     try {
       await transceiver.sender.replaceTrack(track);
-      // Null replaceTrack often flips the m-line to recvonly; restore send so
-      // remotes actually receive RTP (otherwise they get a black / muted track).
-      const nextDir: RTCRtpTransceiverDirection = track
-        ? "sendrecv"
-        : "recvonly";
-      if (transceiver.direction !== nextDir) {
-        transceiver.direction = nextDir;
+      // After replaceTrack(null), Chromium may flip the m-line to recvonly and
+      // leave remotes with a forever-muted (black) receiver on the next share.
+      // Re-assert sendrecv when attaching a track so RTP actually flows.
+      if (track && transceiver.direction !== "sendrecv") {
+        transceiver.direction = "sendrecv";
       }
     } catch (error) {
       console.warn("[voice-mesh] replaceTrack failed", kind, error);
