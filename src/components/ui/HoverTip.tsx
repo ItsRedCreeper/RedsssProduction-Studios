@@ -8,7 +8,6 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -45,44 +44,11 @@ type TipState = {
   side: HoverTipSide;
   /** Cap width so the tip wraps instead of overflowing the viewport. */
   maxWidth: number;
-  /** Arrow offset from the tip edge that faces the anchor (px along that edge). */
-  arrowOffset: number;
 };
 
-const GAP = 10;
+const GAP = 8;
 const EDGE = 8;
 const MAX_TIP = 320;
-
-function tipArrowClass(side: HoverTipSide) {
-  const base =
-    "absolute h-2.5 w-2.5 rotate-45 border-[#3f4147] bg-[#111214]";
-  switch (side) {
-    case "right":
-      return `${base} left-[-5px] border-b border-l`;
-    case "left":
-      return `${base} right-[-5px] border-t border-r`;
-    case "bottom":
-      return `${base} top-[-5px] border-l border-t`;
-    case "top":
-    default:
-      return `${base} bottom-[-5px] border-b border-r`;
-  }
-}
-
-function tipArrowStyle(
-  side: HoverTipSide,
-  arrowOffset: number,
-): CSSProperties {
-  switch (side) {
-    case "right":
-    case "left":
-      return { top: arrowOffset, transform: "translateY(-50%) rotate(45deg)" };
-    case "bottom":
-    case "top":
-    default:
-      return { left: arrowOffset, transform: "translateX(-50%) rotate(45deg)" };
-  }
-}
 
 function placeTip(
   rect: DOMRect,
@@ -173,20 +139,7 @@ function placeTip(
   left = Math.min(Math.max(left, EDGE), Math.max(EDGE, vw - EDGE - boxW));
   top = Math.min(Math.max(top, EDGE), Math.max(EDGE, vh - EDGE - boxH));
 
-  let arrowOffset: number;
-  if (side === "top" || side === "bottom") {
-    arrowOffset = Math.min(
-      Math.max(anchorX - left, 10),
-      Math.max(10, boxW - 10),
-    );
-  } else {
-    arrowOffset = Math.min(
-      Math.max(anchorY - top, 10),
-      Math.max(10, boxH - 10),
-    );
-  }
-
-  return { top, left, side, maxWidth, arrowOffset };
+  return { top, left, side, maxWidth };
 }
 
 /**
@@ -244,8 +197,7 @@ export function HoverTip({
       tip.top !== measured.top ||
       tip.left !== measured.left ||
       tip.side !== measured.side ||
-      tip.maxWidth !== measured.maxWidth ||
-      tip.arrowOffset !== measured.arrowOffset;
+      tip.maxWidth !== measured.maxWidth;
 
     if (changed) {
       setTip(measured);
@@ -351,11 +303,6 @@ export function HoverTip({
             }}
             className="pointer-events-none fixed z-[80] whitespace-pre-line rounded-md border border-[#3f4147] bg-[#111214] px-3 py-1.5 text-sm font-medium leading-snug text-white shadow-[0_8px_24px_rgba(0,0,0,0.55)] [overflow-wrap:anywhere] [text-wrap:pretty]"
           >
-            <span
-              className={tipArrowClass(tip.side)}
-              style={tipArrowStyle(tip.side, tip.arrowOffset)}
-              aria-hidden
-            />
             {clean}
           </span>,
           document.body,
