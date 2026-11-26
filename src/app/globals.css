@@ -207,19 +207,6 @@ body::before {
   border-bottom: 1px solid var(--ms-border);
 }
 
-.messenger-header::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  width: 3.5rem;
-  bottom: -1px;
-  height: 2px;
-  background: var(--accent);
-  opacity: 0.85;
-  pointer-events: none;
-  border-radius: 0 2px 0 0;
-}
-
 .messenger-row-active {
   background: var(--ms-active);
   box-shadow: inset 2px 0 0 var(--accent);
