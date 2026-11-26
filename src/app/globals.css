@@ -207,6 +207,12 @@ body::before {
   border-bottom: 1px solid var(--ms-border);
 }
 
+/* Explicitly kill any leftover red accent stub from older CSS caches. */
+.messenger-header::after {
+  content: none !important;
+  display: none !important;
+}
+
 .messenger-row-active {
   background: var(--ms-active);
   box-shadow: inset 2px 0 0 var(--accent);
