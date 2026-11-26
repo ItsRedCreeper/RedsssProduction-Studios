@@ -1760,9 +1760,10 @@ export function ServerSettingsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="server-settings-title"
-        className="messenger-shell relative z-10 flex h-[min(90dvh,52rem)] w-full max-w-4xl overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
+        className="messenger-shell relative z-10 flex h-[min(90dvh,52rem)] max-h-[min(90dvh,52rem)] min-h-0 w-full max-w-4xl overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-chat)] shadow-2xl shadow-black/50 ring-1 ring-accent/15"
+        style={{ height: "min(90dvh, 52rem)", maxHeight: "min(90dvh, 52rem)" }}
       >
-        <aside className="flex w-40 shrink-0 flex-col overflow-y-auto border-r border-[var(--ms-border)] bg-[var(--ms-sidebar)] p-3 sm:w-52">
+        <aside className="flex h-full w-40 shrink-0 flex-col overflow-y-auto border-r border-[var(--ms-border)] bg-[var(--ms-sidebar)] p-3 sm:w-52">
           <p
             id="server-settings-title"
             className="mb-3 truncate px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]"
@@ -1792,7 +1793,7 @@ export function ServerSettingsModal({
           </nav>
         </aside>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="messenger-header flex shrink-0 items-center justify-between bg-[var(--ms-chat)] px-5 py-3">
             <h2 className="text-base font-semibold tracking-tight text-white">
               {visibleTabs.find((item) => item.id === tab)?.label ??
@@ -1808,7 +1809,7 @@ export function ServerSettingsModal({
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:max-w-[45rem]">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-4 sm:max-w-[45rem]">
             {error && (
               <p className="mb-3 rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">
                 {error}
@@ -2115,12 +2116,12 @@ export function ServerSettingsModal({
             )}
 
             {tab === "roles" && (canManageRoles || isOwner) && (
-              <div className="flex min-h-[20rem] gap-3">
+              <div className="flex gap-3">
                 <form
                   onSubmit={createRole}
-                  className="flex w-40 shrink-0 flex-col rounded-md border border-[#3f4147] bg-[var(--ms-sidebar)]"
+                  className="flex w-40 shrink-0 flex-col self-start rounded-md border border-[#3f4147] bg-[var(--ms-sidebar)]"
                 >
-                  <div className="flex-1 overflow-y-auto p-2">
+                  <div className="max-h-64 overflow-y-auto p-2">
                     {roles.length === 0 ? (
                       <p className="px-2 py-3 text-sm text-muted">No roles yet.</p>
                     ) : (
@@ -2174,7 +2175,7 @@ export function ServerSettingsModal({
                     </button>
                   </div>
                 </form>
-                <div className="min-w-0 flex-1 overflow-y-auto">
+                <div className="min-w-0 flex-1">
                   {selectedRoleId && roles.some((r) => r.id === selectedRoleId) ? (
                     (() => {
                       const role = roles.find((r) => r.id === selectedRoleId)!;
