@@ -24,6 +24,11 @@ import {
   ImageCropModal,
   type ImageCropKind,
 } from "@/components/ui/ImageCropModal";
+import {
+  GIF_NOT_ALLOWED_HERE,
+  STATIC_IMAGE_ACCEPT,
+  isAllowedStaticImage,
+} from "@/lib/upload-image-types";
 
 type EditProfileModalProps = {
   open: boolean;
@@ -78,8 +83,8 @@ export function EditProfileModal({
 
   function onPick(kind: "avatar" | "banner", file: File | null) {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file.");
+    if (!isAllowedStaticImage(file)) {
+      setError(GIF_NOT_ALLOWED_HERE);
       return;
     }
     setError(null);
@@ -216,7 +221,7 @@ export function EditProfileModal({
                   {uploading === "banner" ? "Uploading…" : bannerUrl ? "Change image" : "Upload image"}
                   <input
                     type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    accept={STATIC_IMAGE_ACCEPT}
                     className="hidden"
                     disabled={!!uploading || saving}
                     onChange={(event) => {
@@ -301,7 +306,7 @@ export function EditProfileModal({
                 </span>
                 <input
                   type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  accept={STATIC_IMAGE_ACCEPT}
                   className="hidden"
                   disabled={!!uploading || saving}
                   onChange={(event) => {

@@ -48,7 +48,7 @@ function clamp(n: number, min: number, max: number) {
 
 /**
  * Discord-style crop: pan + zoom inside a fixed aspect frame, then export.
- * Animated GIFs become a still frame (canvas limitation).
+ * Identity slots (avatar / banner / icon) only accept static images.
  */
 export function ImageCropModal({
   open,

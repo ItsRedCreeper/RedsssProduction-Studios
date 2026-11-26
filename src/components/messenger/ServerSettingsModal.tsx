@@ -42,6 +42,17 @@ import {
   SERVER_NAME_MIN,
 } from "@/lib/field-limits";
 import { sanitizeEmojiName, type ServerEmoji } from "@/lib/emoji";
+import {
+  EMOJI_IMAGE_ACCEPT,
+  GIF_NOT_ALLOWED_HERE,
+  STATIC_IMAGE_ACCEPT,
+  STATIC_IMAGE_HINT,
+  STICKER_IMAGE_ACCEPT,
+  STICKER_IMAGE_HINT,
+  isAllowedEmojiImage,
+  isAllowedStaticImage,
+  isAllowedStickerImage,
+} from "@/lib/upload-image-types";
 import type { AutomodRule } from "@/lib/automod";
 import {
   DEFAULT_MEMBER_PERMISSIONS,
@@ -476,6 +487,10 @@ export function ServerSettingsModal({
 
   async function uploadServerIcon(file: File) {
     if (!canEditOverview) return;
+    if (!isAllowedStaticImage(file)) {
+      setError(GIF_NOT_ALLOWED_HERE);
+      return;
+    }
     if (file.size > 512 * 1024) {
       setError("Server icon must be 512 KB or smaller.");
       return;
@@ -484,13 +499,11 @@ export function ServerSettingsModal({
     setError(null);
     const supabase = createClient();
     const ext =
-      file.type === "image/gif"
-        ? "gif"
-        : file.type === "image/webp"
-          ? "webp"
-          : file.type === "image/png"
-            ? "png"
-            : "jpg";
+      file.type === "image/webp"
+        ? "webp"
+        : file.type === "image/png"
+          ? "png"
+          : "jpg";
     const path = `${server.id}/icon.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("server-icons")
@@ -1451,6 +1464,10 @@ export function ServerSettingsModal({
       setError("Choose an image or GIF first.");
       return;
     }
+    if (!isAllowedEmojiImage(emojiFile)) {
+      setError("Emojis must be PNG, JPG, GIF, or WebP.");
+      return;
+    }
     const name = sanitizeEmojiName(emojiName || emojiFile.name.replace(/\.[^.]+$/, ""));
     if (name.length < 2) {
       setError("Emoji name must be at least 2 characters.");
@@ -1549,6 +1566,10 @@ export function ServerSettingsModal({
       setError("Choose an image first.");
       return;
     }
+    if (!isAllowedStickerImage(stickerFile)) {
+      setError(`Stickers must be ${STICKER_IMAGE_HINT}. GIFs aren't allowed.`);
+      return;
+    }
     const stickerLabel = sanitizeEmojiName(
       stickerName || stickerFile.name.replace(/\.[^.]+$/, ""),
     );
@@ -1563,14 +1584,7 @@ export function ServerSettingsModal({
     setStickerBusy(true);
     setError(null);
     const supabase = createClient();
-    const ext =
-      stickerFile.type === "image/gif"
-        ? "gif"
-        : stickerFile.type === "image/webp"
-          ? "webp"
-          : stickerFile.type === "image/png"
-            ? "png"
-            : "jpg";
+    const ext = stickerFile.type === "image/webp" ? "webp" : "png";
     const id = crypto.randomUUID();
     let bucket = "server-stickers";
     let path = `${server.id}/${id}.${ext}`;
@@ -1840,12 +1854,15 @@ export function ServerSettingsModal({
                     <input
                       ref={iconFileRef}
                       type="file"
-                      accept="image/png,image/jpeg,image/gif,image/webp"
+                      accept={STATIC_IMAGE_ACCEPT}
                       className="hidden"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
-                        if (file?.type.startsWith("image/")) {
+                        if (file && isAllowedStaticImage(file)) {
                           setIconCropFile(file);
+                          setError(null);
+                        } else if (file) {
+                          setError(GIF_NOT_ALLOWED_HERE);
                         }
                         event.target.value = "";
                       }}
@@ -1859,7 +1876,7 @@ export function ServerSettingsModal({
                       {iconBusy ? "Uploading…" : "Change Icon"}
                     </button>
                     <p className="text-[11px] text-[var(--ms-text-muted)]">
-                      Crop after upload · PNG, JPG, GIF, or WebP · max 512 KB
+                      Crop after upload · {STATIC_IMAGE_HINT} · max 512 KB
                     </p>
                   </div>
                 </div>
@@ -3243,7 +3260,7 @@ export function ServerSettingsModal({
                         <input
                           ref={emojiFileRef}
                           type="file"
-                          accept="image/png,image/jpeg,image/gif,image/webp"
+                          accept={EMOJI_IMAGE_ACCEPT}
                           className="hidden"
                           onChange={(event) => {
                             const file = event.target.files?.[0] ?? null;
@@ -3352,7 +3369,7 @@ export function ServerSettingsModal({
                       <input
                         ref={stickerFileRef}
                         type="file"
-                        accept="image/png,image/jpeg,image/gif,image/webp"
+                        accept={STICKER_IMAGE_ACCEPT}
                         className="hidden"
                         onChange={(event) => {
                           const file = event.target.files?.[0] ?? null;
@@ -3384,7 +3401,7 @@ export function ServerSettingsModal({
                     </button>
                   </div>
                   <p className="text-[11px] text-[var(--ms-text-muted)]">
-                    PNG, JPG, GIF, or WebP · max 512 KB
+                    {STICKER_IMAGE_HINT} · max 512 KB
                   </p>
                 </form>
                 <ul className="space-y-1">

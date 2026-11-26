@@ -454,6 +454,12 @@ export async function uploadProfileAsset(
   file: File,
   kind: "avatar" | "banner",
 ) {
+  const { GIF_NOT_ALLOWED_HERE, isAllowedStaticImage } = await import(
+    "@/lib/upload-image-types"
+  );
+  if (!isAllowedStaticImage(file)) {
+    return { url: null as string | null, error: GIF_NOT_ALLOWED_HERE };
+  }
   const { fitImageToMaxBytes, PROFILE_ASSET_MAX_BYTES } = await import(
     "@/lib/compress-image"
   );
