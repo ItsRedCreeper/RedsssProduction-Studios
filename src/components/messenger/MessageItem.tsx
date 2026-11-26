@@ -316,7 +316,10 @@ export function MessageItem({
   if (message.is_system) {
     const missedVideo = /missed a video call/i.test(message.content);
     const missedVoice =
-      !missedVideo && /missed a(?:n)? voice call|missed voice call/i.test(message.content);
+      !missedVideo &&
+      /missed a(?:n)? voice call|missed (?:a )?voice call|missed a call from/i.test(
+        message.content,
+      );
     const SystemIcon = missedVideo
       ? VideoOff
       : missedVoice

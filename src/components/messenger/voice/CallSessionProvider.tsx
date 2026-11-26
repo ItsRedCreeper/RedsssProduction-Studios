@@ -628,12 +628,13 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
           const stillOutgoing =
             outgoingRef.current?.conversationId === args.conversationId;
           if (!stillOutgoing) return;
+          const callerName = profile?.username ?? "Someone";
           await supabase.from("dm_messages").insert({
             conversation_id: args.conversationId,
             user_id: user.id,
             content: withVideo
-              ? "Missed a video call."
-              : "Missed a voice call.",
+              ? `You missed a video call from ${callerName}.`
+              : `You missed a voice call from ${callerName}.`,
             is_system: true,
             pinned: false,
           });
