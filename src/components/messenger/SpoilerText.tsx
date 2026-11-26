@@ -2,6 +2,7 @@
 
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { LinkPreviewCard } from "@/components/messenger/LinkEmbeds";
+import { HoverTip } from "@/components/ui/HoverTip";
 
 type SpoilerTextProps = {
   children: ReactNode;
@@ -43,25 +44,26 @@ export function SpoilerText({ children, embedUrls = [] }: SpoilerTextProps) {
   }
 
   return (
-    <span
-      role="button"
-      tabIndex={0}
-      onClick={reveal}
-      onKeyDown={onKeyDown}
-      className="relative inline cursor-pointer rounded bg-[var(--ms-border)] px-0.5 text-transparent transition hover:bg-[var(--ms-sidebar)]"
-      aria-label="Reveal spoiler"
-      title="Reveal spoiler"
-    >
-      {/*
-        Keep layout width from the real content, but force every nested link
-        (and other colored bits) fully invisible so nothing peeks through.
-      */}
+    <HoverTip label="Reveal spoiler" delayMs={40} side="top">
       <span
-        aria-hidden
-        className="pointer-events-none select-none text-transparent [text-shadow:none] [&_*]:!text-transparent [&_*]:!no-underline [&_*]:![text-decoration:none] [&_a]:!text-transparent [&_a]:!decoration-transparent"
+        role="button"
+        tabIndex={0}
+        onClick={reveal}
+        onKeyDown={onKeyDown}
+        className="relative inline cursor-pointer rounded bg-[var(--ms-border)] px-0.5 text-transparent transition hover:bg-[var(--ms-sidebar)]"
+        aria-label="Reveal spoiler"
       >
-        {children}
+        {/*
+          Keep layout width from the real content, but force every nested link
+          (and other colored bits) fully invisible so nothing peeks through.
+        */}
+        <span
+          aria-hidden
+          className="pointer-events-none select-none text-transparent [text-shadow:none] [&_*]:!text-transparent [&_*]:!no-underline [&_*]:![text-decoration:none] [&_a]:!text-transparent [&_a]:!decoration-transparent"
+        >
+          {children}
+        </span>
       </span>
-    </span>
+    </HoverTip>
   );
 }
