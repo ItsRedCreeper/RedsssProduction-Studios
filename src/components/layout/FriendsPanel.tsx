@@ -51,6 +51,7 @@ import {
   FRIENDS_PANEL_MIN,
   useFriendsPanelWidth,
 } from "@/hooks/useFriendsPanelWidth";
+import { formatUnreadCount } from "@/lib/unread";
 
 export type FriendListItem = {
   id: string;
@@ -593,16 +594,16 @@ export function FriendsPanel({
                 {item.label}
                 {pendingBadge > 0 && (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] text-white">
-                    {pendingBadge}
+                    {formatUnreadCount(pendingBadge)}
                   </span>
                 )}
                 {blockedUnseen > 0 ? (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] text-white">
-                    {blockedUnseen}
+                    {formatUnreadCount(blockedUnseen)}
                   </span>
                 ) : blockedTotal > 0 && item.id === "blocked" ? (
                   <span className="ml-1.5 text-[10px] font-medium text-[var(--ms-text-muted)]">
-                    {blockedTotal}
+                    {formatUnreadCount(blockedTotal)}
                   </span>
                 ) : null}
               </button>
@@ -675,7 +676,7 @@ export function FriendsPanel({
                           ringClassName="ring-[var(--ms-sidebar)]"
                         />
                       </span>
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="flex min-w-0 items-center gap-1.5">
                           <HoverTip
                             label={displayName}
@@ -683,7 +684,7 @@ export function FriendsPanel({
                             delayMs={40}
                             className="min-w-0"
                           >
-                            <span className="block truncate text-sm font-medium text-white">
+                            <span className="block text-sm font-medium text-white group-hover:truncate group-focus-within:truncate">
                               {displayName}
                             </span>
                           </HoverTip>
@@ -696,7 +697,7 @@ export function FriendsPanel({
                             />
                           )}
                         </span>
-                        <p className="truncate text-[11px] text-[var(--ms-text-faint)]">
+                        <p className="text-[11px] text-[var(--ms-text-faint)] group-hover:truncate group-focus-within:truncate">
                           @{edge.other.username}
                         </p>
                         <PresenceCaption
@@ -705,10 +706,11 @@ export function FriendsPanel({
                           lastSeenAt={edge.other.last_seen_at}
                           customStatus={edge.other.status_text}
                           className="mt-0.5"
+                          truncateClassName="group-hover:truncate group-focus-within:truncate"
                         />
                       </span>
                     </button>
-                    <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                    <div className="hidden shrink-0 items-center group-hover:flex group-focus-within:flex">
                     <HoverTip
                       label={favorited ? "Unfavorite" : "Favorite"}
                       delayMs={40}

@@ -22,6 +22,11 @@ type PresenceCaptionProps = {
   className?: string;
   showDot?: boolean;
   dotClassName?: string;
+  /**
+   * Truncation for the caption text. Use `group-hover:truncate` when a parent
+   * `group` shows action buttons only on hover.
+   */
+  truncateClassName?: string;
 };
 
 export function PresenceCaption({
@@ -33,6 +38,7 @@ export function PresenceCaption({
   className = "",
   showDot = false,
   dotClassName = "h-2 w-2",
+  truncateClassName = "truncate",
 }: PresenceCaptionProps) {
   const feed = useOptionalPresenceFeed();
   const live = useUserPresence(userId);
@@ -99,7 +105,9 @@ export function PresenceCaption({
         delayMs={40}
         className="min-w-0 flex-1"
       >
-        <span className={`block truncate text-xs ${tone}`}>{caption}</span>
+        <span className={`block text-xs ${tone} ${truncateClassName}`}>
+          {caption}
+        </span>
       </HoverTip>
     </span>
   );
