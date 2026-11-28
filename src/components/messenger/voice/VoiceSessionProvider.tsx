@@ -654,9 +654,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   );
 
   const leaveVoice = useCallback(async () => {
+    // Sound first — before any mesh/mic teardown work.
+    if (connectionRef.current) playSound("voice-leave");
     const current = connectionRef.current;
     if (current) {
-      playSound("voice-leave");
       // Merge with sessionStorage so an SSR-empty ref can't wipe prior skips.
       for (const id of readSkipChannels()) {
         skipAutoJoinRef.current.add(id);

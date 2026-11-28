@@ -327,10 +327,13 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   );
 
   const leaveCall = useCallback(async () => {
+    // Sound before ringtone teardown / presence cleanup.
+    if (connectionRef.current || outgoingRef.current) {
+      playSound("voice-leave");
+    }
     clearRingTimer();
     stopIncomingAlerts();
     const conn = connectionRef.current;
-    if (conn) playSound("voice-leave");
     const uid = userIdRef.current;
     const outgoingPeer = outgoingRef.current?.peerUserId;
     if (conn && uid) {
