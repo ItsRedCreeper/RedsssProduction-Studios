@@ -719,6 +719,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       };
       setConnection(next);
       connectionRef.current = next;
+      // Play immediately on click — don't wait for mesh / DB round-trips.
+      playSound("voice-join");
       attachBroadcast(args.channelId);
       void startMesh(args.channelId);
 
@@ -747,7 +749,6 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
       void voiceError;
       void startMicMonitor();
-      playSound("voice-join");
     },
     [attachBroadcast, detachBroadcast, startMesh, startMicMonitor, stopMesh, stopMicMonitor],
   );

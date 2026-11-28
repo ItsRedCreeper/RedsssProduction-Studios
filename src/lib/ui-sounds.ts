@@ -1,6 +1,7 @@
 /**
  * Subtle messenger UI sounds from `/public/sounds/*.mp3`.
  * Missing files fail silently. Respects a local mute toggle (default on).
+ * Prefetches audio so join/leave/mute feel immediate.
  */
 
 export type UiSoundName =
@@ -25,11 +26,24 @@ const DEBOUNCE_MS: Partial<Record<UiSoundName, number>> = {
   error: 400,
   mute: 80,
   unmute: 80,
+  "voice-join": 40,
+  "voice-leave": 40,
 };
+
+/** Prefetch first — these are the ones users notice lagging. */
+const EAGER: UiSoundName[] = [
+  "voice-join",
+  "voice-leave",
+  "mute",
+  "unmute",
+  "message-send",
+  "message-receive",
+];
 
 const missing = new Set<UiSoundName>();
 const lastPlayedAt = new Map<UiSoundName, number>();
-const unlocked = { current: false };
+/** Warm templates — clone on play so we never wait on a network fetch. */
+const templates = new Map<UiSoundName, HTMLAudioElement>();
 
 let loopAudio: HTMLAudioElement | null = null;
 let loopName: UiSoundName | null = null;
@@ -46,6 +60,40 @@ function readEnabled(): boolean {
 }
 
 let enabled = true;
+
+function srcFor(name: UiSoundName) {
+  return `/sounds/${name}.mp3`;
+}
+
+function ensureTemplate(name: UiSoundName) {
+  if (typeof window === "undefined" || missing.has(name)) return null;
+  let audio = templates.get(name);
+  if (audio) return audio;
+  audio = new Audio(srcFor(name));
+  audio.preload = "auto";
+  audio.volume = VOLUME;
+  audio.addEventListener(
+    "error",
+    () => {
+      missing.add(name);
+      templates.delete(name);
+    },
+    { once: true },
+  );
+  // Kick the download without playing.
+  try {
+    void audio.load();
+  } catch {
+    /* ignore */
+  }
+  templates.set(name, audio);
+  return audio;
+}
+
+function prefetchEager() {
+  for (const name of EAGER) ensureTemplate(name);
+}
+
 if (typeof window !== "undefined") {
   enabled = readEnabled();
   window.addEventListener("storage", (event) => {
@@ -54,14 +102,20 @@ if (typeof window !== "undefined") {
       if (!enabled) stopSoundLoop();
     }
   });
-  // Unlock audio after the first user gesture (browser autoplay policy).
+  // Prefetch after first gesture (also satisfies autoplay unlock).
   const unlock = () => {
-    unlocked.current = true;
+    prefetchEager();
     window.removeEventListener("pointerdown", unlock);
     window.removeEventListener("keydown", unlock);
   };
   window.addEventListener("pointerdown", unlock, { once: true });
   window.addEventListener("keydown", unlock, { once: true });
+  // Idle prefetch when the tab is quiet — join/leave stay snappy.
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(() => prefetchEager(), { timeout: 2500 });
+  } else {
+    window.setTimeout(prefetchEager, 1200);
+  }
 }
 
 export function areUiSoundsEnabled() {
@@ -83,17 +137,6 @@ export function setUiSoundsEnabled(on: boolean) {
   }
 }
 
-function srcFor(name: UiSoundName) {
-  return `/sounds/${name}.mp3`;
-}
-
-function makeAudio(name: UiSoundName) {
-  const audio = new Audio(srcFor(name));
-  audio.preload = "auto";
-  audio.volume = VOLUME;
-  return audio;
-}
-
 function shouldSkip(name: UiSoundName) {
   if (!enabled || missing.has(name)) return true;
   if (typeof window === "undefined") return true;
@@ -105,33 +148,30 @@ function shouldSkip(name: UiSoundName) {
   return false;
 }
 
+function audioForPlay(name: UiSoundName) {
+  const template = ensureTemplate(name);
+  if (!template) return null;
+  // Clone so overlaps don't cut each other off and we keep the warm buffer.
+  const audio = template.cloneNode(true) as HTMLAudioElement;
+  audio.volume = VOLUME;
+  audio.currentTime = 0;
+  return audio;
+}
+
 /**
  * Fire-and-forget one-shot. Never throws; never blocks UI.
  */
 export function playSound(name: UiSoundName) {
   if (shouldSkip(name)) return;
   try {
-    const audio = makeAudio(name);
+    const audio = audioForPlay(name);
+    if (!audio) return;
     const play = audio.play();
     if (play && typeof play.catch === "function") {
       void play.catch(() => {
-        // Autoplay blocked or missing file — mark missing only on hard media errors.
-        audio.addEventListener(
-          "error",
-          () => {
-            missing.add(name);
-          },
-          { once: true },
-        );
+        /* autoplay blocked — ignore; next gesture unlocks */
       });
     }
-    audio.addEventListener(
-      "error",
-      () => {
-        missing.add(name);
-      },
-      { once: true },
-    );
   } catch {
     missing.add(name);
   }
@@ -144,7 +184,8 @@ export function startSoundLoop(name: UiSoundName = "incoming-call") {
     return { stop: () => undefined };
   }
   try {
-    const audio = makeAudio(name);
+    const audio = audioForPlay(name);
+    if (!audio) return { stop: () => undefined };
     audio.loop = true;
     audio.volume = Math.min(VOLUME, 0.35);
     loopAudio = audio;
@@ -152,7 +193,6 @@ export function startSoundLoop(name: UiSoundName = "incoming-call") {
     const play = audio.play();
     if (play && typeof play.catch === "function") {
       void play.catch(() => {
-        /* autoplay blocked until gesture — retry once on next pointer */
         const retry = () => {
           if (loopAudio !== audio) return;
           void audio.play().catch(() => {
@@ -163,14 +203,6 @@ export function startSoundLoop(name: UiSoundName = "incoming-call") {
         window.addEventListener("pointerdown", retry, { once: true });
       });
     }
-    audio.addEventListener(
-      "error",
-      () => {
-        missing.add(name);
-        stopSoundLoop();
-      },
-      { once: true },
-    );
   } catch {
     missing.add(name);
   }

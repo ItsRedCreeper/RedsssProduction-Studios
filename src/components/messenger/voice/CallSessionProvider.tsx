@@ -553,6 +553,8 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       skipEnsure?: boolean;
     }) => {
       if (!user) return;
+      // Immediate feedback — mesh/mic setup can take hundreds of ms.
+      playSound("voice-join");
       if (!args.skipEnsure) await ensureLeftOtherSessions();
       else {
         // Tear down media/mesh only if reconnecting same provider without leaveCall.
@@ -614,7 +616,6 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
         participantIds: [user.id, ...args.peerUserIds],
         peerNames: args.peerNames ?? {},
       });
-      playSound("voice-join");
       setStageExpanded(true);
       setOpenCalls((prev) => ({
         ...prev,
