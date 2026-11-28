@@ -35,8 +35,8 @@ export type ProfileTagMeta = {
 const TAG_ORDER: ProfileTagId[] = [PROFILE_TAG_PIONEER, PROFILE_TAG_FUNDER];
 
 /**
- * Solid-enough fills so labels stay readable on dark messenger cards.
- * Pioneer = muted red + light text; Funder = soft gold + dark text.
+ * Soft fills, low visual weight. Pioneer = muted red + light text;
+ * Funder = soft gold + dark text. Borders stay light so chips read as labels.
  */
 export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
   pioneer: {
@@ -44,14 +44,14 @@ export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
     label: "Pioneer",
     tip: "Funded before official release",
     className:
-      "border border-accent/40 bg-[rgba(220,38,38,0.28)] text-[#fecaca]",
+      "border border-accent/30 bg-[rgba(220,38,38,0.22)] text-[#fecaca]",
   },
   funder: {
     id: PROFILE_TAG_FUNDER,
     label: "Funder",
     tip: "Funded RedsssProduction Studios",
     className:
-      "border border-[#c9922e]/50 bg-[#e8b84a] text-[#1f1608]",
+      "border border-[#c9922e]/40 bg-[#e8b84a] text-[#1f1608]",
   },
 };
 

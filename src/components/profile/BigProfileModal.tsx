@@ -632,7 +632,7 @@ export function BigProfileModal({
             <ProfileTagsPills
               tags={profile.profile_tags}
               size="md"
-              className="mt-1.5"
+              className="mt-1"
             />
             {!restricted ? (
               <PresenceCaption

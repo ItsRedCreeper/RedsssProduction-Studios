@@ -240,7 +240,7 @@ export function SmallProfileCard({
         <ProfileTagsPills
           tags={profile.profile_tags}
           size="sm"
-          className="mt-1"
+          className="mt-0.5"
         />
 
         {roles.length > 0 && (
