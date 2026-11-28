@@ -82,11 +82,12 @@ function MemberButton({
       <span className={`min-w-0 flex-1 ${online ? "" : "opacity-50"}`}>
         <span className="flex min-w-0 items-center gap-1.5">
           <span
-            className="min-w-0 flex-1 truncate text-sm"
+            className="min-w-0 truncate text-sm"
             style={{ color: nameColor ?? "#dbdee1" }}
           >
             {displayName || "…"}
           </span>
+          <ProfileTagsPills tags={member.profile_tags} variant="dots" />
           {owner && (
             <Crown
               className="h-3.5 w-3.5 shrink-0 text-[#f0b232]"
@@ -96,11 +97,6 @@ function MemberButton({
             />
           )}
         </span>
-        <ProfileTagsPills
-          tags={member.profile_tags}
-          size="sm"
-          className="mt-0.5"
-        />
         <PresenceCaption
           userId={member.user_id}
           status={member.status}

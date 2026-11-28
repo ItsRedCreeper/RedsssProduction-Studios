@@ -8,39 +8,66 @@ import {
 
 type ProfileTagsPillsProps = {
   tags?: readonly ProfileTagId[] | unknown | null;
-  /** Tiny labels everywhere — `md` is only a hair roomier for the big profile. */
+  /**
+   * `pills` — full text labels (small/big profile).
+   * `dots` — compact circles for the member list.
+   */
+  variant?: "pills" | "dots";
+  /** Pill sizing; ignored for `dots`. */
   size?: "sm" | "md";
   className?: string;
 };
 
 export function ProfileTagsPills({
   tags,
+  variant = "pills",
   size = "sm",
   className = "",
 }: ProfileTagsPillsProps) {
   const items = profileTagsMeta(tags ?? []);
   if (items.length === 0) return null;
 
-  // Tiny label chips — not buttons. Text stays fully readable.
+  if (variant === "dots") {
+    return (
+      <span
+        className={`inline-flex shrink-0 items-center gap-1 ${className}`}
+        aria-label={items.map((t) => t.label).join(", ")}
+      >
+        {items.map((tag) => (
+          <HoverTip
+            key={tag.id}
+            label={`${tag.label}\n${tag.tip}`}
+            delayMs={40}
+            side="top"
+          >
+            <span
+              className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] ${tag.dotClassName}`}
+              aria-label={tag.label}
+            />
+          </HoverTip>
+        ))}
+      </span>
+    );
+  }
+
   const pad =
     size === "md"
-      ? "h-4 px-1.5 text-[10px] leading-none"
-      : "h-3.5 px-1 text-[9px] leading-none";
+      ? "h-[1.125rem] px-2 text-[10px] leading-none"
+      : "h-4 px-1.5 text-[10px] leading-none";
 
   return (
     <span
-      className={`inline-flex max-w-full flex-wrap items-center gap-0.5 ${className}`}
+      className={`inline-flex max-w-full flex-wrap items-center gap-1 ${className}`}
     >
       {items.map((tag) => (
         <HoverTip key={tag.id} label={tag.tip} delayMs={40} side="top">
           <span
             className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium tracking-wide whitespace-nowrap ${pad} ${tag.className}`}
             // Beat inherited button / role WebkitTextFillColor on profile cards.
-            style={
-              tag.id === "funder"
-                ? { color: "#1f1608", WebkitTextFillColor: "#1f1608" }
-                : { color: "#fecaca", WebkitTextFillColor: "#fecaca" }
-            }
+            style={{
+              color: tag.textColor,
+              WebkitTextFillColor: tag.textColor,
+            }}
           >
             {tag.label}
           </span>

@@ -28,15 +28,19 @@ export type ProfileTagMeta = {
   id: ProfileTagId;
   label: string;
   tip: string;
-  /** Tailwind classes for the pill surface + label. */
+  /** Tailwind classes for profile text pills. */
   className: string;
+  /** Tailwind classes for member-list circle dots. */
+  dotClassName: string;
+  /** Explicit text fill for pills (beats inherited WebkitTextFillColor). */
+  textColor: string;
 };
 
 const TAG_ORDER: ProfileTagId[] = [PROFILE_TAG_PIONEER, PROFILE_TAG_FUNDER];
 
 /**
- * Soft fills, low visual weight. Pioneer = muted red + light text;
- * Funder = soft gold + dark text. Borders stay light so chips read as labels.
+ * Soft fills, quieter than role colors.
+ * Pioneer = muted red + light text; Funder = soft gold + dark text.
  */
 export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
   pioneer: {
@@ -44,14 +48,20 @@ export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
     label: "Pioneer",
     tip: "Funded before official release",
     className:
-      "border border-accent/30 bg-[rgba(220,38,38,0.22)] text-[#fecaca]",
+      "border border-[rgba(248,113,113,0.35)] bg-[rgba(185,28,28,0.32)] text-[#fecaca]",
+    dotClassName:
+      "border border-[rgba(248,113,113,0.45)] bg-[rgba(220,60,60,0.85)]",
+    textColor: "#fecaca",
   },
   funder: {
     id: PROFILE_TAG_FUNDER,
     label: "Funder",
     tip: "Funded RedsssProduction Studios",
     className:
-      "border border-[#c9922e]/40 bg-[#e8b84a] text-[#1f1608]",
+      "border border-[rgba(201,146,46,0.45)] bg-[#e2b44f] text-[#1f1608]",
+    dotClassName:
+      "border border-[rgba(201,146,46,0.55)] bg-[#e2b44f]",
+    textColor: "#1f1608",
   },
 };
 
