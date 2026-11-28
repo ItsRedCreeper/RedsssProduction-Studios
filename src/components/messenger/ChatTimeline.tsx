@@ -62,6 +62,8 @@ type ChatTimelineProps = {
   onForward?: (message: ChatMessage) => void;
   onMarkUnread?: (message: ChatMessage) => void;
   onCreateThread?: (message: ChatMessage) => void;
+  /** starter_message_id → thread id for Open Thread menu labels */
+  threadIdByStarterMessageId?: Record<string, string>;
   onCopyLink?: (message: ChatMessage) => void;
   pollVotesByMessage?: Record<
     string,
@@ -155,6 +157,7 @@ export function ChatTimeline({
   onForward,
   onMarkUnread,
   onCreateThread,
+  threadIdByStarterMessageId,
   onCopyLink,
   pollVotesByMessage,
   onPollVote,
@@ -538,6 +541,9 @@ export function ChatTimeline({
                       readOnly || !onCreateThread
                         ? undefined
                         : () => onCreateThread(message)
+                    }
+                    existingThreadId={
+                      threadIdByStarterMessageId?.[message.id] ?? null
                     }
                     onCopyLink={
                       readOnly || !onCopyLink

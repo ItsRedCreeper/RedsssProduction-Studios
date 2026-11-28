@@ -21,7 +21,7 @@ import {
   type OverrideState,
   type Permission,
 } from "@/lib/permissions";
-import type { Channel, Role } from "@/components/messenger/types";
+import type { Category, Channel, Role } from "@/components/messenger/types";
 
 const SLOWMODE_OPTIONS = [
   { value: 0, label: "Off" },
@@ -44,6 +44,7 @@ type EditChannelModalProps = {
   open: boolean;
   channel: Channel | null;
   roles: Role[];
+  categories?: Category[];
   onClose: () => void;
   onSaved: (channel: Channel) => void;
   onDuplicated?: (channel: Channel) => void;
@@ -90,6 +91,7 @@ export function EditChannelModal({
   open,
   channel,
   roles,
+  categories = [],
   onClose,
   onSaved,
   onDuplicated,
@@ -99,6 +101,7 @@ export function EditChannelModal({
   const [topic, setTopic] = useState("");
   const [slowmode, setSlowmode] = useState(0);
   const [nsfw, setNsfw] = useState(false);
+  const [categoryId, setCategoryId] = useState<string>("");
   const [overrides, setOverrides] = useState<ChannelOverrides>({});
   const [target, setTarget] = useState<string>(EVERYONE_OVERRIDE_KEY);
   const [saving, setSaving] = useState(false);
@@ -111,6 +114,7 @@ export function EditChannelModal({
     setTopic(channel.topic ?? "");
     setSlowmode(channel.slowmode_seconds ?? 0);
     setNsfw(Boolean(channel.nsfw));
+    setCategoryId(channel.category_id ?? "");
     setOverrides(
       (channel.permission_overrides &&
       typeof channel.permission_overrides === "object" &&
@@ -134,7 +138,8 @@ export function EditChannelModal({
       (name.trim() !== channel.name ||
         (topic.trim() || "") !== (channel.topic ?? "") ||
         slowmode !== (channel.slowmode_seconds ?? 0) ||
-        nsfw !== Boolean(channel.nsfw)),
+        nsfw !== Boolean(channel.nsfw) ||
+        (categoryId || null) !== (channel.category_id ?? null)),
   );
 
   const permsDirty = Boolean(
@@ -191,6 +196,7 @@ export function EditChannelModal({
         topic: topic.trim() || null,
         slowmode_seconds: slowmode,
         nsfw,
+        category_id: categoryId || null,
       })
       .eq("id", channel.id)
       .select("*")
@@ -347,6 +353,25 @@ export function EditChannelModal({
                   maxLength={CHANNEL_NAME_MAX}
                   className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
                 />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Category
+                </span>
+                <select
+                  value={categoryId}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                  className="w-full rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm outline-none focus:border-accent/60"
+                >
+                  <option value="">No category</option>
+                  {[...categories]
+                    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+                    .map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                </select>
               </label>
               {channel.type === "text" && (
                 <label className="block space-y-1.5">

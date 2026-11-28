@@ -107,7 +107,12 @@ import {
   resolveServerEmojisByIds,
   seedEmojiCache,
 } from "@/lib/emoji-resolve";
-import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
+import {
+  CATEGORY_NAME_MAX,
+  CATEGORY_NAME_MIN,
+  MESSAGE_MAX,
+  MESSAGE_MAX_REACHED,
+} from "@/lib/field-limits";
 import {
   publishReadSync,
   READ_SYNC_CHANNEL,
@@ -123,8 +128,10 @@ import {
 } from "@/lib/permissions";
 import { roleColorForMember } from "@/lib/roles";
 import {
+  contentHasMentionSignal,
   displayMentionText,
   encodeMentions,
+  stripUnauthorizedEveryoneMentions,
   type MentionMaps,
 } from "@/lib/mentions";
 import {
@@ -266,12 +273,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     (userId: string | null | undefined) =>
       !!userId && ignoredIds.includes(userId),
     [ignoredIds],
-  );
-  /** Block or ignore — hide messages / typing / notifications content. */
-  const isMessageHidden = useCallback(
-    (userId: string | null | undefined) =>
-      isBlocked(userId) || isIgnored(userId),
-    [isBlocked, isIgnored],
   );
   const voice = useVoiceSession();
   const call = useCallSession();
@@ -417,6 +418,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const messagesRequest = useRef(0);
   const dmMessagesRequest = useRef(0);
   const sendRequest = useRef(0);
+  const sendingRef = useRef(false);
   const messagesChannelRef = useRef<string | null>(null);
   const typingChannelRef = useRef<ReturnType<
     ReturnType<typeof createClient>["channel"]
@@ -473,6 +475,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     !!activeThread && isBlocked(activeThread.otherUserId);
   const [dmBlockedByThem, setDmBlockedByThem] = useState(false);
   const dmOtherId = activeThread?.otherUserId ?? null;
+  /** Block, ignore, or (DM) blocked-by-them — hide messages / typing content. */
+  const isMessageHidden = useCallback(
+    (userId: string | null | undefined) =>
+      isBlocked(userId) ||
+      isIgnored(userId) ||
+      (!!dmBlockedByThem && !!dmOtherId && userId === dmOtherId),
+    [isBlocked, isIgnored, dmBlockedByThem, dmOtherId],
+  );
   const textMode = pane === "server" && activeChannel?.type === "text";
   const voiceMode = pane === "server" && activeChannel?.type === "voice";
   const dmMode = pane === "home" && !!activeConversationId;
@@ -564,18 +574,41 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [toast]);
 
   useEffect(() => {
-    if (!dmMode || !dmOtherId || dmBlocked) {
+    if (!dmMode || !dmOtherId || dmBlocked || !user) {
       setDmBlockedByThem(false);
       return;
     }
     let cancelled = false;
-    void loadIsBlockedBy(dmOtherId).then(({ blockedByThem }) => {
+    async function refreshBlockedByThem() {
+      const { blockedByThem } = await loadIsBlockedBy(dmOtherId!);
       if (!cancelled) setDmBlockedByThem(blockedByThem);
-    });
+    }
+    void refreshBlockedByThem();
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`blocked-by-them:${user.id}:${dmOtherId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "blocked_users",
+          filter: `blocked_id=eq.${user.id}`,
+        },
+        () => {
+          void refreshBlockedByThem();
+        },
+      )
+      .subscribe();
+    const poll = window.setInterval(() => {
+      void refreshBlockedByThem();
+    }, 15_000);
     return () => {
       cancelled = true;
+      window.clearInterval(poll);
+      void supabase.removeChannel(channel);
     };
-  }, [dmMode, dmOtherId, dmBlocked]);
+  }, [dmMode, dmOtherId, dmBlocked, user]);
 
   useEffect(() => {
     rememberMessengerPath(pathname);
@@ -598,6 +631,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     if (scopeRef.current === scope) return;
     scopeRef.current = scope;
     sendRequest.current += 1;
+    sendingRef.current = false;
+    sendingRef.current = false;
     setSending(false);
     setDraft("");
     setReplyTo(null);
@@ -1737,6 +1772,93 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     };
   }, [user]);
 
+  // Kick / leave / ban: eject self immediately; refresh peer member lists.
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    let channel = supabase
+      .channel(`membership-live:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "server_members",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.old as { server_id?: string } | null;
+          const serverId = row?.server_id;
+          if (!serverId) return;
+          if (voice.connection?.serverId === serverId) {
+            void voice.leaveVoice();
+          }
+          setServers((prev) => prev.filter((server) => server.id !== serverId));
+          if (activeServerId === serverId) {
+            setMembers([]);
+            setChannels([]);
+            setCategories([]);
+            setPreviewServer(null);
+            setSettingsOpen(false);
+            router.push(messengerHomePath());
+          }
+        },
+      );
+    if (activeServerId) {
+      const serverId = activeServerId;
+      channel = channel.on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "server_members",
+          filter: `server_id=eq.${serverId}`,
+        },
+        (payload) => {
+          const row = payload.old as { user_id?: string; server_id?: string } | null;
+          if (!row?.user_id || row.server_id !== serverId) return;
+          if (row.user_id === user.id) return;
+          setMembers((prev) =>
+            prev.filter((member) => member.user_id !== row.user_id),
+          );
+        },
+      );
+    }
+    channel.subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user, activeServerId, voice, router]);
+
+  // Live server icon / name / description updates for joined servers.
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`servers-live:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "servers" },
+        (payload) => {
+          const row = payload.new as Tables<"servers"> | null;
+          if (!row?.id) return;
+          setServers((prev) => {
+            if (!prev.some((server) => server.id === row.id)) return prev;
+            return prev.map((server) =>
+              server.id === row.id ? { ...server, ...row } : server,
+            );
+          });
+          setPreviewServer((prev) =>
+            prev && prev.id === row.id ? { ...prev, ...row } : prev,
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   // Live role / member_role updates for member list colors + grouping.
   useEffect(() => {
     if (!activeServerId || previewMode) return;
@@ -2314,6 +2436,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     ...message,
                     content: row.content,
                     edited_at: row.edited_at,
+                    pinned: row.pinned,
                     reply_to_id: row.reply_to_id,
                     attachment_url: row.attachment_url ?? null,
                     attachment_type: row.attachment_type ?? null,
@@ -2322,6 +2445,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 : message,
             ),
           );
+          setPinnedExtra((prev) => {
+            if (!row.pinned) {
+              return prev.filter((item) => item.id !== row.id);
+            }
+            return prev;
+          });
         },
       )
       .on(
@@ -3128,7 +3257,21 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const loadOlderChannel = useCallback(async () => {
     if (!activeChannelId || loadingOlderMessages || !channelHasMore) return;
     const channelId = activeChannelId;
-    const oldest = messages[0]?.created_at;
+    const threadId = activeThreadId;
+    const oldestInView = threadId
+      ? messages
+          .filter(
+            (message) =>
+              message.thread_id === threadId ||
+              message.id ===
+                channelThreads.find((thread) => thread.id === threadId)
+                  ?.starter_message_id,
+          )
+          .sort(
+            (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
+          )[0]?.created_at
+      : messages[0]?.created_at;
+    const oldest = oldestInView;
     if (!oldest) return;
     setLoadingOlderMessages(true);
     const stillHere = () => activeChannelRef.current === channelId;
@@ -3151,6 +3294,41 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         return [...older, ...prev];
       });
       setChannelHasMore(result.hasMore);
+      setLoadingOlderMessages(false);
+      return;
+    }
+    if (threadId) {
+      const supabase = createClient();
+      const { data, error: olderError } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("channel_id", channelId)
+        .eq("thread_id", threadId)
+        .lt("created_at", oldest)
+        .order("created_at", { ascending: false })
+        .limit(CHANNEL_MESSAGE_PAGE_SIZE);
+      if (!stillHere()) {
+        setLoadingOlderMessages(false);
+        return;
+      }
+      if (olderError) {
+        setError(olderError.message);
+        setLoadingOlderMessages(false);
+        return;
+      }
+      const olderRows = data ?? [];
+      if (olderRows.length > 0) {
+        const profiles = await loadProfiles(
+          olderRows.map((row) => row.user_id),
+        );
+        const hydrated = hydrateMessages(olderRows, profiles);
+        setMessages((prev) => {
+          const seen = new Set(prev.map((message) => message.id));
+          const older = hydrated.filter((message) => !seen.has(message.id));
+          return [...older, ...prev];
+        });
+      }
+      setChannelHasMore(olderRows.length >= CHANNEL_MESSAGE_PAGE_SIZE);
       setLoadingOlderMessages(false);
       return;
     }
@@ -3182,6 +3360,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setLoadingOlderMessages(false);
   }, [
     activeChannelId,
+    activeThreadId,
+    channelThreads,
     loadingOlderMessages,
     channelHasMore,
     messages,
@@ -3431,8 +3611,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const searchNeedle =
     searchOpen ? searchQuery.trim().toLowerCase() : "";
+  const activeThreadMeta = activeThreadId
+    ? channelThreads.find((thread) => thread.id === activeThreadId) ?? null
+    : null;
+  const threadIdByStarterMessageId = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const thread of channelThreads) {
+      if (thread.starter_message_id) map[thread.starter_message_id] = thread.id;
+    }
+    return map;
+  }, [channelThreads]);
   const threadScopedMessages = activeThreadId
-    ? unblockedMessages.filter((message) => message.thread_id === activeThreadId)
+    ? unblockedMessages.filter(
+        (message) =>
+          message.thread_id === activeThreadId ||
+          (!!activeThreadMeta?.starter_message_id &&
+            message.id === activeThreadMeta.starter_message_id),
+      )
     : unblockedMessages.filter((message) => !message.thread_id);
   const visibleMessages = searchNeedle
     ? threadScopedMessages.filter((message) =>
@@ -3580,10 +3775,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError("You don't have permission to manage channels.");
       return false;
     }
+    const trimmed = name.trim();
+    if (trimmed.length < CATEGORY_NAME_MIN) {
+      setError(
+        `Category name must be at least ${CATEGORY_NAME_MIN} characters.`,
+      );
+      return false;
+    }
+    if (trimmed.length > CATEGORY_NAME_MAX) {
+      setError(
+        `Category name must be ${CATEGORY_NAME_MAX} characters or fewer.`,
+      );
+      return false;
+    }
     const supabase = createClient();
     const { data, error: updateError } = await supabase
       .from("channel_categories")
-      .update({ name })
+      .update({ name: trimmed })
       .eq("id", categoryId)
       .select("*")
       .single();
@@ -3641,6 +3849,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   function jumpToMessage(messageId: string) {
+    // Leave thread view when the target is a main-channel / other-thread row.
+    if (activeThreadId) {
+      const inThread = threadScopedMessages.some(
+        (message) => message.id === messageId,
+      );
+      if (!inThread) {
+        setActiveThreadId(null);
+        window.setTimeout(() => jumpToMessage(messageId), 50);
+        return;
+      }
+    }
     const nodes = document.querySelectorAll<HTMLElement>(
       `[data-message-id="${CSS.escape(messageId)}"]`,
     );
@@ -3659,13 +3878,22 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setPinsOpen(false);
   }
 
+  // Deep-link ?msg= from copied message links.
+  useEffect(() => {
+    const msgId = searchParams.get("msg");
+    if (!msgId || loadingChannels) return;
+    const timer = window.setTimeout(() => jumpToMessage(msgId), 120);
+    return () => window.clearTimeout(timer);
+  }, [searchParams, loadingChannels, activeChannelId, activeConversationId, activeThreadId]);
+
   async function sendChannel(contentOverride?: string) {
     if (
       !user ||
       !activeChannelId ||
       !activeChannel ||
       (activeChannel.type !== "text" && activeChannel.type !== "voice") ||
-      sending
+      sending ||
+      sendingRef.current
     ) {
       return;
     }
@@ -3730,6 +3958,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError("One or more files are too large.");
       return;
     }
+    // Lock send + start slowmode clock before any await (prevents double Enter).
+    sendingRef.current = true;
+    if (
+      slowmode > 0 &&
+      !isServerOwner &&
+      !myPerms.ADMINISTRATOR &&
+      !myPerms.MANAGE_CHANNELS &&
+      !myPerms.MANAGE_MESSAGES
+    ) {
+      lastChannelSendAt.current[channelId] = Date.now();
+    }
     // Discord-style: resolve :name: → <:name:id>, then store <@id> mention tokens.
     const withEmojis = content
       ? resolveEmojiShortcodes(content, customEmojis, activeServer?.id)
@@ -3750,10 +3989,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           })),
         })
       : "";
-    // Belt-and-suspenders: strip pasted <@&roleId> tokens without permission.
+    // Belt-and-suspenders: strip @everyone/@here and role tokens without permission.
     const text = canMentionEveryone
       ? encoded
-      : encoded.replace(/<@&[0-9a-f-]{36}>/gi, "").replace(/\s{2,}/g, " ").trim();
+      : stripUnauthorizedEveryoneMentions(encoded);
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const pingReply = replyPing;
@@ -3814,7 +4053,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     for (const item of filesSnapshot) {
       const uploaded = await uploadAttachment(user.id, item.file);
       if (!sendStillCurrent()) {
-        setSending(false);
+        sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
         return;
       }
       if (uploaded.error || !uploaded.attachment) {
@@ -3828,7 +4069,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         });
         setError(uploaded.error ?? "Upload failed");
         restoreComposer();
-        setSending(false);
+        sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
         return;
       }
       uploadedAttachments.push({
@@ -3838,7 +4081,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
 
     if (!sendStillCurrent()) {
-      setSending(false);
+      sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
       return;
     }
 
@@ -3864,7 +4109,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .single();
 
     if (!sendStillCurrent()) {
-      setSending(false);
+      sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
       return;
     }
 
@@ -3879,7 +4126,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       });
       setError(insertError?.message ?? "Failed to send message");
       restoreComposer();
-      setSending(false);
+      sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
       return;
     }
 
@@ -3934,11 +4183,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         p_conversation_id: null,
       });
     }
+    sendingRef.current = false;
+    sendingRef.current = false;
     setSending(false);
   }
 
   async function sendDm(contentOverride?: string) {
-    if (!user || !activeConversationId || sending) return;
+    if (!user || !activeConversationId || sending || sendingRef.current) return;
     const otherId =
       threads.find((thread) => thread.id === activeConversationId)?.otherUserId ??
       activeThread?.otherUserId ??
@@ -3970,6 +4221,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const text = content
       ? resolveEmojiShortcodes(content, customEmojis, null)
       : "";
+    sendingRef.current = true;
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const sendScope = scopeRef.current;
@@ -4025,7 +4277,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     for (const item of filesSnapshot) {
       const uploaded = await uploadAttachment(user.id, item.file);
       if (!sendStillCurrent()) {
-        setSending(false);
+        sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
         return;
       }
       if (uploaded.error || !uploaded.attachment) {
@@ -4039,7 +4293,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         });
         setError(uploaded.error ?? "Upload failed");
         restoreComposer();
-        setSending(false);
+        sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
         return;
       }
       uploadedAttachments.push({
@@ -4049,7 +4305,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
 
     if (!sendStillCurrent()) {
-      setSending(false);
+      sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
       return;
     }
 
@@ -4070,7 +4328,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .single();
 
     if (!sendStillCurrent()) {
-      setSending(false);
+      sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
       return;
     }
 
@@ -4087,7 +4347,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       if (blockedMsg) setDmBlockedByThem(true);
       setError(blockedMsg ?? insertError?.message ?? "Failed to send message");
       restoreComposer();
-      setSending(false);
+      sendingRef.current = false;
+    sendingRef.current = false;
+    setSending(false);
       return;
     }
 
@@ -4154,16 +4416,35 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         p_conversation_id: conversationId,
       });
     }
+    sendingRef.current = false;
+    sendingRef.current = false;
     setSending(false);
   }
 
   async function editChannel(messageId: string, content: string) {
     const previous = messages.find((message) => message.id === messageId);
-    const nextContent = resolveEmojiShortcodes(
+    const withEmojis = resolveEmojiShortcodes(
       content,
       customEmojis,
       activeServer?.id,
     );
+    const encoded = encodeMentions(withEmojis, {
+      users: members.map((member) => ({
+        id: member.user_id,
+        username: member.nickname?.trim() || member.username,
+      })),
+      roles: mentionableRoles.map((role) => ({
+        id: role.id,
+        name: role.name,
+      })),
+      channels: channels.map((channel) => ({
+        id: channel.id,
+        name: channel.name,
+      })),
+    });
+    const nextContent = canMentionEveryone
+      ? encoded
+      : stripUnauthorizedEveryoneMentions(encoded);
     const editedAt = new Date().toISOString();
     setMessages((prev) =>
       prev.map((message) =>
@@ -4189,6 +4470,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       }
       setError(updateError.message);
       return false;
+    }
+    if (
+      user &&
+      activeChannelId &&
+      contentHasMentionSignal(nextContent)
+    ) {
+      void supabase.rpc("notify_message_mentions", {
+        p_message_id: messageId,
+        p_channel_id: activeChannelId,
+        p_author_id: user.id,
+        p_content: nextContent,
+      });
     }
     return true;
   }
@@ -4380,16 +4673,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setMessages((prev) =>
         prev.map((item) => (item.id === message.id ? { ...item, pinned: next } : item)),
       );
-      setPinnedExtra((prev) => {
-        const updated = prev.map((item) =>
-          item.id === message.id ? { ...item, pinned: next } : item,
-        );
-        if (next && !updated.some((item) => item.id === message.id)) {
-          return [{ ...message, pinned: true }, ...updated];
-        }
-        return updated.filter((item) => item.pinned);
-      });
     }
+    setPinnedExtra((prev) => {
+      const updated = prev.map((item) =>
+        item.id === message.id ? { ...item, pinned: next } : item,
+      );
+      if (next && !updated.some((item) => item.id === message.id)) {
+        return [{ ...message, pinned: true }, ...updated];
+      }
+      return updated.filter((item) => item.pinned);
+    });
     const supabase = createClient();
     const { error: updateError } = await supabase
       .from(isDm ? "dm_messages" : "messages")
@@ -4409,6 +4702,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           ),
         );
       }
+      setPinnedExtra((prev) => {
+        const updated = prev.map((item) =>
+          item.id === message.id ? { ...item, pinned: message.pinned } : item,
+        );
+        if (message.pinned && !updated.some((item) => item.id === message.id)) {
+          return [{ ...message, pinned: true }, ...updated];
+        }
+        return updated.filter((item) => item.pinned);
+      });
       setError(updateError.message);
       return;
     }
@@ -4470,6 +4772,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   async function createThreadFromMessage(message: ChatMessage) {
     if (!user || !activeServer || !activeChannelId) return;
+    const existing = channelThreads.find(
+      (thread) => thread.starter_message_id === message.id,
+    );
+    if (existing) {
+      setActiveThreadId(existing.id);
+      return;
+    }
     const name =
       message.content.trim().slice(0, 80) ||
       `thread-${message.id.slice(0, 6)}`;
@@ -5546,6 +5855,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     ? undefined
                     : (message) => void createThreadFromMessage(message)
                 }
+                threadIdByStarterMessageId={threadIdByStarterMessageId}
                 onCopyLink={
                   previewMode
                     ? undefined
@@ -5827,6 +6137,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     ? undefined
                     : (message) => void createThreadFromMessage(message)
                 }
+                threadIdByStarterMessageId={threadIdByStarterMessageId}
                 onCopyLink={(message) => copyMessageLink(message)}
                 pollVotesByMessage={pollVotesByMessage}
                 onPollVote={(messageId, optionIndex) =>
@@ -5958,6 +6269,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             channels.find((channel) => channel.id === editChannelId) ?? null
           }
           roles={serverRoles}
+          categories={categories}
           onClose={() => setEditChannelId(null)}
           onSaved={(next) => {
             setChannels((prev) =>
@@ -6039,6 +6351,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           }}
           onServerDeleted={(serverId) => {
             setSettingsOpen(false);
+            if (voice.connection?.serverId === serverId) {
+              void voice.leaveVoice();
+            }
             setServers((prev) => prev.filter((server) => server.id !== serverId));
             router.push(messengerHomePath());
           }}

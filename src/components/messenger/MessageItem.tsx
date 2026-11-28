@@ -158,6 +158,8 @@ type MessageItemProps = {
   onForward?: (message: ChatMessage) => void;
   onMarkUnread?: (message: ChatMessage) => void;
   onCreateThread?: (message: ChatMessage) => void;
+  /** When set, "Open Thread" is shown instead of Create Thread. */
+  existingThreadId?: string | null;
   onCopyLink?: (message: ChatMessage) => void;
   pollVotes?: { user_id: string; option_index: number }[];
   onPollVote?: (messageId: string, optionIndex: number) => void;
@@ -195,6 +197,7 @@ export function MessageItem({
   onForward,
   onMarkUnread,
   onCreateThread,
+  existingThreadId = null,
   onCopyLink,
   pollVotes = [],
   onPollVote,
@@ -885,7 +888,7 @@ export function MessageItem({
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
                 >
                   <MessagesSquare className="h-4 w-4" strokeWidth={1.75} />
-                  Create Thread
+                  {existingThreadId ? "Open Thread" : "Create Thread"}
                 </button>
               )}
               {onMarkUnread && (

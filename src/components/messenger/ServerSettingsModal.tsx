@@ -1053,6 +1053,11 @@ export function ServerSettingsModal({
       setError(deleteError.message);
       return;
     }
+    await supabase
+      .from("voice_states")
+      .delete()
+      .eq("server_id", server.id)
+      .eq("user_id", memberId);
     onMembersChanged(members.filter((member) => member.user_id !== memberId));
   }
 
@@ -1111,6 +1116,11 @@ export function ServerSettingsModal({
       .eq("user_id", memberId);
     await supabase
       .from("server_members")
+      .delete()
+      .eq("server_id", server.id)
+      .eq("user_id", memberId);
+    await supabase
+      .from("voice_states")
       .delete()
       .eq("server_id", server.id)
       .eq("user_id", memberId);
@@ -1325,10 +1335,14 @@ export function ServerSettingsModal({
     setError(null);
     const supabase = createClient();
     // Detach channels first so they become uncategorized.
-    await supabase
+    const { error: detachError } = await supabase
       .from("channels")
       .update({ category_id: null })
       .eq("category_id", categoryId);
+    if (detachError) {
+      setError(detachError.message);
+      return;
+    }
     const { error: deleteError } = await supabase
       .from("channel_categories")
       .delete()

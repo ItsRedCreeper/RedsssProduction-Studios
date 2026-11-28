@@ -77,6 +77,24 @@ export function extractMentionRoleIds(content: string): string[] {
   return [...ids];
 }
 
+/** Strip @everyone / @here and role mention tokens when the author lacks permission. */
+export function stripUnauthorizedEveryoneMentions(content: string): string {
+  return content
+    .replace(/<@&[0-9a-f-]{36}>/gi, "")
+    .replace(/(^|[\s])@(everyone|here)\b/gi, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+export function contentHasMentionSignal(content: string): boolean {
+  return (
+    /<@[0-9a-f-]{36}>/i.test(content) ||
+    /<@&[0-9a-f-]{36}>/i.test(content) ||
+    /(^|[\s])@(everyone|here)\b/i.test(content) ||
+    content.includes("@")
+  );
+}
+
 /** Turn stored `<@id>` / `<@&id>` / `<#id>` tokens into readable @Name / #channel text. */
 export function displayMentionText(content: string, maps?: MentionMaps | null): string {
   if (!content) return content;
