@@ -986,9 +986,14 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
                 participantIds: [
                   ...new Set([...prev.participantIds, msg.from]),
                 ],
+                peerUserIds: [
+                  ...new Set([...prev.peerUserIds, msg.from]),
+                ].filter((id) => id !== user?.id),
               }
             : prev,
         );
+        // Late joiners already send mesh hello; also ensure from our side.
+        void meshRef.current?.connectPeer(msg.from);
       }
     },
     [clearRingTimer, leaveCall, user],

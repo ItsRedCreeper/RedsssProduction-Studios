@@ -44,8 +44,8 @@ export function CreateGroupDmModal({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (selected.length < 1) {
-      setError("Pick at least one friend.");
+    if (selected.length < 2) {
+      setError("Pick at least two friends for a group DM.");
       return;
     }
     setSaving(true);

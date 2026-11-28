@@ -284,7 +284,7 @@ export function ChannelSidebar({
         />
         {people.length > 0 && (
           <ul className="mb-1 ml-4 space-y-0.5">
-            {people.slice(0, 8).map((person) => {
+            {people.map((person) => {
               // Green ring whenever someone is speaking — even if you are not connected.
               const speaking = speakingUserIds.has(person.user_id);
               return (
@@ -328,9 +328,6 @@ export function ChannelSidebar({
                 </li>
               );
             })}
-            {people.length > 8 && (
-              <li className="px-2 text-[11px] text-[var(--ms-text-muted)]">+{people.length - 8} more</li>
-            )}
           </ul>
         )}
       </li>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText, Film, Paperclip } from "lucide-react";
 import { MediaLightbox } from "@/components/messenger/MediaLightbox";
 import { SpoilerMedia } from "@/components/messenger/SpoilerMedia";
@@ -23,6 +23,18 @@ type MessageMediaProps = {
 export function MessageMedia({ message }: MessageMediaProps) {
   const items = useMemo(() => attachmentsFromMessage(message), [message]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const inlineVideoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
+
+  useEffect(() => {
+    if (lightboxIndex == null) return;
+    for (const video of inlineVideoRefs.current.values()) {
+      try {
+        video.pause();
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [lightboxIndex]);
 
   if (items.length === 0) return null;
 
@@ -34,6 +46,10 @@ export function MessageMedia({ message }: MessageMediaProps) {
     if (mediaIndex >= 0 && mediaIndex < mediaItems.length) {
       setLightboxIndex(mediaIndex);
     }
+  }
+
+  function closeLightbox() {
+    setLightboxIndex(null);
   }
 
   return (
@@ -71,10 +87,16 @@ export function MessageMedia({ message }: MessageMediaProps) {
             const body = (
               <div className="relative max-w-full overflow-hidden rounded-md bg-black">
                 <video
+                  ref={(el) => {
+                    if (el) inlineVideoRefs.current.set(itemIndex, el);
+                    else inlineVideoRefs.current.delete(itemIndex);
+                  }}
                   src={item.url}
                   controls
                   preload="metadata"
-                  className="max-h-[32rem] max-w-full"
+                  className={`max-h-[32rem] max-w-full ${
+                    lightboxIndex != null ? "invisible absolute" : ""
+                  }`}
                 />
                 <button
                   type="button"
@@ -135,7 +157,7 @@ export function MessageMedia({ message }: MessageMediaProps) {
         <MediaLightbox
           items={mediaItems}
           index={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
+          onClose={closeLightbox}
           onIndexChange={setLightboxIndex}
         />
       )}

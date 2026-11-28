@@ -93,6 +93,7 @@ import {
   MESSAGE_ATTACHMENT_MAX_BYTES,
 } from "@/lib/compress-image";
 import {
+  attachmentsFromMessage,
   isImageMime,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_PER_MESSAGE,
@@ -522,8 +523,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     !!connection &&
     !!activeChannel &&
     connection.channelId === activeChannel.id;
+  // Re-evaluate voice occupancy age even when realtime is quiet.
+  const [voiceNowTick, setVoiceNowTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setVoiceNowTick(Date.now()), 8_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const displayVoiceStates = useMemo(() => {
-    const now = Date.now();
+    const now = voiceNowTick || Date.now();
     const fresh = voiceStates.filter((state) => {
       // Keep your own seat while connected even between heartbeats.
       if (user && connection && state.user_id === user.id) return true;
@@ -555,6 +563,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return [...fresh, selfRow];
   }, [
     voiceStates,
+    voiceNowTick,
     user,
     connection,
     activeServerId,
@@ -905,6 +914,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         const prevById = new Map(prev.map((thread) => [thread.id, thread]));
         return fetched.map((thread) => {
           const old = prevById.get(thread.id);
+          const sameParticipants =
+            (old?.participantIds ?? []).slice().sort().join(",") ===
+            (thread.participantIds ?? []).slice().sort().join(",");
           if (
             old &&
             old.otherUserId === thread.otherUserId &&
@@ -916,7 +928,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             old.last_seen_at === thread.last_seen_at &&
             old.status_text === thread.status_text &&
             old.isGroup === thread.isGroup &&
-            old.groupName === thread.groupName
+            old.groupName === thread.groupName &&
+            sameParticipants
           ) {
             return old;
           }
@@ -1088,16 +1101,25 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           setError(theirsError.message);
           return null;
         }
-        const match = (theirs ?? []).find((row) => mineIds.has(row.conversation_id));
-        if (match) {
-          // Re-open if this DM was closed (hidden) on our side.
-          await supabase
-            .from("dm_participants")
-            .update({ hidden: false })
-            .eq("conversation_id", match.conversation_id)
-            .eq("user_id", user.id);
-          await refreshThreads();
-          return match.conversation_id;
+        // Prefer a true 1:1 conversation — never open a shared group DM as a DM.
+        const sharedIds = (theirs ?? [])
+          .map((row) => row.conversation_id)
+          .filter((id) => mineIds.has(id));
+        if (sharedIds.length > 0) {
+          const { data: convos } = await supabase
+            .from("dm_conversations")
+            .select("id, is_group")
+            .in("id", sharedIds);
+          const oneToOne = (convos ?? []).find((row) => !row.is_group);
+          if (oneToOne) {
+            await supabase
+              .from("dm_participants")
+              .update({ hidden: false })
+              .eq("conversation_id", oneToOne.id)
+              .eq("user_id", user.id);
+            await refreshThreads();
+            return oneToOne.id;
+          }
         }
 
         const { data: convo, error: convoError } = await supabase
@@ -2058,6 +2080,20 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     };
   }, [occupiedVoiceChannelKey, previewMode, connection?.channelId]);
 
+  // Drop speaking rings when a voice occupant leaves (DELETE often skips speaking:false).
+  useEffect(() => {
+    const occupants = new Set(displayVoiceStates.map((state) => state.user_id));
+    setWatchedSpeakingIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (occupants.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [displayVoiceStates]);
+
   useEffect(() => {
     if (!activeChannelId) return;
     // Don't block on server chrome — messages load in parallel with members/roles.
@@ -2164,14 +2200,25 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       }
     }
 
+    const loadTimeout = window.setTimeout(() => {
+      if (!stillCurrent()) return;
+      setLoadingChannelMessages(false);
+      setError((prev) => prev ?? "Timed out loading messages. Try again.");
+    }, 20_000);
+
     if (previewMode) {
-      void loadPreviewMessages();
+      void loadPreviewMessages().finally(() => {
+        window.clearTimeout(loadTimeout);
+      });
       return () => {
         cancelled = true;
+        window.clearTimeout(loadTimeout);
       };
     }
 
-    void load();
+    void load().finally(() => {
+      window.clearTimeout(loadTimeout);
+    });
 
     const channel = supabase
       .channel(`messages:${channelId}`)
@@ -2256,6 +2303,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(loadTimeout);
       void supabase.removeChannel(channel);
     };
   }, [activeChannelId, activeChannel?.type, previewMode]);
@@ -3657,6 +3705,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   function selectServer(serverId: string) {
     setLeaveOpen(false);
     if (serverId === activeServerId && !previewMode) return;
+    const recalled = recallServerChannel(serverId);
+    if (recalled) {
+      router.push(messengerChannelPath(serverId, recalled));
+      return;
+    }
     router.push(messengerServerPath(serverId));
   }
 
@@ -3878,13 +3931,40 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setPinsOpen(false);
   }
 
-  // Deep-link ?msg= from copied message links.
+  // Deep-link ?msg= / ?thread= from copied message links.
   useEffect(() => {
     const msgId = searchParams.get("msg");
-    if (!msgId || loadingChannels) return;
-    const timer = window.setTimeout(() => jumpToMessage(msgId), 120);
+    const threadId = searchParams.get("thread");
+    if (!msgId || loadingChannels || loadingChannelMessages) return;
+    if (threadId && threadId !== activeThreadId) {
+      setActiveThreadId(threadId);
+      return;
+    }
+    let tries = 0;
+    let timer = 0;
+    const attempt = () => {
+      const nodes = document.querySelectorAll(
+        `[data-message-id="${CSS.escape(msgId)}"]`,
+      );
+      if (nodes.length > 0) {
+        jumpToMessage(msgId);
+        return;
+      }
+      tries += 1;
+      if (tries < 8) {
+        timer = window.setTimeout(attempt, 150);
+      }
+    };
+    timer = window.setTimeout(attempt, 80);
     return () => window.clearTimeout(timer);
-  }, [searchParams, loadingChannels, activeChannelId, activeConversationId, activeThreadId]);
+  }, [
+    searchParams,
+    loadingChannels,
+    loadingChannelMessages,
+    activeChannelId,
+    activeConversationId,
+    activeThreadId,
+  ]);
 
   async function sendChannel(contentOverride?: string) {
     if (
@@ -4459,14 +4539,28 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .update({ content: nextContent, edited_at: editedAt })
       .eq("id", messageId);
     if (updateError) {
+      // Only roll back our optimistic edit — don't clobber concurrent realtime updates
+      // or resurrect a message deleted while we were editing.
       if (previous) {
-        setMessages((prev) =>
-          prev.map((message) =>
+        setMessages((prev) => {
+          const current = prev.find((message) => message.id === messageId);
+          if (!current) return prev;
+          if (
+            current.content !== nextContent ||
+            current.edited_at !== editedAt
+          ) {
+            return prev;
+          }
+          return prev.map((message) =>
             message.id === messageId
-              ? { ...message, content: previous.content, edited_at: previous.edited_at }
+              ? {
+                  ...message,
+                  content: previous.content,
+                  edited_at: previous.edited_at,
+                }
               : message,
-          ),
-        );
+          );
+        });
       }
       setError(updateError.message);
       return false;
@@ -4504,13 +4598,25 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .eq("id", messageId);
     if (updateError) {
       if (previous) {
-        setDmMessages((prev) =>
-          prev.map((message) =>
+        setDmMessages((prev) => {
+          const current = prev.find((message) => message.id === messageId);
+          if (!current) return prev;
+          if (
+            current.content !== nextContent ||
+            current.edited_at !== editedAt
+          ) {
+            return prev;
+          }
+          return prev.map((message) =>
             message.id === messageId
-              ? { ...message, content: previous.content, edited_at: previous.edited_at }
+              ? {
+                  ...message,
+                  content: previous.content,
+                  edited_at: previous.edited_at,
+                }
               : message,
-          ),
-        );
+          );
+        });
       }
       setError(updateError.message);
       return false;
@@ -4524,7 +4630,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setMessages((prev) => prev.filter((message) => message.id !== messageId));
       return;
     }
-    const snapshot = messages;
+    const snapshotRow = messages.find((message) => message.id === messageId);
     setMessages((prev) => prev.filter((message) => message.id !== messageId));
     const supabase = createClient();
     const { error: deleteError } = await supabase
@@ -4532,8 +4638,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .delete()
       .eq("id", messageId);
     if (deleteError) {
-      setMessages(snapshot);
       setError(deleteError.message);
+      // Restore only if the row is still missing (avoid resurrecting after realtime DELETE).
+      if (snapshotRow) {
+        setMessages((prev) => {
+          if (prev.some((message) => message.id === messageId)) return prev;
+          return [...prev, snapshotRow].sort(
+            (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
+          );
+        });
+      }
     }
   }
 
@@ -4542,7 +4656,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setDmMessages((prev) => prev.filter((message) => message.id !== messageId));
       return;
     }
-    const snapshot = dmMessages;
+    const snapshotRow = dmMessages.find((message) => message.id === messageId);
     setDmMessages((prev) => prev.filter((message) => message.id !== messageId));
     const supabase = createClient();
     const { error: deleteError } = await supabase
@@ -4550,8 +4664,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .delete()
       .eq("id", messageId);
     if (deleteError) {
-      setDmMessages(snapshot);
       setError(deleteError.message);
+      if (snapshotRow) {
+        setDmMessages((prev) => {
+          if (prev.some((message) => message.id === messageId)) return prev;
+          return [...prev, snapshotRow].sort(
+            (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
+          );
+        });
+      }
     }
   }
 
@@ -4765,7 +4886,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   function copyMessageLink(message: ChatMessage) {
     if (!activeServerId) return;
-    const url = `${window.location.origin}${messengerChannelPath(activeServerId, message.channel_id)}?msg=${message.id}`;
+    const base = `${window.location.origin}${messengerChannelPath(activeServerId, message.channel_id)}`;
+    const params = new URLSearchParams();
+    params.set("msg", message.id);
+    if (message.thread_id) params.set("thread", message.thread_id);
+    const url = `${base}?${params.toString()}`;
     void navigator.clipboard.writeText(url);
     setToast("Message link copied");
   }
@@ -4810,7 +4935,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }) {
     if (!user || !forwardMessage) return;
     const supabase = createClient();
-    const content = forwardMessage.content || "(forwarded attachment)";
+    const media = attachmentsFromMessage(forwardMessage);
+    const content =
+      forwardMessage.content ||
+      (media.length > 0 ? "(forwarded attachment)" : "");
+    const first = media[0] ?? null;
     const forwardedFrom = {
       from: forwardMessage.profiles?.username ?? "unknown",
       messageId: forwardMessage.id,
@@ -4822,7 +4951,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         content,
         message_kind: "default",
         forwarded_from: forwardedFrom,
-        attachments: forwardMessage.attachments ?? [],
+        attachments: media,
+        attachment_url: first?.url ?? null,
+        attachment_type: first?.type ?? null,
       });
       if (insertError) {
         setError(insertError.message);
@@ -4839,7 +4970,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       conversation_id: target.id,
       user_id: user.id,
       content,
-      attachments: forwardMessage.attachments ?? [],
+      attachments: media,
+      attachment_url: first?.url ?? null,
+      attachment_type: first?.type ?? null,
     });
     if (insertError) {
       setError(insertError.message);
@@ -5108,11 +5241,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   );
 
   const speakingUserIds = useMemo(() => {
-    const next = new Set(watchedSpeakingIds);
-    for (const id of voice.speakingUserIds) next.add(id);
-    if (user && voice.selfSpeaking) next.add(user.id);
+    const occupants = new Set(displayVoiceStates.map((state) => state.user_id));
+    const next = new Set<string>();
+    for (const id of watchedSpeakingIds) {
+      if (occupants.has(id)) next.add(id);
+    }
+    for (const id of voice.speakingUserIds) {
+      if (occupants.has(id)) next.add(id);
+    }
+    if (user && voice.selfSpeaking && occupants.has(user.id)) next.add(user.id);
     return next;
-  }, [watchedSpeakingIds, user, voice.selfSpeaking, voice.speakingUserIds]);
+  }, [
+    watchedSpeakingIds,
+    displayVoiceStates,
+    user,
+    voice.selfSpeaking,
+    voice.speakingUserIds,
+  ]);
 
   const memberUserIds = useMemo(
     () => members.map((member) => member.user_id),

@@ -129,6 +129,13 @@ export class VoiceMesh {
     this.opts = opts;
   }
 
+  /** Connect to a peer discovered after `start` (e.g. late group-call joiner). */
+  async connectPeer(peerId: string) {
+    if (!this.started || this.closed) return;
+    if (!peerId || peerId === this.opts.userId) return;
+    await this.ensurePeer(peerId);
+  }
+
   async start(existingPeerIds: string[] = []) {
     if (this.started || this.closed) return;
     this.started = true;

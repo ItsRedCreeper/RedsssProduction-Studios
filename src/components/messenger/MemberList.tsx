@@ -121,9 +121,10 @@ export function MemberList({
   const feed = useOptionalPresenceFeed();
   const feedVersion = feed?.version ?? 0;
   // Recompute online/offline as heartbeats go stale without a new render.
+  // 30s is enough for stale dots and avoids regroup thrash on large servers.
   const [nowTick, setNowTick] = useState(0);
   useEffect(() => {
-    const timer = window.setInterval(() => setNowTick(Date.now()), 10_000);
+    const timer = window.setInterval(() => setNowTick(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
 
