@@ -62,6 +62,7 @@ const buffers = new Map<UiSoundName, AudioBuffer>();
 const loading = new Map<UiSoundName, Promise<AudioBuffer | null>>();
 
 let audioCtx: AudioContext | null = null;
+let unlocked = false;
 let loopAudio: HTMLAudioElement | null = null;
 let loopName: UiSoundName | null = null;
 let loopSource: AudioBufferSourceNode | null = null;
@@ -81,6 +82,10 @@ function readEnabled(): boolean {
 let enabled = true;
 
 function srcFor(name: UiSoundName) {
+  // Absolute URL avoids odd relative-path resolution on some production hosts.
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/sounds/${name}.mp3`;
+  }
   return `/sounds/${name}.mp3`;
 }
 
@@ -95,7 +100,7 @@ function getCtx() {
     audioCtx = new Ctx();
   }
   if (audioCtx.state === "suspended") {
-    void audioCtx.resume();
+    void audioCtx.resume().catch(() => undefined);
   }
   return audioCtx;
 }
@@ -109,19 +114,21 @@ async function loadBuffer(name: UiSoundName): Promise<AudioBuffer | null> {
 
   const promise = (async () => {
     try {
-      const res = await fetch(srcFor(name), { cache: "force-cache" });
+      const res = await fetch(srcFor(name), { cache: "default" });
       if (!res.ok) {
-        missing.add(name);
+        // Only permanently skip hard 404s — transient CDN blips should retry.
+        if (res.status === 404) missing.add(name);
         return null;
       }
       const raw = await res.arrayBuffer();
+      if (raw.byteLength < 64) return null;
       const ctx = getCtx();
       if (!ctx) return null;
       const buffer = await ctx.decodeAudioData(raw.slice(0));
       buffers.set(name, buffer);
       return buffer;
     } catch {
-      missing.add(name);
+      // Don't blacklist on decode/network flukes — next play can retry.
       return null;
     } finally {
       loading.delete(name);
@@ -133,8 +140,15 @@ async function loadBuffer(name: UiSoundName): Promise<AudioBuffer | null> {
 }
 
 function prefetchEager() {
-  getCtx();
   for (const name of EAGER) void loadBuffer(name);
+}
+
+function unlockAudio() {
+  if (unlocked) return;
+  unlocked = true;
+  const ctx = getCtx();
+  void ctx?.resume().catch(() => undefined);
+  prefetchEager();
 }
 
 if (typeof window !== "undefined") {
@@ -145,18 +159,21 @@ if (typeof window !== "undefined") {
       if (!enabled) stopSoundLoop();
     }
   });
+  // Production browsers require a user gesture before AudioContext can play.
+  // Prefetch files after first pointer/key — don't create a blocked context early.
   const unlock = () => {
-    prefetchEager();
-    window.removeEventListener("pointerdown", unlock);
-    window.removeEventListener("keydown", unlock);
+    unlockAudio();
+    window.removeEventListener("pointerdown", unlock, true);
+    window.removeEventListener("keydown", unlock, true);
   };
-  window.addEventListener("pointerdown", unlock, { once: true });
-  window.addEventListener("keydown", unlock, { once: true });
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(() => prefetchEager(), { timeout: 2000 });
-  } else {
-    window.setTimeout(prefetchEager, 800);
-  }
+  window.addEventListener("pointerdown", unlock, true);
+  window.addEventListener("keydown", unlock, true);
+  // Warm the MP3 bytes without touching AudioContext (safe before gesture).
+  window.setTimeout(() => {
+    for (const name of EAGER) {
+      void fetch(srcFor(name), { cache: "default" }).catch(() => undefined);
+    }
+  }, 900);
 }
 
 export function areUiSoundsEnabled() {
@@ -203,12 +220,15 @@ function playBuffer(buffer: AudioBuffer, opts?: { loop?: boolean; volume?: numbe
   return { source, gain };
 }
 
-/** HTMLAudio fallback only while a buffer is still decoding. */
+/** HTMLAudio fallback — works even when Web Audio is still suspended. */
 function playHtmlFallback(name: UiSoundName) {
   try {
     const audio = new Audio(srcFor(name));
     audio.volume = VOLUME;
-    void audio.play().catch(() => undefined);
+    const play = audio.play();
+    if (play && typeof play.catch === "function") {
+      void play.catch(() => undefined);
+    }
   } catch {
     /* ignore */
   }
@@ -219,16 +239,25 @@ function playHtmlFallback(name: UiSoundName) {
  */
 export function playSound(name: UiSoundName) {
   if (shouldSkip(name)) return;
+  unlockAudio();
   const ready = buffers.get(name);
   if (ready) {
     try {
+      const ctx = getCtx();
+      // Suspended Web Audio is silent on production until resume settles —
+      // HTMLAudio plays immediately from the same user gesture.
+      if (!ctx || ctx.state === "suspended") {
+        void ctx?.resume().catch(() => undefined);
+        playHtmlFallback(name);
+        return;
+      }
       playBuffer(ready);
     } catch {
-      /* ignore */
+      playHtmlFallback(name);
     }
     return;
   }
-  // Not warm yet — kick decode and use a one-shot HTML element this time.
+  // Not warm yet — kick decode and use HTMLAudio this time.
   void loadBuffer(name);
   playHtmlFallback(name);
 }
@@ -239,6 +268,7 @@ export function startSoundLoop(name: UiSoundName = "incoming-call") {
   if (!enabled || missing.has(name) || typeof window === "undefined") {
     return { stop: () => undefined };
   }
+  unlockAudio();
 
   const startFromBuffer = (buffer: AudioBuffer) => {
     stopSoundLoop();
@@ -252,17 +282,17 @@ export function startSoundLoop(name: UiSoundName = "incoming-call") {
       loopGain = nodes.gain;
       loopName = name;
     } catch {
-      missing.add(name);
+      /* fall through to HTMLAudio below if needed */
     }
   };
 
   const ready = buffers.get(name);
   if (ready) {
     startFromBuffer(ready);
-    return { stop: () => stopSoundLoop() };
+    if (loopSource) return { stop: () => stopSoundLoop() };
   }
 
-  // Fallback element until decode finishes, then switch to buffer loop.
+  // Fallback element until decode finishes / AudioContext unlocks.
   try {
     const audio = new Audio(srcFor(name));
     audio.loop = true;
@@ -279,7 +309,7 @@ export function startSoundLoop(name: UiSoundName = "incoming-call") {
       );
     });
   } catch {
-    missing.add(name);
+    /* ignore */
   }
 
   void loadBuffer(name).then((buffer) => {

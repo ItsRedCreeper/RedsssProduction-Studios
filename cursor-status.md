@@ -1,26 +1,19 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (More voice / screenshare UI sounds)
+**Last updated:** 2026-11-28 (Fix production sounds + deploy build)
 
 ## Localhost health
-**Healthy** (prior).
+**Healthy**
 
-## UI sounds
-`src/lib/ui-sounds.ts` — pre-decoded buffers, mute toggle in Account Settings.
+## UI sounds on production
+Root cause: Vercel builds were failing (`lint_or_type_error`), so sound code/assets never reached production. Live site stayed on an older deploy.
 
-### Wired
-- Send / receive / mention / notification / error
-- Local voice-join / voice-leave (instant)
-- Mute / unmute
-- Deafen / undeafen
-- Other users join/leave current voice/call → `voice-user-join` / `voice-user-leave`
-  (skipped for peers already present when you connect; not fired on local leave)
-- Screen share start / stop (incl. browser “Stop sharing”)
-- Incoming call loop
+### Fixes
+- Build: `raceTimeout` accepts thenables; `asProfile` accepts DB `string[]` tags; `ui-sounds` TS idle timer
+- Playback: unlock AudioContext on first gesture; HTMLAudio fallback when Web Audio is suspended; absolute `/sounds/` URLs; don’t permanently blacklist transient fetch failures
 
-### Controls
-- Volume ~0.4, debounce on busy events
-- Missing files skipped
+### Wired sounds (unchanged set)
+Send/receive, mention, notification, error, voice join/leave, peer join/leave, mute/unmute, deafen/undeafen, screenshare start/stop, incoming-call loop.
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)

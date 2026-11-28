@@ -31,13 +31,23 @@ export type FriendEdge = Tables<"friends"> & {
   other: FriendProfile;
 };
 
-function asProfile(
-  row: Partial<FriendProfile> & {
-    id: string;
-    username: string;
-    profile_tags?: unknown;
-  },
-): FriendProfile {
+function asProfile(row: {
+  id: string;
+  username: string;
+  avatar_url?: string | null;
+  status?: string | null;
+  status_text?: string | null;
+  last_seen_at?: string | null;
+  manual_status?: string | null;
+  manual_status_expires_at?: string | null;
+  status_text_expires_at?: string | null;
+  bio?: string | null;
+  banner_url?: string | null;
+  banner_color?: string | null;
+  created_at?: string | null;
+  /** DB returns string[]; normalize to known tag ids. */
+  profile_tags?: unknown;
+}): FriendProfile {
   return {
     id: row.id,
     username: row.username,

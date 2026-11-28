@@ -338,11 +338,12 @@ async function hydrateMessageRows(
   return hydrateMessages(rows, [...authorProfiles, ...extraProfiles], parents);
 }
 
-async function raceTimeout<T>(promise: Promise<T>, ms: number, label: string) {
+async function raceTimeout<T>(promise: PromiseLike<T>, ms: number, label: string) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    // Supabase builders are thenables, not native Promises — wrap for Promise.race.
     return await Promise.race([
-      promise,
+      Promise.resolve(promise),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error(label)), ms);
       }),
