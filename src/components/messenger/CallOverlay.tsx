@@ -337,10 +337,10 @@ export function CallOverlay() {
     ? stageItems.filter((item) => item.key !== focusedItem.key)
     : [];
 
+  // Mini bar stays top-anchored so it never covers the composer or
+  // collides with the sidebar VoiceConnectionBar footer.
   if (!call.stageExpanded) {
     return (
-      {/* Always top — never bottom — so it cannot cover the composer or
-          collide with the sidebar VoiceConnectionBar footer. */}
       <div className="absolute left-14 right-2 top-2 z-40 w-auto max-w-[18rem] overflow-hidden rounded-2xl border border-white/[0.08] bg-[var(--ms-rail)]/95 shadow-xl shadow-black/50 ring-1 ring-accent/15 backdrop-blur-sm sm:left-auto sm:right-3 sm:w-[min(100%-1.5rem,18rem)] sm:max-w-none">
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="min-w-0 flex-1">

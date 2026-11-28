@@ -249,6 +249,15 @@ export class VoiceMesh {
       await this.announceMedia();
       return true;
     }
+    track.addEventListener(
+      "ended",
+      () => {
+        if (this.localVideoTrack === track) {
+          void this.setLocalVideoTrack(null);
+        }
+      },
+      { once: true },
+    );
     const ok = await waitUntilTrackLive(track);
     if (!ok || this.localVideoTrack !== track || this.closed) {
       if (this.localVideoTrack === track) this.localVideoTrack = null;

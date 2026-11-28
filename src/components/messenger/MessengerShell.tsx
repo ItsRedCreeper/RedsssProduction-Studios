@@ -2729,14 +2729,38 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const canManageChannels = can(myPerms, PERMISSIONS.MANAGE_CHANNELS, {
     isOwner: isServerOwner,
   });
-  const canMentionEveryone = can(myPerms, PERMISSIONS.MENTION_EVERYONE, {
-    isOwner: isServerOwner,
-    overrides: activeChannel?.permission_overrides,
-    roleIds: myRoleIds,
-    userId: user?.id,
-  });
   /** While viewing as a role, hide real management affordances. */
   const manageUiAllowed = !viewAsRoleId && !previewMode;
+  const canMentionEveryone = useMemo(() => {
+    if (viewAsRoleId) {
+      const viewRole = serverRoles.find((role) => role.id === viewAsRoleId);
+      if (!viewRole) return false;
+      return can(
+        mergeRolePermissions([viewRole.permissions]),
+        PERMISSIONS.MENTION_EVERYONE,
+        {
+          isOwner: false,
+          overrides: activeChannel?.permission_overrides,
+          roleIds: [viewAsRoleId],
+          userId: null,
+        },
+      );
+    }
+    return can(myPerms, PERMISSIONS.MENTION_EVERYONE, {
+      isOwner: isServerOwner,
+      overrides: activeChannel?.permission_overrides,
+      roleIds: myRoleIds,
+      userId: user?.id,
+    });
+  }, [
+    viewAsRoleId,
+    serverRoles,
+    myPerms,
+    isServerOwner,
+    activeChannel?.permission_overrides,
+    myRoleIds,
+    user?.id,
+  ]);
   const canManageRoles = can(myPerms, PERMISSIONS.MANAGE_ROLES, {
     isOwner: isServerOwner,
   });
@@ -3656,7 +3680,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           })),
         })
       : "";
-    const text = encoded;
+    // Belt-and-suspenders: strip pasted <@&roleId> tokens without permission.
+    const text = canMentionEveryone
+      ? encoded
+      : encoded.replace(/<@&[0-9a-f-]{36}>/gi, "").replace(/\s{2,}/g, " ").trim();
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
     const pingReply = replyPing;
@@ -3714,11 +3741,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     for (const item of filesSnapshot) {
       const uploaded = await uploadAttachment(user.id, item.file);
       if (uploaded.error || !uploaded.attachment) {
-        setMessages((prev) =>
-          prev.map((message) =>
+        setMessages((prev) => {
+          if (activeChannelRef.current !== channelId) {
+            return prev.filter((message) => message.id !== tempId);
+          }
+          return prev.map((message) =>
             message.id === tempId ? { ...message, failed: true } : message,
-          ),
-        );
+          );
+        });
         setError(uploaded.error ?? "Upload failed");
         restoreComposer();
         setSending(false);
@@ -3752,11 +3782,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .single();
 
     if (insertError || !data) {
-      setMessages((prev) =>
-        prev.map((message) =>
+      setMessages((prev) => {
+        if (activeChannelRef.current !== channelId) {
+          return prev.filter((message) => message.id !== tempId);
+        }
+        return prev.map((message) =>
           message.id === tempId ? { ...message, failed: true } : message,
-        ),
-      );
+        );
+      });
       setError(insertError?.message ?? "Failed to send message");
       restoreComposer();
       setSending(false);
@@ -3902,11 +3935,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     for (const item of filesSnapshot) {
       const uploaded = await uploadAttachment(user.id, item.file);
       if (uploaded.error || !uploaded.attachment) {
-        setDmMessages((prev) =>
-          prev.map((message) =>
+        setDmMessages((prev) => {
+          if (conversationRef.current !== conversationId) {
+            return prev.filter((message) => message.id !== tempId);
+          }
+          return prev.map((message) =>
             message.id === tempId ? { ...message, failed: true } : message,
-          ),
-        );
+          );
+        });
         setError(uploaded.error ?? "Upload failed");
         restoreComposer();
         setSending(false);
@@ -3935,11 +3971,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .single();
 
     if (insertError || !data) {
-      setDmMessages((prev) =>
-        prev.map((message) =>
+      setDmMessages((prev) => {
+        if (conversationRef.current !== conversationId) {
+          return prev.filter((message) => message.id !== tempId);
+        }
+        return prev.map((message) =>
           message.id === tempId ? { ...message, failed: true } : message,
-        ),
-      );
+        );
+      });
       const blockedMsg = friendlyBlockDmMessage(insertError?.message);
       if (blockedMsg) setDmBlockedByThem(true);
       setError(blockedMsg ?? insertError?.message ?? "Failed to send message");

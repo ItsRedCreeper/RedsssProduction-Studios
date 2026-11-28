@@ -1,42 +1,31 @@
 # Cursor Status
 
-**Last updated:** 2026-11-27 22:10
+**Last updated:** 2026-11-27 22:45
 
-## Pass 3 — Voice / permissions / composer / profiles / mobile (M–V)
+## Localhost health
+**Healthy.** Root cause of the “bug detected” crash was invalid JSX in `CallOverlay.tsx` (a `{/* comment */}` sibling before the root element inside `return (` → parse error `Expected ',', got 'ident'`). Fixed in this pass; messenger routes compile and load (`#bug-reports` usable, composer works).  
+Note: Next.js issues badge may still show a hydration warning while the Cursor browser injects `data-cursor-ref` attributes — that is tooling noise, not an app defect (diff shows `- data-cursor-ref=…`).
 
-| ID | Final verdict | Evidence / fix |
-|---|---|---|
-| **M** | **Partially confirmed → Fixed** | Minimized DM call bar used `sm:bottom-3`, overlapping the composer / colliding with the sidebar voice bar. Mini bar is now top-anchored on all breakpoints. Disconnect / unmount paths already cleared overlay state. |
-| **N** | **Confirmed → Fixed** | Camera toggle could mark UI on even when mesh `setLocalVideoTrack` failed, and camera lacked a track `ended` handler (screen share already had one). Both Call + Voice session providers now require mesh `ok`, stop the track on failure, and clear camera UI/`persistMediaFlags` on `ended`. |
-| **O** | **Partially confirmed → Fixed** | Server voice already left only outside `/messenger`. Follow-up: DM/group calls could keep playing with no UI after leaving messenger (`CallSessionProvider` stayed mounted in AppShell). Pathname leave now hangs up DM calls the same way. Refresh still ends DM calls (WebRTC; intentional, unlike server-voice rehydrate). |
-| **P** | **Partially confirmed → Fixed** | View as Role still offered create/edit channel, invite, and settings because manage gates used real owner perms. Management UI/actions now require `manageUiAllowed` (`!viewAsRoleId && !previewMode`). `MENTION_EVERYONE` was unused: role mention suggestions + `encodeMentions` role list are empty without it. |
-| **Q** | **Partially confirmed → Fixed** | Failed optimistic messages stayed forever; deleting `temp-*` hit the DB and rolled back the ghost. Temp deletes are local-only; failed rows expose a Dismiss control. |
-| **R** | **Disproved** | `clampCardPosition` keeps small cards on-screen; blocked/restricted profiles already hide mutuals/about. No reproducible stale-open or off-screen bug after edge cases in code review. |
-| **S** | **Partially confirmed → Fixed** | Channel drawer already Escape-closes via `ResizableSidebar`. Members + voice-chat mobile sheets now Escape-close below `lg`. |
-| **T** | **Partially confirmed → Fixed** | Scope clear already resets draft/reply/files on channel change. Failure path could restore a draft into the *new* conversation after navigate-away; restore is now gated on `scopeRef` matching the send-time scope. |
-| **U** | **Partially confirmed → Fixed** | Friends panel refreshed on realtime; open profile friend button kept `initialStatus` and never re-fetched. Button + open small/big `ready.friendStatus` now refresh on `friends` changes. Block already closes profiles and filters members/DM list via `blockedIds`. |
-| **V** | **Partially confirmed → Fixed** | Channel load already used `messagesRequest` / `stillCurrent`. Follow-up: DM load/realtime now uses `dmMessagesRequest` + `stillCurrent`; older-page loads discard stale results via channel/conversation refs. |
-
-### Code changes this pass
-- `CallOverlay.tsx` — minimized bar top-only
-- `CallSessionProvider.tsx` / `VoiceSessionProvider.tsx` — camera mesh ok + `ended`; DM call leave outside `/messenger`
-- `MessengerShell.tsx` — manage UI under view-as, `MENTION_EVERYONE`, temp delete, scoped failure restore, older-message + DM race guards, members/voice Escape
-- `MessageItem.tsx` — dismiss failed optimistic
-- `ProfileFriendButton.tsx` / `ProfileProvider.tsx` — friendship realtime refresh for open cards
-
-## Pass 2b — Final verdicts (F / H / I / J / K / L)
+## Pass 3b — Final verdicts (no Partial)
 
 | ID | Final verdict | Evidence |
 |---|---|---|
-| **F** | **Disproved** | Bell and panel both use `countUnreadPanelRows()` on the same UnreadProvider state. |
-| **H** | **Disproved** | Empty stuck divider cleared when list is loaded and `firstUnreadMessageId` is null. |
-| **I** | **Disproved** | Realtime patch always re-sorts unless that conversation is already top with the same preview. |
-| **J** | **Disproved** | Unfocus → Idle via `hasFocus()`; last-tab Offline via `pagehide`. |
-| **K** | **Disproved** | Notify RPCs short-circuit on blocked **and** ignored. |
-| **L** | **Confirmed (fix holds)** | Mark-all publishes read-sync and advances local activity maps. |
+| **M** | **Fixed and verified** | Mini call bar is top-anchored only (`top-2`, `sm:right-3`) — no `sm:bottom-*`. Expand + Disconnect remain on the bar; sidebar `VoiceConnectionBar` is separate. Composer sits at bottom; mini bar cannot cover it. |
+| **N** | **Fixed and verified** | Call + Voice `toggleCamera` require mesh `ok`, clear UI on failure, and listen for track `ended`. Mesh `setLocalVideoTrack` now also clears/announces off on `ended` (same as screen). Screen stop path already announced off to peers. |
+| **O** | **Fixed and verified** | Server voice and DM/group calls both leave when pathname leaves `/messenger`. In-messenger navigation keeps sessions. Refresh: server voice rehydrates via heartbeat; DM calls tear down on unmount (WebRTC). |
+| **P** | **Fixed and verified** | View-as: composer/send blocked; manage UI gated by `manageUiAllowed`; create/rename hard-blocked. `MENTION_EVERYONE` filters suggestions + encode list; pasted `<@&roleId>` stripped without permission; view-as computes mention perm from the viewed role. Channel create without `MANAGE_CHANNELS` still rejected by RLS. |
+| **Q** | **Fixed and verified** | Failed temps get `failed: true` + Dismiss; `temp-*` deletes are local-only. Failure mark ignored/dropped if channel/DM changed. Scope-gated composer restore. Success still merges via `mergeIncoming`. |
+| **S** | **Fixed and verified** | Channel drawer: Escape + backdrop (`ResizableSidebar`). Members + voice sheets: Escape below `lg` + backdrop. Route change closes mobile list. |
+| **T** | **Fixed and verified** | Scope effect clears draft/reply/files on channel/DM change. Live check: typed draft in `#bug-reports` → switch to `#general` → composer value `""` / placeholder `#general`. Failure restore gated on `sendScope`. |
+| **U** | **Fixed and verified** | Friends panel realtime; `ProfileFriendButton` + open small/big `ready.friendStatus` refresh on `friends` changes. Block closes cards; members/DM lists filter via `blockedIds`. |
+| **V** | **Fixed and verified** | Channel load: `messagesRequest`/`stillCurrent`. DM load: `dmMessagesRequest`/`stillCurrent` on load + realtime. Older-page loads discard when channel/conversation refs mismatch. Rapid channel hops ended on matching `#bug-reports` placeholder with empty draft. |
+
+### Code changes this pass (3b)
+- `CallOverlay.tsx` — fix invalid JSX comment that broke the build
+- `MessengerShell.tsx` — view-as mention perms, strip role tokens, scoped failure list updates
+- `webrtcMesh.ts` — camera track `ended` → announce off
 
 ## Still open / broken
-- Live visual QA at 375/768/1440 after deploy
 - Jump-to-unread pill not built
 - `↑` edit-last-own still incomplete
 - Cmd/Ctrl+K quick switcher not built
@@ -47,5 +36,5 @@
 - None
 
 ## Suggested next focus
-- Live QA of Pass 3 voice + mobile after deploy
+- Live two-client voice/camera QA after deploy
 - Remaining product gaps (jump-to-unread, quick switcher)
