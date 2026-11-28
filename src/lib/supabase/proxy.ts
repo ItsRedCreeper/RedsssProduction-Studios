@@ -61,10 +61,17 @@ export async function updateSession(request: NextRequest) {
     path === "/login" ||
     path.startsWith("/login/") ||
     path.startsWith("/auth/");
+  // UI sounds + other public static files must not HTML-redirect to /login —
+  // Audio()/fetch follow that as a 200 login page and playback silently fails.
+  const isPublicStatic =
+    path.startsWith("/sounds/") ||
+    path === "/icon.png" ||
+    path === "/apple-icon.png" ||
+    path === "/favicon.ico";
 
   // API routes must never HTML-redirect to login. Fetch follows those as 200
   // and the GIF picker treats the login page as an empty result set.
-  if (isApiRoute) {
+  if (isApiRoute || isPublicStatic) {
     return supabaseResponse;
   }
 
