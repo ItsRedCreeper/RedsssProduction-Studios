@@ -125,10 +125,15 @@ import {
 import {
   can,
   canAccessServerSettings,
+  effectiveChannelOverrides,
   isPrivateChannel,
   mergeRolePermissions,
   PERMISSIONS,
 } from "@/lib/permissions";
+import {
+  SESSION_EXPIRED_MESSAGE,
+  userFacingActionError,
+} from "@/lib/auth-errors";
 import { roleColorForMember } from "@/lib/roles";
 import {
   contentHasMentionSignal,
@@ -628,6 +633,22 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return () => {
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  // Surface a clear banner when the session dies mid-messenger (drafts stay in Maps).
+  useEffect(() => {
+    const supabase = createClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setError(SESSION_EXPIRED_MESSAGE);
+        setToast("Session expired — sign in again");
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -1830,7 +1851,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     const previewSafeChannels = previewMode
       ? channels.filter(
-          (channel) => !isPrivateChannel(channel.permission_overrides),
+          (channel) =>
+            !isPrivateChannel(effectiveChannelOverrides(channel, categories)),
         )
       : channels;
     const channelValid =
@@ -1871,6 +1893,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     routeServerId,
     routeChannelId,
     channels,
+    categories,
     loadingChannels,
     loadedServerId,
     pathname,
@@ -3355,39 +3378,46 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return mergeRolePermissions(rolePerms);
   }, [isServerOwner, serverRoles, myRoleIds]);
 
+  const overridesFor = useCallback(
+    (channel: Channel | null | undefined) =>
+      channel ? effectiveChannelOverrides(channel, categories) : undefined,
+    [categories],
+  );
+  const activeOverrides = overridesFor(activeChannel);
+
   const canSendMessages = can(myPerms, PERMISSIONS.SEND_MESSAGES, {
     isOwner: isServerOwner,
-    overrides: activeChannel?.permission_overrides,
+    overrides: activeOverrides,
     roleIds: myRoleIds,
     userId: user?.id,
   });
   const canManageMessages = can(myPerms, PERMISSIONS.MANAGE_MESSAGES, {
     isOwner: isServerOwner,
-    overrides: activeChannel?.permission_overrides,
+    overrides: activeOverrides,
     roleIds: myRoleIds,
     userId: user?.id,
   });
   const canConnectVoice = can(myPerms, PERMISSIONS.CONNECT, {
     isOwner: isServerOwner,
-    overrides: activeChannel?.permission_overrides,
+    overrides: activeOverrides,
     roleIds: myRoleIds,
     userId: user?.id,
   });
   const canSpeakVoice = can(myPerms, PERMISSIONS.SPEAK, {
     isOwner: isServerOwner,
-    overrides: activeChannel?.permission_overrides,
+    overrides: activeOverrides,
     roleIds: myRoleIds,
     userId: user?.id,
   });
   const canAttachFiles = can(myPerms, PERMISSIONS.ATTACH_FILES, {
     isOwner: isServerOwner,
-    overrides: activeChannel?.permission_overrides,
+    overrides: activeOverrides,
     roleIds: myRoleIds,
     userId: user?.id,
   });
   const canAddReactions = can(myPerms, PERMISSIONS.ADD_REACTIONS, {
     isOwner: isServerOwner,
-    overrides: activeChannel?.permission_overrides,
+    overrides: activeOverrides,
     roleIds: myRoleIds,
     userId: user?.id,
   });
@@ -3400,7 +3430,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     );
     return can(myPerms, PERMISSIONS.SPEAK, {
       isOwner: isServerOwner && connection.serverId === activeServerId,
-      overrides: connectedChannel?.permission_overrides,
+      overrides: overridesFor(connectedChannel),
       roleIds: myRoleIds,
       userId: user?.id,
     });
@@ -3412,6 +3442,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     activeServerId,
     myRoleIds,
     user?.id,
+    overridesFor,
   ]);
 
   // SPEAK denied → stay muted while in that voice channel.
@@ -3437,7 +3468,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         PERMISSIONS.MENTION_EVERYONE,
         {
           isOwner: false,
-          overrides: activeChannel?.permission_overrides,
+          overrides: activeOverrides,
           roleIds: [viewAsRoleId],
           userId: null,
         },
@@ -3445,7 +3476,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
     return can(myPerms, PERMISSIONS.MENTION_EVERYONE, {
       isOwner: isServerOwner,
-      overrides: activeChannel?.permission_overrides,
+      overrides: activeOverrides,
       roleIds: myRoleIds,
       userId: user?.id,
     });
@@ -3454,7 +3485,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     serverRoles,
     myPerms,
     isServerOwner,
-    activeChannel?.permission_overrides,
+    activeOverrides,
     myRoleIds,
     user?.id,
   ]);
@@ -3482,7 +3513,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     // Preview guests only see channels @everyone can view (private channels stay hidden).
     if (previewMode) {
       return channels.filter(
-        (channel) => !isPrivateChannel(channel.permission_overrides),
+        (channel) => !isPrivateChannel(overridesFor(channel)),
       );
     }
     if (!viewAsRoleId && (isServerOwner || myPerms.ADMINISTRATOR)) return channels;
@@ -3496,7 +3527,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return channels.filter((channel) =>
       can(base, PERMISSIONS.VIEW_CHANNEL, {
         isOwner: viewAsRoleId ? false : isServerOwner,
-        overrides: channel.permission_overrides,
+        overrides: overridesFor(channel),
         roleIds,
         userId: viewAsRoleId ? null : user?.id,
       }),
@@ -3510,6 +3541,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     user?.id,
     viewAsRoleId,
     serverRoles,
+    overridesFor,
   ]);
 
   const channelsByServerForForward = useMemo(() => {
@@ -3523,12 +3555,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const canViewActiveChannel =
     !activeChannel ||
     (previewMode
-      ? !isPrivateChannel(activeChannel.permission_overrides)
+      ? !isPrivateChannel(activeOverrides)
       : isServerOwner ||
         !!myPerms.ADMINISTRATOR ||
         can(myPerms, PERMISSIONS.VIEW_CHANNEL, {
           isOwner: isServerOwner,
-          overrides: activeChannel.permission_overrides,
+          overrides: activeOverrides,
           roleIds: myRoleIds,
           userId: user?.id,
         }));
@@ -4315,7 +4347,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     if (target?.type === "voice" && activeServer) {
       const allowed = can(myPerms, PERMISSIONS.CONNECT, {
         isOwner: isServerOwner,
-        overrides: target.permission_overrides,
+        overrides: overridesFor(target),
         roleIds: myRoleIds,
         userId: user?.id,
       });
@@ -4607,7 +4639,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
     const channelId = activeChannelId;
     let content = (contentOverride ?? draft).trim();
-    if (content.trimStart().toLowerCase().startsWith("/poll")) {
+    if (/^\/poll(\s|$)/i.test(content.trimStart())) {
       setPollOpen(true);
       setDraft("");
       return;
@@ -4753,7 +4785,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             message.id === tempId ? { ...message, failed: true } : message,
           );
         });
-        setError(uploaded.error ?? "Upload failed");
+        setError(
+          userFacingActionError(uploaded.error, "Upload failed"),
+        );
         restoreComposer();
         sendingRef.current = false;
         setSending(false);
@@ -4809,7 +4843,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           message.id === tempId ? { ...message, failed: true } : message,
         );
       });
-      setError(insertError?.message ?? "Failed to send message");
+      setError(
+        userFacingActionError(
+          insertError?.message,
+          "Failed to send message",
+        ),
+      );
       restoreComposer();
       sendingRef.current = false;
     sendingRef.current = false;
@@ -4987,7 +5026,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             message.id === tempId ? { ...message, failed: true } : message,
           );
         });
-        setError(uploaded.error ?? "Upload failed");
+        setError(userFacingActionError(uploaded.error, "Upload failed"));
         restoreComposer();
         sendingRef.current = false;
         setSending(false);
@@ -5040,7 +5079,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       });
       const blockedMsg = friendlyBlockDmMessage(insertError?.message);
       if (blockedMsg) setDmBlockedByThem(true);
-      setError(blockedMsg ?? insertError?.message ?? "Failed to send message");
+      setError(
+        blockedMsg ??
+          userFacingActionError(
+            insertError?.message,
+            "Failed to send message",
+          ),
+      );
       restoreComposer();
       sendingRef.current = false;
     sendingRef.current = false;

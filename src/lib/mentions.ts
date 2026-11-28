@@ -26,6 +26,20 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Temporarily mask URLs so @/# mention encoding cannot rewrite fragments inside them. */
+function withProtectedUrls(content: string, transform: (masked: string) => string): string {
+  const urls: string[] = [];
+  const masked = content.replace(/https?:\/\/[^\s<>]+/gi, (match) => {
+    const index = urls.length;
+    urls.push(match);
+    return `\0URL${index}\0`;
+  });
+  const transformed = transform(masked);
+  return transformed.replace(/\0URL(\d+)\0/g, (_match, index: string) => {
+    return urls[Number(index)] ?? "";
+  });
+}
+
 /** Convert plain @names / #channels in composer text into Discord-like ID tokens. */
 export function encodeMentions(
   content: string,
@@ -35,30 +49,43 @@ export function encodeMentions(
     channels: MentionChannel[];
   },
 ): string {
-  let next = content;
+  return withProtectedUrls(content, (masked) => {
+    let next = masked;
 
-  const channels = [...opts.channels].sort((a, b) => b.name.length - a.name.length);
-  for (const channel of channels) {
-    if (!channel.name) continue;
-    const re = new RegExp(`#${escapeRegExp(channel.name)}(?=$|[\\s.,!?;:])`, "gi");
-    next = next.replace(re, `<#${channel.id}>`);
-  }
+    const channels = [...opts.channels].sort((a, b) => b.name.length - a.name.length);
+    for (const channel of channels) {
+      if (!channel.name) continue;
+      const re = new RegExp(
+        `#${escapeRegExp(channel.name)}(?=$|[\\s.,!?;:])`,
+        "gi",
+      );
+      next = next.replace(re, `<#${channel.id}>`);
+    }
 
-  const roles = [...opts.roles].sort((a, b) => b.name.length - a.name.length);
-  for (const role of roles) {
-    if (!role.name) continue;
-    const re = new RegExp(`@${escapeRegExp(role.name)}(?=$|[\\s.,!?;:])`, "gi");
-    next = next.replace(re, `<@&${role.id}>`);
-  }
+    const roles = [...opts.roles].sort((a, b) => b.name.length - a.name.length);
+    for (const role of roles) {
+      if (!role.name) continue;
+      const re = new RegExp(
+        `@${escapeRegExp(role.name)}(?=$|[\\s.,!?;:])`,
+        "gi",
+      );
+      next = next.replace(re, `<@&${role.id}>`);
+    }
 
-  const users = [...opts.users].sort((a, b) => b.username.length - a.username.length);
-  for (const user of users) {
-    if (!user.username) continue;
-    const re = new RegExp(`@${escapeRegExp(user.username)}(?=$|[\\s.,!?;:])`, "gi");
-    next = next.replace(re, `<@${user.id}>`);
-  }
+    const users = [...opts.users].sort(
+      (a, b) => b.username.length - a.username.length,
+    );
+    for (const user of users) {
+      if (!user.username) continue;
+      const re = new RegExp(
+        `@${escapeRegExp(user.username)}(?=$|[\\s.,!?;:])`,
+        "gi",
+      );
+      next = next.replace(re, `<@${user.id}>`);
+    }
 
-  return next;
+    return next;
+  });
 }
 
 export function extractMentionUserIds(content: string): string[] {

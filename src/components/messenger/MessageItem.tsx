@@ -316,7 +316,14 @@ export function MessageItem({
   }
 
   async function copyText() {
-    const value = message.content || message.attachment_url || "";
+    // Prefer display form (@Name / #channel / :emoji:) over raw storage tokens.
+    let value = message.content
+      ? displayMentionText(message.content, mentionMaps).replace(
+          /<a?:([a-zA-Z0-9_]+):[0-9a-f-]{36}>/gi,
+          ":$1:",
+        )
+      : "";
+    if (!value.trim()) value = message.attachment_url || "";
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);

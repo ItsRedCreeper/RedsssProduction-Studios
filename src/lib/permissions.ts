@@ -498,6 +498,25 @@ export function can(
   return Boolean(base[permission]);
 }
 
+/**
+ * Channels with `permissions_synced` inherit the parent category's override map.
+ * Unsynced channels keep their own map (category deny + channel allow works).
+ */
+export function effectiveChannelOverrides(
+  channel: {
+    category_id?: string | null;
+    permission_overrides?: unknown;
+    permissions_synced?: boolean | null;
+  },
+  categories: { id: string; permission_overrides?: unknown }[],
+): unknown {
+  if (channel.permissions_synced && channel.category_id) {
+    const category = categories.find((item) => item.id === channel.category_id);
+    if (category) return category.permission_overrides ?? {};
+  }
+  return channel.permission_overrides;
+}
+
 /** Show Server Settings entry when the user can manage anything inside it. */
 export function canAccessServerSettings(
   base: PermissionMap,

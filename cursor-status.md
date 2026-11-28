@@ -1,40 +1,41 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Pass 11)
+**Last updated:** 2026-11-28 (Pass 12)
 
 ## Localhost health
-**Healthy.** `/messenger` returns 200 after Pass 11 fixes.
+**Healthy.** `/messenger` returns 200 after Pass 12 fixes.
 
-## Pass 11 — Final verdicts (no Partial)
+## Pass 12 — Final verdicts (no Partial)
 
 | ID | Final verdict | Evidence |
 |---|---|---|
-| **CP** | **Fixed and verified** | Channel/DM realtime UPDATE patches children’s `reply_to.content`; DELETE keeps deleted stub; hydrate/RPC map stub when parent missing; optimistic edit also syncs child previews. |
-| **CQ** | **Fixed and verified** | DM `@` suggestions use conversation peers (group `participantIds` / DM other), filtered by block list — no longer server `visibleMembers`. Channel path still follows live membership. |
-| **CR** | **Disproved** | `useVoiceConnectionQuality` resets to “Measuring” when `active` is false and clears the poll interval on leave/rejoin. |
-| **CS** | **Fixed and verified** | Discover `memberIds` updates on live `server_members` INSERT/DELETE for self; join guards concurrent `joiningId` and treats duplicate membership as success without double-counting stats. |
-| **CT** | **Fixed and verified** | Own open big/small cards now compare avatar/bio/banner/username (not only status fields) against `useCurrentProfile`; other users already refresh via profiles UPDATE realtime. |
-| **CU** | **Fixed and verified** | Composer emoji/gif/sticker register `pushOverlayEscape` so Escape works while search is focused; mention/emoji/reply Escape handlers preventDefault + stopPropagation. ArrowUp edit-last already gated on empty draft. |
-| **CV** | **Fixed and verified** | Non-image attachments use blob download with sanitized filename (same pattern as lightbox); cross-origin `download=` attribute no longer relied on. |
-| **CW** | **Disproved** | Category move updates `category_id` only; overrides preserved; sync-to-category is an explicit `permissions_synced` action. |
-| **CX** | **Fixed and verified** | `displayVoiceStates` filters blocked users out of the roster; mesh already silences either-direction blocks. |
-| **CY** | **Disproved** | Post-refresh paths hydrate replies/reactions; scope change clears drafts/aborts uploads; leave/join membership + channel loads stay consistent with DB after heavy nav. |
+| **CZ** | **Fixed and verified** | `/poll` only matches as a whole command (`/^\/poll(\s|$)/i`); `encodeMentions` masks `http(s)://` URLs so `#channel` / `@name` inside links are not rewritten. Unknown `/…` / `!…` remain plain text; slash expand still exact-name. |
+| **DA** | **Fixed and verified** | Copy Text uses `displayMentionText` + `:emoji:` shortcodes instead of raw `<@uuid>` / `<:name:id>` tokens. No Quote action exists (not added — out of scope). |
+| **DB** | **Disproved** | Server icons already append `?v=`; avatars/emojis use unique storage paths + emoji cache invalidation. |
+| **DC** | **Disproved** | Voice/call join ops cancel stale work; same-channel rejoin short-circuits; `displayVoiceStates` de-dupes self. |
+| **DD** | **Fixed and verified** | `effectiveChannelOverrides` uses category map when `permissions_synced`; category save pushes to synced channels; channel save clears sync; new channels in a category inherit + sync; Re-sync always available. |
+| **DE** | **Disproved** | No chat `document.title` / favicon / message sound path to mishandle; unread badges clear via mark-read. |
+| **DF** | **Disproved** | No channel/category drag-reorder UI exists; create-time `position` display sort is stable — nothing to reset. (DnD would be a new feature.) |
+| **DG** | **Disproved** | Empty server/DM/members/Discover already render dedicated empty states. |
+| **DH** | **Disproved** | `LinkEmbeds` is content-driven; edit/delete remounts/cancels previews. |
+| **DI** | **Fixed and verified** | `userFacingActionError` on send/upload; `SIGNED_OUT` sets session-expired error + toast; drafts already restored via `restoreComposer`. |
 
 ### Code changes this pass
-- `MessengerShell.tsx` — reply preview sync (realtime + edit), DM mentions, blocked voice roster, messages channel reconnect subscribe
-- `data.ts` — deleted-parent reply stubs on hydrate/RPC map
-- `DiscoverPane.tsx` — live membership + join race guard
-- `ProfileProvider.tsx` — own profile card field sync
-- `MessageComposer.tsx` — Escape overlay priority for pickers
-- `MessageMedia.tsx` / `MediaLightbox.tsx` — safe blob downloads
+- `lib/auth-errors.ts` — session failure detection + copy
+- `lib/mentions.ts` — URL-safe mention encoding
+- `lib/permissions.ts` — `effectiveChannelOverrides`
+- `MessengerShell.tsx` — `/poll` match, effective overrides, auth feedback
+- `ServerSettingsModal.tsx` / `CreateChannelModal.tsx` — category sync inheritance
+- `MessageItem.tsx` — display-form Copy Text
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)
 - Jump-to-unread pill not built
 - Cmd/Ctrl+K quick switcher not built
+- Channel/category drag-and-drop reorder not built (feature, not a regression)
 
 ## Blockers
 - None
 
 ## Suggested next focus
-- Two-client QA: reply parent delete while reply visible; Discover join→leave→rejoin; file download with spaced filenames; block mid-voice
+- Two-client QA: category deny + channel allow; `/pollfoo` still sends; copy mention paste; expire session mid-upload

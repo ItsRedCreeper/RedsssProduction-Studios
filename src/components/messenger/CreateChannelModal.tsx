@@ -7,7 +7,11 @@ import {
   CHANNEL_NAME_MAX,
   CHANNEL_NAME_MIN,
 } from "@/lib/field-limits";
-import { setChannelPrivate, setRoleChannelView } from "@/lib/permissions";
+import {
+  asChannelOverrides,
+  setChannelPrivate,
+  setRoleChannelView,
+} from "@/lib/permissions";
 import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import type { Category, Channel } from "@/components/messenger/types";
 
@@ -114,8 +118,15 @@ export function CreateChannelModal({
       nextCategoryId = category.id;
     }
 
-    let overrides = isPrivate ? setChannelPrivate({}, true) : undefined;
-    if (overrides && creatorRoleIds.length > 0) {
+    const categoryForChannel = nextCategoryId
+      ? nextCategories.find((item) => item.id === nextCategoryId)
+      : null;
+    let overrides = isPrivate
+      ? setChannelPrivate(categoryForChannel?.permission_overrides ?? {}, true)
+      : categoryForChannel
+        ? asChannelOverrides(categoryForChannel.permission_overrides)
+        : undefined;
+    if (isPrivate && overrides && creatorRoleIds.length > 0) {
       for (const roleId of creatorRoleIds) {
         overrides = setRoleChannelView(overrides, roleId, true);
       }
@@ -129,6 +140,9 @@ export function CreateChannelModal({
         category_id: nextCategoryId,
         position: channelCount,
         ...(overrides ? { permission_overrides: overrides } : {}),
+        ...(categoryForChannel && !isPrivate
+          ? { permissions_synced: true }
+          : {}),
       })
       .select("*")
       .single();

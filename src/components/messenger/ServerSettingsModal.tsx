@@ -63,6 +63,7 @@ import {
   DEFAULT_MEMBER_PERMISSIONS,
   PERMISSIONS,
   ROLE_PERMISSION_OPTIONS,
+  asChannelOverrides,
   isPrivateChannel,
   roleCanViewChannel,
   setChannelPrivate,
@@ -1378,10 +1379,18 @@ export function ServerSettingsModal({
     setSaving(true);
     setError(null);
     const supabase = createClient();
+    const categoryForChannel = channelCategoryId
+      ? categories.find((item) => item.id === channelCategoryId)
+      : null;
     let overrides = newChannelPrivate
-      ? setChannelPrivate({}, true)
-      : undefined;
-    if (overrides && actorRoleIds.length > 0) {
+      ? setChannelPrivate(
+          categoryForChannel?.permission_overrides ?? {},
+          true,
+        )
+      : categoryForChannel
+        ? asChannelOverrides(categoryForChannel.permission_overrides)
+        : undefined;
+    if (newChannelPrivate && overrides && actorRoleIds.length > 0) {
       for (const roleId of actorRoleIds) {
         overrides = setRoleChannelView(overrides, roleId, true);
       }
@@ -1395,6 +1404,9 @@ export function ServerSettingsModal({
         category_id: channelCategoryId || null,
         position: channels.length,
         ...(overrides ? { permission_overrides: overrides } : {}),
+        ...(categoryForChannel && !newChannelPrivate
+          ? { permissions_synced: true }
+          : {}),
       })
       .select("*")
       .single();
@@ -1422,13 +1434,46 @@ export function ServerSettingsModal({
       .eq("id", category.id)
       .select("*")
       .single();
-    setSaving(false);
     if (updateError || !data) {
+      setSaving(false);
       setError(updateError?.message ?? "Could not update category permissions.");
       return;
     }
+    // Keep synced channels' stored maps in lockstep with the category.
+    const synced = channels.filter(
+      (channel) =>
+        channel.category_id === category.id && channel.permissions_synced,
+    );
+    let nextChannels = channels;
+    if (synced.length > 0) {
+      const { error: syncError } = await supabase
+        .from("channels")
+        .update({
+          permission_overrides: nextOverrides,
+          permissions_synced: true,
+        })
+        .in(
+          "id",
+          synced.map((channel) => channel.id),
+        );
+      if (syncError) {
+        setSaving(false);
+        setError(syncError.message);
+        return;
+      }
+      nextChannels = channels.map((channel) =>
+        channel.category_id === category.id && channel.permissions_synced
+          ? {
+              ...channel,
+              permission_overrides: nextOverrides,
+              permissions_synced: true,
+            }
+          : channel,
+      );
+    }
+    setSaving(false);
     onChannelsChanged(
-      channels,
+      nextChannels,
       categories.map((item) => (item.id === category.id ? data : item)).sort(byPosition),
     );
   }
@@ -1442,7 +1487,11 @@ export function ServerSettingsModal({
     const supabase = createClient();
     const { data, error: updateError } = await supabase
       .from("channels")
-      .update({ permission_overrides: nextOverrides })
+      .update({
+        permission_overrides: nextOverrides,
+        // Custom channel overrides break category sync (Discord behavior).
+        permissions_synced: false,
+      })
       .eq("id", channel.id)
       .select("*")
       .single();
@@ -3157,8 +3206,7 @@ export function ServerSettingsModal({
                               >
                                 Permissions
                               </button>
-                              {channel.category_id &&
-                              !channel.permissions_synced ? (
+                              {channel.category_id ? (
                                 <button
                                   type="button"
                                   disabled={saving}
@@ -3167,7 +3215,9 @@ export function ServerSettingsModal({
                                   }
                                   className="rounded-md px-2 py-1 text-xs text-[var(--ms-text)] hover:bg-white/10 disabled:opacity-50"
                                 >
-                                  Sync Now
+                                  {channel.permissions_synced
+                                    ? "Re-sync"
+                                    : "Sync Now"}
                                 </button>
                               ) : null}
                               <button
