@@ -12,13 +12,11 @@ function getSupabaseKey() {
 let browserClient: SupabaseClient<Database> | null = null;
 
 /**
- * Cap concurrent Supabase REST/RPC calls. Browsers allow ~6 connections per host;
- * messenger boot used to open dozens at once and stall everything.
- *
- * Auth (/auth/v1/*) bypasses the queue — otherwise GoTrue init/getUser can
- * hold slots while other calls wait on the auth lock → hard deadlock.
+ * Soft cap at the browser's typical per-host HTTP/1.1 limit.
+ * High enough not to feel sluggish; still FIFO-queues true stampedes.
+ * Auth bypasses the queue to avoid GoTrue lock deadlocks.
  */
-const MAX_CONCURRENT_REST = 3;
+const MAX_CONCURRENT_REST = 6;
 let activeRest = 0;
 const restWaiters: Array<() => void> = [];
 
@@ -49,8 +47,7 @@ function requestUrl(input: RequestInfo | URL): string {
 
 const queuedFetch: typeof fetch = async (input, init) => {
   const url = requestUrl(input);
-  const isAuth = url.includes("/auth/v1/");
-  if (isAuth) {
+  if (url.includes("/auth/v1/")) {
     return fetch(input, init);
   }
   await acquireRestSlot();
@@ -64,7 +61,6 @@ const queuedFetch: typeof fetch = async (input, init) => {
 /** One shared browser client — avoids duplicate GoTrue init /auth/v1/user work. */
 export function createClient() {
   if (browserClient) return browserClient;
-  // isSingleton: false — we own the singleton so global.fetch always queues.
   browserClient = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     getSupabaseKey(),

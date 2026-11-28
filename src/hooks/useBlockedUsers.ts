@@ -103,7 +103,7 @@ function ensureBlockedStore(userId: string | null) {
         },
       )
       .subscribe();
-  }, 2_000);
+  }, 400);
 }
 
 function subscribe(onStoreChange: () => void) {

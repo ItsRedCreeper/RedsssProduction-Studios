@@ -993,7 +993,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     const defer = window.setTimeout(() => {
       void restore();
-    }, 5_000);
+    }, 2_000);
     return () => {
       cancelled = true;
       window.clearTimeout(defer);
@@ -1057,7 +1057,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void error;
     }
 
-    const boot = window.setTimeout(() => void prune(), 8_000);
+    const boot = window.setTimeout(() => void prune(), 4_000);
     const timer = window.setInterval(() => void prune(), VOICE_CLEANUP_POLL_MS);
     return () => {
       window.clearTimeout(boot);

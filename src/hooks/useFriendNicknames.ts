@@ -28,7 +28,7 @@ export function useFriendNicknames() {
     // Defer past messenger server/message boot (avoids PostgREST 504 stampede).
     const boot = window.setTimeout(() => {
       void refresh();
-    }, 2_000);
+    }, 400);
     function onChanged() {
       void refresh();
     }

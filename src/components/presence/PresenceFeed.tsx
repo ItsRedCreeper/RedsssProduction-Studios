@@ -218,12 +218,10 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
     watchedRef.current.add(user.id);
 
     async function refreshPrivacy() {
+      const { loadMyServerIds } = await import("@/lib/messenger/membership");
       const [edges, membership, nickResult] = await Promise.all([
         loadFriendEdges(user!.id),
-        createClient()
-          .from("server_members")
-          .select("server_id")
-          .eq("user_id", user!.id),
+        loadMyServerIds(user!.id),
         loadFriendNicknames(),
       ]);
       if (cancelled) return;
@@ -241,9 +239,7 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
         if (nick?.trim()) nicks.set(id.toLowerCase(), nick.trim());
       }
       nicknamesRef.current = nicks;
-      serverIdsRef.current = new Set(
-        (membership.data ?? []).map((row) => row.server_id),
-      );
+      serverIdsRef.current = new Set(membership.serverIds);
       // Relabel existing snaps with fresh privacy context (includes self).
       for (const [id, snap] of snapsRef.current) {
         upsert(id, { activity: snap.activity });
@@ -254,7 +250,7 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       void fetchUsers([user.id]);
       void refreshPrivacy();
-    }, 2_000);
+    }, 400);
 
     const supabase = createClient();
     const privacyChannel = supabase

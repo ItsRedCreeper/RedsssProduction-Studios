@@ -1184,7 +1184,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     // Deferred so channel bootstrap isn't fighting dm_call_* queries.
     const boot = window.setTimeout(() => {
       void recoverMissedInvites();
-    }, 5_000);
+    }, 2_000);
 
     return () => {
       window.clearTimeout(boot);

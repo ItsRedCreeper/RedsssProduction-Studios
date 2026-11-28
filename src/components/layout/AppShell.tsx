@@ -59,7 +59,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       return;
     }
     setSecondaryReady(false);
-    const timer = window.setTimeout(() => setSecondaryReady(true), 2_000);
+    // Short yield so messenger servers/messages start first without a noticeable lag.
+    const timer = window.setTimeout(() => setSecondaryReady(true), 400);
     return () => window.clearTimeout(timer);
   }, [lockViewport]);
 

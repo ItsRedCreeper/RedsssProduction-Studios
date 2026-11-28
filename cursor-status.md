@@ -1,22 +1,15 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Messenger hang fixed — fetch queue + no premature abort)
+**Last updated:** 2026-11-28 (Site-wide speed: REST cap 6 + coalesce)
 
 ## Localhost health
 **Healthy**
 
-## Messenger load hang — fixed
-### Causes
-1. Auth/profile stampede + many parallel REST calls filled the browser’s ~6 connections/host
-2. Client AbortSignal timeouts (~8–12s) discarded responses that still returned 200 from PostgREST
-3. Queuing auth with REST caused a brief deadlock (fixed: auth bypasses the queue)
-
-### Fixes
-- Shared profile store + single-flight profile fetch
-- Queued REST fetch (max 3); `/auth/v1/*` unqueued
-- No abort on critical server/message loads; coalesce message RPC
-- Defer unread/presence/blocked/voice restore/activity/call recovery
-- Sequential channel chrome loads
+## Performance
+- Soft REST concurrency cap **6** (was 3 — felt sluggish site-wide; auth still unqueued)
+- Short secondary boot delays (~400ms)
+- Coalesce membership / server chrome / channel messages (StrictMode double-fetch)
+- Shared profile store + no premature AbortSignal on critical loads
 
 ## Still open / broken
 - Reports / Funding placeholders

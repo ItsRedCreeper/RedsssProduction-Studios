@@ -530,7 +530,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     // Defer past server/message bootstrap — dm_call_* was 504-stamping the pool.
     const timer = window.setTimeout(() => {
       void refreshOpenCalls(ids);
-    }, 4_000);
+    }, 1_200);
     return () => window.clearTimeout(timer);
   }, [threads, refreshOpenCalls]);
   const { width: sidebarWidth, beginResize } = useMessengerSidebarWidth();
@@ -871,17 +871,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
     const request = ++serversRequest.current;
     setLoadingServers(true);
-    const supabase = createClient();
-    // No AbortSignal — under pool pressure these often land at ~10–15s with 200;
-    // aborting discards success and leaves the shell on Loading forever.
-    const { data: memberships, error: memberError } = await supabase
-      .from("server_members")
-      .select("server_id")
-      .eq("user_id", user.id);
+    const { loadMyServerIds, loadServersByIds } = await import(
+      "@/lib/messenger/membership"
+    );
+    const { serverIds, error: memberError } = await loadMyServerIds(user.id);
 
     if (serversRequest.current !== request) return;
     if (memberError) {
-      setError(memberError.message);
+      setError(memberError);
       setServers([]);
       setLoadingServers(false);
       if (routeServerRef.current) {
@@ -891,7 +888,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
 
-    const serverIds = (memberships ?? []).map((row) => row.server_id);
     const previewInUrl =
       typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).get("preview") === "1";
@@ -909,22 +905,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
 
-    const { data, error: serversError } = await supabase
-      .from("servers")
-      .select("*")
-      .in("id", serverIds)
-      .order("created_at", { ascending: true });
+    const { servers: next, error: serversError } =
+      await loadServersByIds(serverIds);
 
     if (serversRequest.current !== request) return;
     if (serversError) {
-      setError(serversError.message);
+      setError(serversError);
       setServers([]);
       if (routeServerRef.current) {
         setLoadedServerId(routeServerRef.current);
       }
       setLoadingChannels(false);
     } else {
-      const next = data ?? [];
       setServers(next);
       if (
         paneRef.current === "server" &&
@@ -949,11 +941,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
     const supabase = createClient();
-    const { data: memberships } = await supabase
-      .from("server_members")
-      .select("server_id")
-      .eq("user_id", user.id);
-    const serverIds = (memberships ?? []).map((row) => row.server_id);
+    const { loadMyServerIds } = await import("@/lib/messenger/membership");
+    const { serverIds } = await loadMyServerIds(user.id);
     if (serverIds.length === 0) {
       setCustomEmojis([]);
       return;
@@ -1642,24 +1631,35 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
 
     async function load() {
-      // Sequential pairs keep under the shared fetch-slot cap so messages can
-      // still progress instead of five GETs + RPC fighting for 6 sockets.
-      const channelResult = await supabase
-        .from("channels")
-        .select("*")
-        .eq("server_id", serverId);
+      const { onceInflight } = await import("@/lib/supabase/inflight");
+      const chrome = await onceInflight(`server-chrome:${serverId}`, async () => {
+        const [channelResult, categoryResult, memberResult, roleResult, rolesTable] =
+          await Promise.all([
+            supabase.from("channels").select("*").eq("server_id", serverId),
+            supabase
+              .from("channel_categories")
+              .select("*")
+              .eq("server_id", serverId),
+            supabase.from("server_members").select("*").eq("server_id", serverId),
+            supabase.from("member_roles").select("*").eq("server_id", serverId),
+            supabase.from("roles").select("*").eq("server_id", serverId),
+          ]);
+        return {
+          channelResult,
+          categoryResult,
+          memberResult,
+          roleResult,
+          rolesTable,
+        };
+      });
       if (cancelled) return;
-      const categoryResult = await supabase
-        .from("channel_categories")
-        .select("*")
-        .eq("server_id", serverId);
-      if (cancelled) return;
-      const [memberResult, roleResult, rolesTable] = await Promise.all([
-        supabase.from("server_members").select("*").eq("server_id", serverId),
-        supabase.from("member_roles").select("*").eq("server_id", serverId),
-        supabase.from("roles").select("*").eq("server_id", serverId),
-      ]);
-      if (cancelled) return;
+      const {
+        channelResult,
+        categoryResult,
+        memberResult,
+        roleResult,
+        rolesTable,
+      } = chrome;
       if (channelResult.error) setError(channelResult.error.message);
       const nextChannels = channelResult.data ?? [];
       const rolesByUser = new Map<string, string[]>();
@@ -2332,7 +2332,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     const boot = window.setTimeout(() => {
       void load();
-    }, 1_500);
+    }, 300);
     const channel = supabase
       .channel(`voice:${serverId}`)
       .on(

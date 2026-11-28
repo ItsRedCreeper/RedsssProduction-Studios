@@ -138,7 +138,7 @@ export function ActivityTracker({
     // Defer past server/message bootstrap — this RPC was competing for REST slots.
     const boot = window.setTimeout(() => {
       void publish(true);
-    }, 3_000);
+    }, 800);
 
     function onVisible() {
       if (document.visibilityState === "visible") {
