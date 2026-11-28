@@ -771,6 +771,14 @@ export type Database = {
         }
         Returns: Json
       }
+      get_invite_preview: {
+        Args: { p_code: string }
+        Returns: Json
+      }
+      join_server_via_invite: {
+        Args: { p_code: string }
+        Returns: Json
+      }
       get_channel_messages: {
         Args: {
           p_channel_id: string

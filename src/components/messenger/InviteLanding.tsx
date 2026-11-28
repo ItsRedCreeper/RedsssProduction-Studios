@@ -13,7 +13,31 @@ import {
   serverInitials,
   serverInitialsClass,
 } from "@/lib/server-initials";
-import type { Tables } from "@/lib/supabase/database.types";
+
+type InvitePreview = {
+  invite: {
+    id: string;
+    code: string;
+    server_id: string;
+    channel_id: string | null;
+    max_uses: number | null;
+    uses: number;
+    expires_at: string | null;
+    is_permanent: boolean;
+    expired: boolean;
+  };
+  server: {
+    id: string;
+    name: string;
+    description: string | null;
+    icon_url: string | null;
+    is_public: boolean;
+    invites_paused: boolean;
+  };
+  member_count: number;
+  online_count: number;
+  joined: boolean;
+};
 
 type InviteLandingProps = {
   code: string;
@@ -22,11 +46,7 @@ type InviteLandingProps = {
 export function InviteLanding({ code }: InviteLandingProps) {
   const router = useRouter();
   const { user, loading: profileLoading } = useCurrentProfile();
-  const [invite, setInvite] = useState<Tables<"invites"> | null>(null);
-  const [server, setServer] = useState<Tables<"servers"> | null>(null);
-  const [memberCount, setMemberCount] = useState(0);
-  const [onlineCount, setOnlineCount] = useState(0);
-  const [joined, setJoined] = useState(false);
+  const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,73 +54,43 @@ export function InviteLanding({ code }: InviteLandingProps) {
 
   useEffect(() => {
     if (profileLoading) return;
+    if (!user) {
+      setLoading(false);
+      setMissing(false);
+      setPreview(null);
+      return;
+    }
     const supabase = createClient();
     let cancelled = false;
 
     async function load() {
       setLoading(true);
       setError(null);
-      const { data: inviteRow, error: inviteError } = await supabase
-        .from("invites")
-        .select("*")
-        .eq("code", code)
-        .maybeSingle();
+      const { data, error: rpcError } = await supabase.rpc("get_invite_preview", {
+        p_code: code,
+      });
 
       if (cancelled) return;
-      if (inviteError || !inviteRow) {
+      if (rpcError || data == null) {
         setMissing(true);
-        setInvite(null);
-        setServer(null);
+        setPreview(null);
         setLoading(false);
         return;
       }
 
-      const { data: serverRow, error: serverError } = await supabase
-        .from("servers")
-        .select("*")
-        .eq("id", inviteRow.server_id)
-        .maybeSingle();
-
-      if (cancelled) return;
-      if (serverError || !serverRow) {
+      const raw =
+        typeof data === "string"
+          ? (JSON.parse(data) as InvitePreview)
+          : (data as InvitePreview);
+      if (!raw?.invite?.id || !raw?.server?.id) {
         setMissing(true);
+        setPreview(null);
         setLoading(false);
         return;
       }
 
-      const { data: members } = await supabase
-        .from("server_members")
-        .select("user_id")
-        .eq("server_id", serverRow.id);
-      const memberIds = (members ?? []).map((row) => row.user_id);
-      let online = 0;
-      if (memberIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, status")
-          .in("id", memberIds);
-        online = (profiles ?? []).filter((profile) =>
-          /online|idle|dnd/i.test(profile.status || ""),
-        ).length;
-      }
-
-      if (cancelled) return;
-      setInvite(inviteRow);
-      setServer(serverRow);
-      setMemberCount(memberIds.length);
-      setOnlineCount(online);
+      setPreview(raw);
       setMissing(false);
-
-      if (user) {
-        const { data: membership } = await supabase
-          .from("server_members")
-          .select("user_id")
-          .eq("server_id", serverRow.id)
-          .eq("user_id", user.id)
-          .maybeSingle();
-        if (!cancelled) setJoined(!!membership);
-      }
-
       setLoading(false);
     }
 
@@ -110,49 +100,50 @@ export function InviteLanding({ code }: InviteLandingProps) {
     };
   }, [code, profileLoading, user]);
 
-  const expired = !!(
-    invite &&
-    !invite.is_permanent &&
-    ((invite.expires_at && new Date(invite.expires_at).getTime() < Date.now()) ||
-      (invite.max_uses != null && invite.uses >= invite.max_uses))
-  );
+  const invite = preview?.invite ?? null;
+  const server = preview?.server ?? null;
+  const expired = !!invite?.expired;
+  const paused = !!server?.invites_paused;
+  const joined = !!preview?.joined;
+  const memberCount = preview?.member_count ?? 0;
+  const onlineCount = preview?.online_count ?? 0;
 
   async function join() {
-    if (!user || !invite || !server || expired) return;
-    if (server.invites_paused) {
-      setError("Invites are paused for this server.");
-      return;
-    }
+    if (!user || !invite || !server || expired || paused) return;
     setJoining(true);
     setError(null);
     const supabase = createClient();
-    const { joinServerWithDefaultRole } = await import(
-      "@/lib/server-membership"
-    );
-    const { error: joinError, alreadyMember } = await joinServerWithDefaultRole(
-      supabase,
-      server.id,
-      user.id,
+    const { data, error: joinError } = await supabase.rpc(
+      "join_server_via_invite",
+      { p_code: code },
     );
 
     if (joinError) {
       setJoining(false);
-      setError(joinError);
+      setError(joinError.message);
       return;
     }
 
-    if (!alreadyMember) {
-      await supabase
-        .from("invites")
-        .update({ uses: invite.uses + 1 })
-        .eq("id", invite.id);
-    }
+    const result =
+      typeof data === "string"
+        ? (JSON.parse(data) as {
+            server_id: string;
+            channel_id: string | null;
+            already_member: boolean;
+          })
+        : (data as {
+            server_id: string;
+            channel_id: string | null;
+            already_member: boolean;
+          } | null);
 
     setJoining(false);
-    if (invite.channel_id) {
-      router.push(messengerChannelPath(server.id, invite.channel_id));
+    const serverId = result?.server_id ?? server.id;
+    const channelId = result?.channel_id ?? invite.channel_id;
+    if (channelId) {
+      router.push(messengerChannelPath(serverId, channelId));
     } else {
-      router.push(messengerServerPath(server.id));
+      router.push(messengerServerPath(serverId));
     }
   }
 
@@ -221,6 +212,11 @@ export function InviteLanding({ code }: InviteLandingProps) {
                   This invite has expired or reached its use limit.
                 </p>
               )}
+              {paused && !expired && (
+                <p className="mt-4 rounded-md border border-[var(--ms-danger)]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[var(--ms-danger)]">
+                  Invites are paused for this server.
+                </p>
+              )}
               {error && (
                 <p className="mt-4 rounded-md border border-[var(--ms-danger)]/40 bg-[#ed4245]/10 px-3 py-2 text-sm text-[var(--ms-danger)]">
                   {error}
@@ -243,7 +239,7 @@ export function InviteLanding({ code }: InviteLandingProps) {
                 ) : (
                   <button
                     type="button"
-                    disabled={joining || expired || !user}
+                    disabled={joining || expired || paused || !user}
                     onClick={() => void join()}
                     className="inline-flex flex-1 items-center justify-center rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                   >

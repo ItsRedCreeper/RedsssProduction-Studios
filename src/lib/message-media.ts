@@ -18,8 +18,23 @@ export type EmbeddableUrl = {
 export const MAX_ATTACHMENTS_PER_MESSAGE = 8;
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
+const INLINE_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+]);
+
+/** Raster images safe to show inline. SVG and exotic image/* go to the file chip. */
 export function isImageMime(type: string | null | undefined, url?: string | null) {
-  if (type?.startsWith("image/")) return true;
+  if (type) {
+    const normalized = type.split(";")[0]?.trim().toLowerCase() ?? "";
+    if (INLINE_IMAGE_TYPES.has(normalized)) return true;
+    // Reject svg / bmp / heic / etc. even when labeled image/*
+    if (normalized.startsWith("image/")) return false;
+  }
   return !!url && /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(url);
 }
 

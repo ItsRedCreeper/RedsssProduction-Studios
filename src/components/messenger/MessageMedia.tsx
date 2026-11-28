@@ -30,24 +30,26 @@ export function MessageMedia({ message }: MessageMediaProps) {
     (item) => isImageMime(item.type, item.url) || isVideoMime(item.type, item.url),
   );
 
-  function openLightbox(item: MessageAttachment) {
-    const idx = mediaItems.findIndex((row) => row.url === item.url);
-    if (idx >= 0) setLightboxIndex(idx);
+  function openLightboxAt(mediaIndex: number) {
+    if (mediaIndex >= 0 && mediaIndex < mediaItems.length) {
+      setLightboxIndex(mediaIndex);
+    }
   }
 
   return (
     <>
       <div className="mt-2 flex max-w-3xl flex-col gap-2">
-        {items.map((item) => {
+        {items.map((item, itemIndex) => {
           const image = isImageMime(item.type, item.url);
           const video = isVideoMime(item.type, item.url);
           const spoiler = Boolean(item.spoiler);
+          const mediaIndex = mediaItems.indexOf(item);
 
           if (image) {
             const body = (
               <button
                 type="button"
-                onClick={() => openLightbox(item)}
+                onClick={() => openLightboxAt(mediaIndex)}
                 className="block max-w-full text-left"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -59,9 +61,9 @@ export function MessageMedia({ message }: MessageMediaProps) {
               </button>
             );
             return spoiler ? (
-              <SpoilerMedia key={item.url}>{body}</SpoilerMedia>
+              <SpoilerMedia key={`${item.url}:${itemIndex}`}>{body}</SpoilerMedia>
             ) : (
-              <div key={item.url}>{body}</div>
+              <div key={`${item.url}:${itemIndex}`}>{body}</div>
             );
           }
 
@@ -76,7 +78,7 @@ export function MessageMedia({ message }: MessageMediaProps) {
                 />
                 <button
                   type="button"
-                  onClick={() => openLightbox(item)}
+                  onClick={() => openLightboxAt(mediaIndex)}
                   className="absolute right-2 top-2 rounded-md bg-black/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white hover:bg-black/80"
                 >
                   Expand
@@ -84,9 +86,9 @@ export function MessageMedia({ message }: MessageMediaProps) {
               </div>
             );
             return spoiler ? (
-              <SpoilerMedia key={item.url}>{body}</SpoilerMedia>
+              <SpoilerMedia key={`${item.url}:${itemIndex}`}>{body}</SpoilerMedia>
             ) : (
-              <div key={item.url}>{body}</div>
+              <div key={`${item.url}:${itemIndex}`}>{body}</div>
             );
           }
 
@@ -118,11 +120,14 @@ export function MessageMedia({ message }: MessageMediaProps) {
           );
 
           return spoiler ? (
-            <SpoilerMedia key={item.url} className="inline-flex max-w-full">
+            <SpoilerMedia
+              key={`${item.url}:${itemIndex}`}
+              className="inline-flex max-w-full"
+            >
               {body}
             </SpoilerMedia>
           ) : (
-            <div key={item.url}>{body}</div>
+            <div key={`${item.url}:${itemIndex}`}>{body}</div>
           );
         })}
       </div>

@@ -303,6 +303,21 @@ export function HoverTip({
     };
   }, []);
 
+  useEffect(() => {
+    if (!tip) return;
+    function onScroll() {
+      if (timerRef.current != null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      anchorRectRef.current = null;
+      setReady(false);
+      setTip(null);
+    }
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, [tip]);
+
   useLayoutEffect(() => {
     if (!tip || !tipRef.current || !anchorRectRef.current) return;
     const el = tipRef.current;

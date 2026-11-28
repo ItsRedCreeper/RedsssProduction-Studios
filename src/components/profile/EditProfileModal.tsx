@@ -71,6 +71,17 @@ export function EditProfileModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally ignore heartbeat profile refreshes
   }, [open, profile.id]);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape" || saving || uploading || crop) return;
+      event.preventDefault();
+      onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, saving, uploading, crop, onClose]);
+
   const dirty =
     username.trim() !== profile.username ||
     (bio.trim() || "") !== (profile.bio?.trim() || "") ||

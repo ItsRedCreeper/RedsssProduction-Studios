@@ -161,6 +161,9 @@ type MessageItemProps = {
   onCopyLink?: (message: ChatMessage) => void;
   pollVotes?: { user_id: string; option_index: number }[];
   onPollVote?: (messageId: string, optionIndex: number) => void;
+  /** When set to this message id, enter edit mode (ArrowUp edit-last). */
+  requestEditMessageId?: string | null;
+  onRequestEditConsumed?: () => void;
 };
 
 export function MessageItem({
@@ -195,6 +198,8 @@ export function MessageItem({
   onCopyLink,
   pollVotes = [],
   onPollVote,
+  requestEditMessageId = null,
+  onRequestEditConsumed,
 }: MessageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [fullPickerOpen, setFullPickerOpen] = useState(false);
@@ -238,6 +243,23 @@ export function MessageItem({
   }
 
   useEffect(() => {
+    if (readOnly || !isOwn || message.is_system) return;
+    if (requestEditMessageId !== message.id) return;
+    setEditDraft(message.content);
+    setEditError(null);
+    setEditing(true);
+    onRequestEditConsumed?.();
+  }, [
+    requestEditMessageId,
+    message.id,
+    message.content,
+    message.is_system,
+    isOwn,
+    readOnly,
+    onRequestEditConsumed,
+  ]);
+
+  useEffect(() => {
     if (!menuOpen && !fullPickerOpen) return;
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
@@ -251,8 +273,24 @@ export function MessageItem({
       setMenuOpen(false);
       setFullPickerOpen(false);
     }
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (fullPickerOpen) {
+        event.preventDefault();
+        setFullPickerOpen(false);
+        return;
+      }
+      if (menuOpen) {
+        event.preventDefault();
+        setMenuOpen(false);
+      }
+    }
     window.addEventListener("mousedown", onPointerDown);
-    return () => window.removeEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [menuOpen, fullPickerOpen]);
 
   async function saveEdit() {

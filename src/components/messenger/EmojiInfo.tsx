@@ -100,6 +100,21 @@ function EmojiHoverShell({
     };
   }, []);
 
+  useEffect(() => {
+    if (!visible) return;
+    function onScroll() {
+      if (timerRef.current != null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      setVisible(false);
+      setPos(null);
+      anchorRectRef.current = null;
+    }
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, [visible]);
+
   useLayoutEffect(() => {
     if (!visible || !tipRef.current || !anchorRectRef.current) return;
     const tip = tipRef.current;

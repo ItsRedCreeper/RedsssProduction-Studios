@@ -122,15 +122,6 @@ export function EditChannelModal({
     setError(null);
   }, [open, channel]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
   const sortedRoles = useMemo(
     () => [...roles].sort(compareRolePositionDesc),
     [roles],
@@ -151,6 +142,25 @@ export function EditChannelModal({
       JSON.stringify(overrides) !==
         JSON.stringify(channel.permission_overrides ?? {}),
   );
+
+  function requestClose() {
+    if (overviewDirty || permsDirty) {
+      const discard = window.confirm(
+        "You have unsaved changes. Discard them and close?",
+      );
+      if (!discard) return;
+    }
+    onClose();
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") requestClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, overviewDirty, permsDirty]);
 
   if (!open || !channel) return null;
 
@@ -261,7 +271,7 @@ export function EditChannelModal({
         type="button"
         className="absolute inset-0 bg-black/70"
         aria-label="Close"
-        onClick={onClose}
+        onClick={requestClose}
       />
       <div
         role="dialog"
@@ -288,7 +298,7 @@ export function EditChannelModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-md p-1.5 text-muted hover:bg-white/10 hover:text-white"
             aria-label="Close"
           >

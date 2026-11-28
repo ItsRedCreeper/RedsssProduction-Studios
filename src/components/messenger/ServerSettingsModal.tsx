@@ -421,14 +421,29 @@ export function ServerSettingsModal({
     };
   }, [open, server.id, userId]);
 
+  const overviewDirty =
+    name.trim() !== server.name ||
+    (description.trim() || "") !== (server.description?.trim() || "") ||
+    isPublic !== server.is_public;
+
+  function requestClose() {
+    if (overviewDirty) {
+      const discard = window.confirm(
+        "You have unsaved changes. Discard them and close?",
+      );
+      if (!discard) return;
+    }
+    onClose();
+  }
+
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") requestClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, overviewDirty]);
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -450,11 +465,6 @@ export function ServerSettingsModal({
   }, [open, roles]);
 
   if (!open) return null;
-
-  const overviewDirty =
-    name.trim() !== server.name ||
-    (description.trim() || "") !== (server.description?.trim() || "") ||
-    isPublic !== server.is_public;
 
   async function saveOverview(event: FormEvent) {
     event.preventDefault();
@@ -839,6 +849,14 @@ export function ServerSettingsModal({
     if (swapIndex < 0 || swapIndex >= ordered.length) return;
     const other = ordered[swapIndex];
     if (!other || other.is_default) return;
+    // Both roles must stay strictly below the actor's highest role.
+    if (
+      !canManageRoleTarget(roles, actorRoleIds, current, { isOwner }) ||
+      !canManageRoleTarget(roles, actorRoleIds, other, { isOwner })
+    ) {
+      setError("You can only reorder roles below your highest role.");
+      return;
+    }
     setError(null);
     const supabase = createClient();
     const aPos = current.position;
@@ -1133,6 +1151,10 @@ export function ServerSettingsModal({
   async function createTimedInvite(event: FormEvent) {
     event.preventDefault();
     if (!canCreateInvites && !isOwner) return;
+    if (server.invites_paused) {
+      setError("Invites are paused for this server.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = createClient();
@@ -1180,7 +1202,11 @@ export function ServerSettingsModal({
   }
 
   async function toggleInvitesPaused() {
-    if (!canManageServer && !isOwner) return;
+    // servers UPDATE RLS is owner-only for invites_paused today.
+    if (!isOwner) {
+      setError("Only the server owner can pause invites.");
+      return;
+    }
     const next = !server.invites_paused;
     setError(null);
     const supabase = createClient();
@@ -1775,7 +1801,7 @@ export function ServerSettingsModal({
         type="button"
         className="absolute inset-0 bg-black/70"
         aria-label="Close settings"
-        onClick={onClose}
+        onClick={requestClose}
       />
       <ImageCropModal
         open={!!iconCropFile}
@@ -1832,7 +1858,7 @@ export function ServerSettingsModal({
             </h2>
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="rounded-lg p-1.5 text-[var(--ms-text-muted)] hover:bg-white/10 hover:text-white"
               aria-label="Close"
             >
@@ -2231,13 +2257,27 @@ export function ServerSettingsModal({
                           canEdit={canEdit}
                           canDelete={!role.is_default && canEdit}
                           canMoveUp={
-                            !role.is_default && index > 0 && (isOwner || canEdit)
+                            !role.is_default &&
+                            index > 0 &&
+                            (isOwner || canEdit) &&
+                            canManageRoleTarget(
+                              roles,
+                              actorRoleIds,
+                              roles[index - 1]!,
+                              { isOwner },
+                            )
                           }
                           canMoveDown={
                             !role.is_default &&
                             !belowIsDefault &&
                             index < roles.length - 1 &&
-                            (isOwner || canEdit)
+                            (isOwner || canEdit) &&
+                            canManageRoleTarget(
+                              roles,
+                              actorRoleIds,
+                              roles[index + 1]!,
+                              { isOwner },
+                            )
                           }
                           onMoveUp={() => void moveRole(role.id, -1)}
                           onMoveDown={() => void moveRole(role.id, 1)}
@@ -2651,7 +2691,7 @@ export function ServerSettingsModal({
 
             {tab === "invites" && (canCreateInvites || isOwner) && (
               <div className="space-y-4">
-                {(canManageServer || isOwner) && (
+                {isOwner && (
                   <label className="flex cursor-pointer items-start gap-2 rounded-md bg-[var(--ms-sidebar)] px-3 py-2.5">
                     <input
                       type="checkbox"
@@ -3560,6 +3600,7 @@ export function ServerSettingsModal({
                   tab.
                 </p>
                 <div className="space-y-4 rounded-md border border-[#3f4147] bg-[var(--ms-border)] p-3">
+                  {isOwner ? (
                   <label className="flex cursor-pointer items-start gap-2">
                     <input
                       type="checkbox"
@@ -3577,6 +3618,12 @@ export function ServerSettingsModal({
                       </span>
                     </span>
                   </label>
+                  ) : (
+                    <p className="text-xs text-[var(--ms-text-muted)]">
+                      Only the server owner can pause invites.
+                      {server.invites_paused ? " Invites are currently paused." : ""}
+                    </p>
+                  )}
                 </div>
               </div>
             )}

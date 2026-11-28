@@ -278,6 +278,48 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     };
   }, [user, openSmallFriendId, openBigFriendId]);
 
+  // Refresh open profile cards when that user edits avatar/banner/bio/username.
+  useEffect(() => {
+    const openIds = [
+      ...new Set(
+        [small?.profile.id, big?.profile.id].filter(
+          (id): id is string => !!id,
+        ),
+      ),
+    ];
+    if (openIds.length === 0) return;
+
+    let cancelled = false;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`profile-open-profiles:${openIds.join(":")}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload) => {
+          const row = payload.new as FriendProfile | null;
+          if (!row?.id || !openIds.includes(row.id)) return;
+          if (cancelled) return;
+          setSmall((prev) =>
+            prev && prev.profile.id === row.id
+              ? { ...prev, profile: { ...prev.profile, ...row } }
+              : prev,
+          );
+          setBig((prev) =>
+            prev && prev.profile.id === row.id
+              ? { ...prev, profile: { ...prev.profile, ...row } }
+              : prev,
+          );
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [small?.profile.id, big?.profile.id]);
+
   // Keep own big/small profile status + expiry labels in sync after StatusPicker /
   // heartbeat / timed revert (clear_expired_status_text).
   useEffect(() => {

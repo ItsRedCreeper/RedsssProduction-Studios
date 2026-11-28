@@ -93,6 +93,7 @@ import {
   MESSAGE_ATTACHMENT_MAX_BYTES,
 } from "@/lib/compress-image";
 import {
+  isImageMime,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_PER_MESSAGE,
   type MessageAttachment,
@@ -116,6 +117,7 @@ import {
 import {
   can,
   canAccessServerSettings,
+  isPrivateChannel,
   mergeRolePermissions,
   PERMISSIONS,
 } from "@/lib/permissions";
@@ -372,6 +374,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [voiceChatOpen, setVoiceChatOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [requestEditMessageId, setRequestEditMessageId] = useState<string | null>(
+    null,
+  );
   const [pinsOpen, setPinsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("overview");
@@ -411,6 +416,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const serversRequest = useRef(0);
   const messagesRequest = useRef(0);
   const dmMessagesRequest = useRef(0);
+  const sendRequest = useRef(0);
   const messagesChannelRef = useRef<string | null>(null);
   const typingChannelRef = useRef<ReturnType<
     ReturnType<typeof createClient>["channel"]
@@ -591,6 +597,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   useEffect(() => {
     if (scopeRef.current === scope) return;
     scopeRef.current = scope;
+    sendRequest.current += 1;
+    setSending(false);
     setDraft("");
     setReplyTo(null);
     setPendingFiles((prev) => {
@@ -600,9 +608,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return [];
     });
     setSearchQuery("");
+    setSearchOpen(false);
     setPinsOpen(false);
     setPinnedExtra([]);
   }, [scope]);
+
+  // Thread open/close keeps the same channel scope but narrows results — clear search.
+  const threadScopeRef = useRef(activeThreadId);
+  useEffect(() => {
+    if (threadScopeRef.current === activeThreadId) return;
+    threadScopeRef.current = activeThreadId;
+    setSearchQuery("");
+    setSearchOpen(false);
+  }, [activeThreadId]);
 
   const loadServers = useCallback(async () => {
     if (!user) {
@@ -1533,6 +1551,24 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             : thread,
         ),
       );
+      // Keep already-loaded timeline authors in sync (member list alone is not enough).
+      if (row.username !== undefined || row.avatar_url !== undefined) {
+        const patchProfiles = (message: ChatMessage): ChatMessage => {
+          if (message.user_id !== row.id) return message;
+          return {
+            ...message,
+            profiles: {
+              username: row.username ?? message.profiles?.username ?? "User",
+              avatar_url:
+                row.avatar_url !== undefined
+                  ? row.avatar_url
+                  : (message.profiles?.avatar_url ?? null),
+            },
+          };
+        };
+        setMessages((prev) => prev.map(patchProfiles));
+        setDmMessages((prev) => prev.map(patchProfiles));
+      }
     };
 
     const channel = supabase
@@ -1563,8 +1599,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     if (pane !== "server" || !routeServerId) return;
     if (loadingChannels || loadedServerId !== routeServerId) return;
 
+    const previewSafeChannels = previewMode
+      ? channels.filter(
+          (channel) => !isPrivateChannel(channel.permission_overrides),
+        )
+      : channels;
     const channelValid =
-      !!routeChannelId && channels.some((channel) => channel.id === routeChannelId);
+      !!routeChannelId &&
+      previewSafeChannels.some((channel) => channel.id === routeChannelId);
     if (channelValid && routeChannelId) {
       if (!previewMode) {
         const current = channels.find((channel) => channel.id === routeChannelId);
@@ -1576,9 +1618,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       }
       return;
     }
-    if (channels.length === 0) return;
+    if (previewSafeChannels.length === 0) return;
 
-    const target = pickFallbackChannel(channels, routeServerId);
+    const target = pickFallbackChannel(previewSafeChannels, routeServerId);
     if (!target || target.id === routeChannelId) return;
     router.replace(
       withPreviewQuery(
@@ -1640,6 +1682,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [servers]);
 
   // Live last-message + unread badges for every known text channel (all servers).
+  // Keep a single subscription; read maps/ids from refs to avoid resubscribe churn.
+  const channelServerMapRef = useRef(channelServerMap);
+  channelServerMapRef.current = channelServerMap;
+  const channelsRef = useRef(channels);
+  channelsRef.current = channels;
+  const serversRef = useRef(servers);
+  serversRef.current = servers;
+
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
@@ -1650,7 +1700,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
           const row = payload.new as Tables<"messages">;
-          const serverId = channelServerMap[row.channel_id];
+          const serverId = channelServerMapRef.current[row.channel_id];
           if (!serverId) return;
           setLastMessageAt((prev) =>
             prev[row.channel_id] === row.created_at
@@ -1661,17 +1711,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           if (
             row.user_id !== user.id &&
             !(
-              pane === "server" &&
-              row.channel_id === activeChannelId
+              paneRef.current === "server" &&
+              row.channel_id === activeChannelRef.current
             )
           ) {
-            const channelMeta = channels.find((c) => c.id === row.channel_id);
-            const serverMeta = servers.find((s) => s.id === serverId);
-            unreadFeed?.noteChannelActivity(row.channel_id, row.created_at, {
-              serverId,
-              serverName: serverMeta?.name,
-              channelName: channelMeta?.name,
-            });
+            const channelMeta = channelsRef.current.find(
+              (c) => c.id === row.channel_id,
+            );
+            const serverMeta = serversRef.current.find((s) => s.id === serverId);
+            unreadFeedRef.current?.noteChannelActivity(
+              row.channel_id,
+              row.created_at,
+              {
+                serverId,
+                serverName: serverMeta?.name,
+                channelName: channelMeta?.name,
+              },
+            );
           }
         },
       )
@@ -1679,15 +1735,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [
-    user,
-    channelServerMap,
-    pane,
-    activeChannelId,
-    channels,
-    servers,
-    unreadFeed,
-  ]);
+  }, [user]);
 
   // Live role / member_role updates for member list colors + grouping.
   useEffect(() => {
@@ -2782,7 +2830,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   /** Discord: hide channels where View Channel is denied (private / role-gated). */
   const visibleChannels = useMemo(() => {
-    if (previewMode) return channels;
+    // Preview guests only see channels @everyone can view (private channels stay hidden).
+    if (previewMode) {
+      return channels.filter(
+        (channel) => !isPrivateChannel(channel.permission_overrides),
+      );
+    }
     if (!viewAsRoleId && (isServerOwner || myPerms.ADMINISTRATOR)) return channels;
     const viewRole = viewAsRoleId
       ? serverRoles.find((role) => role.id === viewAsRoleId)
@@ -2820,27 +2873,35 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const canViewActiveChannel =
     !activeChannel ||
-    previewMode ||
-    isServerOwner ||
-    !!myPerms.ADMINISTRATOR ||
-    can(myPerms, PERMISSIONS.VIEW_CHANNEL, {
-      isOwner: isServerOwner,
-      overrides: activeChannel.permission_overrides,
-      roleIds: myRoleIds,
-      userId: user?.id,
-    });
+    (previewMode
+      ? !isPrivateChannel(activeChannel.permission_overrides)
+      : isServerOwner ||
+        !!myPerms.ADMINISTRATOR ||
+        can(myPerms, PERMISSIONS.VIEW_CHANNEL, {
+          isOwner: isServerOwner,
+          overrides: activeChannel.permission_overrides,
+          roleIds: myRoleIds,
+          userId: user?.id,
+        }));
 
   useEffect(() => {
-    if (pane !== "server" || !routeServerId || previewMode) return;
+    if (pane !== "server" || !routeServerId) return;
     if (loadingChannels || loadedServerId !== routeServerId) return;
     if (!activeChannelId || canViewActiveChannel) return;
     const target = pickFallbackChannel(visibleChannels, routeServerId);
     if (!target) {
-      router.replace(messengerServerPath(routeServerId));
+      router.replace(
+        withPreviewQuery(messengerServerPath(routeServerId), previewMode),
+      );
       return;
     }
     if (target.id === activeChannelId) return;
-    router.replace(messengerChannelPath(routeServerId, target.id));
+    router.replace(
+      withPreviewQuery(
+        messengerChannelPath(routeServerId, target.id),
+        previewMode,
+      ),
+    );
   }, [
     pane,
     routeServerId,
@@ -3368,7 +3429,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     );
   }, [dmMode, unblockedDmMessages, unblockedMessages, pinnedExtra, isMessageHidden]);
 
-  const searchNeedle = searchQuery.trim().toLowerCase();
+  const searchNeedle =
+    searchOpen ? searchQuery.trim().toLowerCase() : "";
   const threadScopedMessages = activeThreadId
     ? unblockedMessages.filter((message) => message.thread_id === activeThreadId)
     : unblockedMessages.filter((message) => !message.thread_id);
@@ -3410,6 +3472,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   async function joinPreviewServer() {
     if (!user || !activeServerId || joiningPreview) return;
+    const targetServer =
+      previewServer?.id === activeServerId
+        ? previewServer
+        : servers.find((s) => s.id === activeServerId) ?? null;
+    if (targetServer && !targetServer.is_public) {
+      setError("This server requires an invite to join.");
+      return;
+    }
     setJoiningPreview(true);
     setError(null);
     const supabase = createClient();
@@ -3736,10 +3806,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     publishTypingStop();
     setSending(true);
     setMessages((prev) => [...prev, optimistic]);
+    const thisSend = ++sendRequest.current;
+    const sendStillCurrent = () =>
+      thisSend === sendRequest.current && scopeRef.current === sendScope;
 
     const uploadedAttachments: MessageAttachment[] = [];
     for (const item of filesSnapshot) {
       const uploaded = await uploadAttachment(user.id, item.file);
+      if (!sendStillCurrent()) {
+        setSending(false);
+        return;
+      }
       if (uploaded.error || !uploaded.attachment) {
         setMessages((prev) => {
           if (activeChannelRef.current !== channelId) {
@@ -3758,6 +3835,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         ...uploaded.attachment,
         spoiler: Boolean(item.spoiler),
       });
+    }
+
+    if (!sendStillCurrent()) {
+      setSending(false);
+      return;
     }
 
     const first = uploadedAttachments[0] ?? null;
@@ -3780,6 +3862,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       })
       .select("*")
       .single();
+
+    if (!sendStillCurrent()) {
+      setSending(false);
+      return;
+    }
 
     if (insertError || !data) {
       setMessages((prev) => {
@@ -3930,10 +4017,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     publishTypingStop();
     setSending(true);
     setDmMessages((prev) => [...prev, optimistic]);
+    const thisSend = ++sendRequest.current;
+    const sendStillCurrent = () =>
+      thisSend === sendRequest.current && scopeRef.current === sendScope;
 
     const uploadedAttachments: MessageAttachment[] = [];
     for (const item of filesSnapshot) {
       const uploaded = await uploadAttachment(user.id, item.file);
+      if (!sendStillCurrent()) {
+        setSending(false);
+        return;
+      }
       if (uploaded.error || !uploaded.attachment) {
         setDmMessages((prev) => {
           if (conversationRef.current !== conversationId) {
@@ -3954,6 +4048,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       });
     }
 
+    if (!sendStillCurrent()) {
+      setSending(false);
+      return;
+    }
+
     const first = uploadedAttachments[0] ?? null;
     const supabase = createClient();
     const { data, error: insertError } = await supabase
@@ -3969,6 +4068,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       })
       .select("*")
       .single();
+
+    if (!sendStillCurrent()) {
+      setSending(false);
+      return;
+    }
 
     if (insertError || !data) {
       setDmMessages((prev) => {
@@ -4158,16 +4262,37 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
   }
 
+  function editLastOwnMessage() {
+    if (!user) return;
+    const list = dmMode ? visibleDmMessages : visibleMessages;
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const message = list[i];
+      if (
+        message &&
+        message.user_id === user.id &&
+        !message.is_system &&
+        !message.id.startsWith("temp-")
+      ) {
+        setRequestEditMessageId(message.id);
+        return;
+      }
+    }
+  }
+
   async function toggleReaction(messageId: string, emoji: string) {
     if (!user || messageId.startsWith("temp-")) return;
+    const userId = user.id;
     const existing = reactions.find(
       (reaction) =>
         reaction.message_id === messageId &&
-        reaction.user_id === user.id &&
+        reaction.user_id === userId &&
         reaction.emoji === emoji,
     );
+    // In-flight optimistic reaction: ignore double-clicks until it resolves.
+    if (existing?.id.startsWith("temp-")) return;
+
     const supabase = createClient();
-    if (existing && !existing.id.startsWith("temp-")) {
+    if (existing) {
       setReactions((prev) => prev.filter((reaction) => reaction.id !== existing.id));
       const { error: deleteError } = dmMode
         ? await supabase
@@ -4187,20 +4312,32 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const temp: Reaction = {
       id: `temp-${crypto.randomUUID()}`,
       message_id: messageId,
-      user_id: user.id,
+      user_id: userId,
       emoji,
       created_at: new Date().toISOString(),
     };
-    setReactions((prev) => [...prev, temp]);
+    setReactions((prev) => {
+      if (
+        prev.some(
+          (reaction) =>
+            reaction.message_id === messageId &&
+            reaction.user_id === userId &&
+            reaction.emoji === emoji,
+        )
+      ) {
+        return prev;
+      }
+      return [...prev, temp];
+    });
     const insertResult = dmMode
       ? await supabase
           .from("dm_message_reactions")
-          .insert({ message_id: messageId, user_id: user.id, emoji })
+          .insert({ message_id: messageId, user_id: userId, emoji })
           .select("*")
           .single()
       : await supabase
           .from("message_reactions")
-          .insert({ message_id: messageId, user_id: user.id, emoji })
+          .insert({ message_id: messageId, user_id: userId, emoji })
           .select("*")
           .single();
     const { data, error: insertError } = insertResult;
@@ -4544,6 +4681,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
     const next: PendingAttachment[] = [];
     for (const file of selected) {
+      // SVG / exotic image/* are not safe inline previews — treat as file chips only
+      // after size checks; never create blob preview for non-raster images.
       if (file.size > MAX_ATTACHMENT_BYTES && !file.type.startsWith("image/")) {
         setError(`"${file.name}" is too large (max 25 MB).`);
         continue;
@@ -4560,12 +4699,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setError(`"${file.name}" is too large (max 25 MB).`);
         continue;
       }
+      const inlinePreview = isImageMime(ready.type);
       next.push({
         id: crypto.randomUUID(),
         file: ready,
-        previewUrl: ready.type.startsWith("image/")
-          ? URL.createObjectURL(ready)
-          : null,
+        previewUrl: inlinePreview ? URL.createObjectURL(ready) : null,
         spoiler: false,
       });
     }
@@ -5068,7 +5206,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             pinsButtonRef={pinsButtonRef}
             showInCall={!!call.connection && !call.stageExpanded}
             onExpandCall={() => call.setStageExpanded(true)}
-            onToggleSearch={() => setSearchOpen((open) => !open)}
+            onToggleSearch={() =>
+              setSearchOpen((open) => {
+                if (open) setSearchQuery("");
+                return !open;
+              })
+            }
             onTogglePins={() => setPinsOpen((open) => !open)}
             onToggleMembers={() => setMembersOpen((open) => !open)}
             onToggleChat={() => setVoiceChatOpen((open) => !open)}
@@ -5308,6 +5451,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               onForward={(message) => setForwardMessage(message)}
               onMarkUnread={undefined}
               onCopyLink={undefined}
+              requestEditMessageId={requestEditMessageId}
+              onRequestEditConsumed={() => setRequestEditMessageId(null)}
             />
           )}
 
@@ -5412,6 +5557,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     : (messageId, optionIndex) =>
                         void votePoll(messageId, optionIndex)
                 }
+                requestEditMessageId={
+                  previewMode ? null : requestEditMessageId
+                }
+                onRequestEditConsumed={() => setRequestEditMessageId(null)}
               />
             </>
           )}
@@ -5509,6 +5658,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               </div>
             ) : (
               <MessageComposer
+                key={`composer:${scope}`}
                 placeholder={
                   textMode && viewAsRoleId
                     ? "Exit View Server As Role to send messages"
@@ -5548,7 +5698,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 }
                 mentionSuggestions={textMode ? mentionSuggestions : []}
                 typingPeople={typingPeople}
-                customEmojis={customEmojis}
+                customEmojis={dmMode ? [] : customEmojis}
                 serverNamesById={serverNamesById}
                 preferredServerId={dmMode ? null : (activeServer?.id ?? null)}
                 onDraft={setDraft}
@@ -5572,6 +5722,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
                 onLimitReached={setError}
+                onEditLastOwnMessage={editLastOwnMessage}
                 onSubmit={(content) => {
                   if (dmMode) void sendDm(content);
                   else void sendChannel(content);
@@ -5681,8 +5832,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onPollVote={(messageId, optionIndex) =>
                   void votePoll(messageId, optionIndex)
                 }
+                requestEditMessageId={requestEditMessageId}
+                onRequestEditConsumed={() => setRequestEditMessageId(null)}
               />
               <MessageComposer
+                key={`composer:${scope}`}
                 placeholder={
                   viewAsRoleId
                     ? "Exit View Server As Role to send messages"
@@ -5737,6 +5891,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}
                 onLimitReached={setError}
+                onEditLastOwnMessage={editLastOwnMessage}
                 onSubmit={(content) => void sendChannel(content)}
               />
             </div>

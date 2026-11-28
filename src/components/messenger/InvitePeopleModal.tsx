@@ -93,6 +93,12 @@ export function InvitePeopleModal({
       setCopied(false);
       setQuery("");
       try {
+        if (server.invites_paused) {
+          setInviteCode(null);
+          setError("Invites are paused for this server.");
+          setLoading(false);
+          return;
+        }
         const permanent = await ensurePermanentInvite(server.id, userId);
         if (cancelled) return;
         setInviteCode(permanent.code);

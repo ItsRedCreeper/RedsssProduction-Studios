@@ -63,15 +63,28 @@ export async function assignDefaultRoleToMember(
 }
 
 /**
- * Join a server. Membership insert alone is success — the private AFTER INSERT
- * trigger assigns the default Member role. Do not treat missing client-side
- * member_roles writes as join failures (RLS only allows owner / MANAGE_ROLES).
+ * Join a public server. Membership insert alone is success — the private AFTER
+ * INSERT trigger assigns the default Member role. Private servers must use
+ * `join_server_via_invite` (RLS blocks self-join when is_public is false).
  */
 export async function joinServerWithDefaultRole(
   supabase: Supabase,
   serverId: string,
   userId: string,
 ) {
+  const { data: serverRow } = await supabase
+    .from("servers")
+    .select("id, is_public")
+    .eq("id", serverId)
+    .maybeSingle();
+
+  if (serverRow && serverRow.is_public === false) {
+    return {
+      error: "This server requires an invite to join.",
+      alreadyMember: false,
+    };
+  }
+
   const { error: memberError } = await supabase.from("server_members").insert({
     server_id: serverId,
     user_id: userId,

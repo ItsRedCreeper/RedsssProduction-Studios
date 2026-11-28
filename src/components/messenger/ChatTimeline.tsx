@@ -68,6 +68,8 @@ type ChatTimelineProps = {
     { user_id: string; option_index: number }[]
   >;
   onPollVote?: (messageId: string, optionIndex: number) => void;
+  requestEditMessageId?: string | null;
+  onRequestEditConsumed?: () => void;
 };
 
 /** Stay pinned to newest messages while within this of the bottom. */
@@ -156,6 +158,8 @@ export function ChatTimeline({
   onCopyLink,
   pollVotesByMessage,
   onPollVote,
+  requestEditMessageId = null,
+  onRequestEditConsumed,
 }: ChatTimelineProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -508,6 +512,8 @@ export function ChatTimeline({
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onJumpToReply={onJumpToReply}
+                    requestEditMessageId={requestEditMessageId}
+                    onRequestEditConsumed={onRequestEditConsumed}
                     onReact={
                       readOnly || !onReact
                         ? undefined
