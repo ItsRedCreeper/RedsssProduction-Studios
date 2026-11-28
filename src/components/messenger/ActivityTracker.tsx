@@ -135,8 +135,10 @@ export function ActivityTracker({
       if (!error) lastKey.current = key;
     }
 
-    // Always force on dep change so returning from Games/Home overwrites stale activity.
-    void publish(true);
+    // Defer past server/message bootstrap — this RPC was competing for REST slots.
+    const boot = window.setTimeout(() => {
+      void publish(true);
+    }, 3_000);
 
     function onVisible() {
       if (document.visibilityState === "visible") {
@@ -154,6 +156,7 @@ export function ActivityTracker({
 
     return () => {
       cancelled = true;
+      window.clearTimeout(boot);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
       offRepublish();

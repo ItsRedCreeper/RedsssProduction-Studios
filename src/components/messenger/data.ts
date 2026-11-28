@@ -338,65 +338,39 @@ async function hydrateMessageRows(
   return hydrateMessages(rows, [...authorProfiles, ...extraProfiles], parents);
 }
 
-async function raceTimeout<T>(
-  promise: PromiseLike<T>,
-  ms: number,
-  label: string,
-  abort?: AbortController,
-) {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    // Supabase builders are thenables, not native Promises — wrap for Promise.race.
-    return await Promise.race([
-      Promise.resolve(promise),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          abort?.abort();
-          reject(new Error(label));
-        }, ms);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
+const messageLoadInflight = new Map<
+  string,
+  Promise<{
+    messages: ChatMessage[];
+    reactions: Tables<"message_reactions">[];
+    hasMore: boolean;
+    error: string | null;
+  }>
+>();
 
 export async function loadChannelMessages(
   channelId: string,
   opts?: { limit?: number; before?: string | null },
 ) {
-  const supabase = createClient();
   const limit = opts?.limit ?? CHANNEL_MESSAGE_PAGE_SIZE;
+  const before = opts?.before ?? null;
+  // Coalesce StrictMode / remount double-fetches for the same page.
+  const key = `${channelId}:${limit}:${before ?? ""}`;
+  const existing = messageLoadInflight.get(key);
+  if (existing) return existing;
+
+  const supabase = createClient();
 
   async function viaTable(fallbackError?: string | null) {
     // Fallback for older deployments / hung or failed RPC.
-    const tableAbort = new AbortController();
-    const tableQuery = supabase
+    // Do not AbortSignal — under load PostgREST can take >8s and still 200;
+    // aborting discards the successful response and leaves the chat hung.
+    const { data: rows, error: tableError } = await supabase
       .from("messages")
       .select("*")
       .eq("channel_id", channelId)
       .order("created_at", { ascending: false })
-      .limit(limit)
-      .abortSignal(tableAbort.signal);
-    let rows: Tables<"messages">[] | null = null;
-    let tableError: { message: string } | null = null;
-    try {
-      const result = await raceTimeout(
-        tableQuery,
-        8_000,
-        "table_timeout",
-        tableAbort,
-      );
-      rows = result.data;
-      tableError = result.error;
-    } catch {
-      return {
-        messages: [] as ChatMessage[],
-        reactions: [] as Tables<"message_reactions">[],
-        hasMore: false,
-        error: fallbackError ?? "Timed out loading messages. Try again.",
-      };
-    }
+      .limit(limit);
     if (tableError || !rows) {
       return {
         messages: [] as ChatMessage[],
@@ -414,22 +388,13 @@ export async function loadChannelMessages(
     };
   }
 
-  // One RPC: messages + author/reply profiles + reactions for this page.
-  // Cap wait so a hung PostgREST call cannot sit until the UI's 20s banner.
-  try {
-    const rpcAbort = new AbortController();
-    const { data, error } = await raceTimeout(
-      supabase
-        .rpc("get_channel_messages", {
-          p_channel_id: channelId,
-          p_limit: limit,
-          p_before: opts?.before ?? null,
-        })
-        .abortSignal(rpcAbort.signal),
-      8_000,
-      "rpc_timeout",
-      rpcAbort,
-    );
+  const run = (async () => {
+    // One RPC: messages + author/reply profiles + reactions for this page.
+    const { data, error } = await supabase.rpc("get_channel_messages", {
+      p_channel_id: channelId,
+      p_limit: limit,
+      p_before: before,
+    });
 
     if (error) {
       return viaTable(error.message);
@@ -442,9 +407,12 @@ export async function loadChannelMessages(
       hasMore: payload.messages.length >= limit,
       error: null as string | null,
     };
-  } catch {
-    return viaTable("Timed out loading messages. Try again.");
-  }
+  })().finally(() => {
+    messageLoadInflight.delete(key);
+  });
+
+  messageLoadInflight.set(key, run);
+  return run;
 }
 
 type PublicPreviewMember = {

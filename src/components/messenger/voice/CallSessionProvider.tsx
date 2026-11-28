@@ -1181,9 +1181,13 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     document.addEventListener("visibilitychange", onReturnToTab);
     window.addEventListener("focus", onReturnToTab);
     // Catch invites that started before this client finished subscribing.
-    void recoverMissedInvites();
+    // Deferred so channel bootstrap isn't fighting dm_call_* queries.
+    const boot = window.setTimeout(() => {
+      void recoverMissedInvites();
+    }, 5_000);
 
     return () => {
+      window.clearTimeout(boot);
       document.removeEventListener("visibilitychange", onReturnToTab);
       window.removeEventListener("focus", onReturnToTab);
     };

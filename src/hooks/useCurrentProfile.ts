@@ -29,7 +29,8 @@ const serverSnapshot: Snapshot = {
 let snapshot: Snapshot = serverSnapshot;
 const listeners = new Set<() => void>();
 let started = false;
-let profileRequest = 0;
+let profileInflight: Promise<void> | null = null;
+let profileUserId: string | null = null;
 
 function emit() {
   for (const listener of listeners) listener();
@@ -41,16 +42,21 @@ function setSnapshot(next: Snapshot) {
 }
 
 async function fetchProfile(userId: string) {
-  const request = ++profileRequest;
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .maybeSingle();
-  if (request !== profileRequest) return;
-  if (snapshot.user?.id !== userId) return;
-  setSnapshot({ ...snapshot, profile: data, loading: false });
+  if (profileInflight && profileUserId === userId) return profileInflight;
+  profileUserId = userId;
+  profileInflight = (async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+    if (snapshot.user?.id !== userId) return;
+    setSnapshot({ ...snapshot, profile: data, loading: false });
+  })().finally(() => {
+    profileInflight = null;
+  });
+  return profileInflight;
 }
 
 function applyUser(nextUser: User | null) {
@@ -60,9 +66,7 @@ function applyUser(nextUser: User | null) {
     profile: sameUser ? snapshot.profile : null,
     loading: false,
   });
-  if (nextUser && !sameUser) {
-    void fetchProfile(nextUser.id);
-  } else if (nextUser && sameUser && !snapshot.profile) {
+  if (nextUser && (!sameUser || !snapshot.profile)) {
     void fetchProfile(nextUser.id);
   }
 }
@@ -86,7 +90,11 @@ function ensureStarted() {
 
   function onUpdated() {
     const id = snapshot.user?.id;
-    if (id) void fetchProfile(id);
+    if (id) {
+      // Force a refresh even if one just finished.
+      profileUserId = null;
+      void fetchProfile(id);
+    }
   }
 
   window.addEventListener(PROFILE_UPDATED_EVENT, onUpdated);
@@ -116,6 +124,7 @@ export function useCurrentProfile() {
   );
 
   const refreshProfile = useCallback(async (userId: string) => {
+    profileUserId = null;
     await fetchProfile(userId);
   }, []);
 

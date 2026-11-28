@@ -940,28 +940,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     async function restore() {
       syncSkipFromStorage();
-      const abort = new AbortController();
-      const timer = window.setTimeout(() => abort.abort(), 5_000);
-      let data: {
-        channel_id: string;
-        server_id: string;
-        muted: boolean;
-        deafened: boolean;
-        updated_at: string;
-      } | null = null;
-      try {
-        const result = await supabase
-          .from("voice_states")
-          .select("*")
-          .eq("user_id", user!.id)
-          .abortSignal(abort.signal)
-          .maybeSingle();
-        data = result.data;
-      } catch {
-        return;
-      } finally {
-        window.clearTimeout(timer);
-      }
+      const { data } = await supabase
+        .from("voice_states")
+        .select("*")
+        .eq("user_id", user!.id)
+        .maybeSingle();
       if (cancelled || !data) return;
       if (connectionRef.current) return;
 
@@ -1010,7 +993,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     const defer = window.setTimeout(() => {
       void restore();
-    }, 1_500);
+    }, 5_000);
     return () => {
       cancelled = true;
       window.clearTimeout(defer);
@@ -1062,6 +1045,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   }, [connection, user]);
 
   // Periodically purge ghost occupants whose heartbeats stopped.
+  // Deferred so messenger server/message loads aren't competing on first paint.
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
@@ -1073,9 +1057,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void error;
     }
 
-    void prune();
+    const boot = window.setTimeout(() => void prune(), 8_000);
     const timer = window.setInterval(() => void prune(), VOICE_CLEANUP_POLL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(boot);
+      window.clearInterval(timer);
+    };
   }, [user]);
 
   useEffect(() => {

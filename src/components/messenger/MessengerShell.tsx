@@ -526,7 +526,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const refreshOpenCalls = call.refreshOpenCalls;
   useEffect(() => {
     const ids = threads.map((thread) => thread.id);
-    void refreshOpenCalls(ids);
+    if (ids.length === 0) return;
+    // Defer past server/message bootstrap — dm_call_* was 504-stamping the pool.
+    const timer = window.setTimeout(() => {
+      void refreshOpenCalls(ids);
+    }, 4_000);
+    return () => window.clearTimeout(timer);
   }, [threads, refreshOpenCalls]);
   const { width: sidebarWidth, beginResize } = useMessengerSidebarWidth();
   const {
@@ -867,36 +872,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const request = ++serversRequest.current;
     setLoadingServers(true);
     const supabase = createClient();
-    const membersAbort = new AbortController();
-    const membersTimer = window.setTimeout(() => membersAbort.abort(), 12_000);
-    let memberships: { server_id: string }[] | null = null;
-    let memberError: { message: string } | null = null;
-    try {
-      const result = await supabase
-        .from("server_members")
-        .select("server_id")
-        .eq("user_id", user.id)
-        .abortSignal(membersAbort.signal);
-      memberships = result.data;
-      memberError = result.error
-        ? {
-            message: /abort/i.test(result.error.message)
-              ? "Timed out loading servers. Try again."
-              : result.error.message,
-          }
-        : null;
-    } catch {
-      memberError = { message: "Timed out loading servers. Try again." };
-    } finally {
-      window.clearTimeout(membersTimer);
-    }
+    // No AbortSignal — under pool pressure these often land at ~10–15s with 200;
+    // aborting discards success and leaves the shell on Loading forever.
+    const { data: memberships, error: memberError } = await supabase
+      .from("server_members")
+      .select("server_id")
+      .eq("user_id", user.id);
 
     if (serversRequest.current !== request) return;
     if (memberError) {
       setError(memberError.message);
       setServers([]);
       setLoadingServers(false);
-      // Unblock channelPending "Loading…" when membership fetch fails/aborts.
       if (routeServerRef.current) {
         setLoadedServerId(routeServerRef.current);
       }
@@ -922,24 +909,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
 
-    const serversAbort = new AbortController();
-    const serversTimer = window.setTimeout(() => serversAbort.abort(), 12_000);
-    let data: typeof servers | null = null;
-    let serversError: { message: string } | null = null;
-    try {
-      const result = await supabase
-        .from("servers")
-        .select("*")
-        .in("id", serverIds)
-        .order("created_at", { ascending: true })
-        .abortSignal(serversAbort.signal);
-      data = result.data;
-      serversError = result.error;
-    } catch {
-      serversError = { message: "Timed out loading servers. Try again." };
-    } finally {
-      window.clearTimeout(serversTimer);
-    }
+    const { data, error: serversError } = await supabase
+      .from("servers")
+      .select("*")
+      .in("id", serverIds)
+      .order("created_at", { ascending: true });
 
     if (serversRequest.current !== request) return;
     if (serversError) {
@@ -1668,14 +1642,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
 
     async function load() {
-      const [channelResult, categoryResult, memberResult, roleResult, rolesTable] =
-        await Promise.all([
-          supabase.from("channels").select("*").eq("server_id", serverId),
-          supabase.from("channel_categories").select("*").eq("server_id", serverId),
-          supabase.from("server_members").select("*").eq("server_id", serverId),
-          supabase.from("member_roles").select("*").eq("server_id", serverId),
-          supabase.from("roles").select("*").eq("server_id", serverId),
-        ]);
+      // Sequential pairs keep under the shared fetch-slot cap so messages can
+      // still progress instead of five GETs + RPC fighting for 6 sockets.
+      const channelResult = await supabase
+        .from("channels")
+        .select("*")
+        .eq("server_id", serverId);
+      if (cancelled) return;
+      const categoryResult = await supabase
+        .from("channel_categories")
+        .select("*")
+        .eq("server_id", serverId);
+      if (cancelled) return;
+      const [memberResult, roleResult, rolesTable] = await Promise.all([
+        supabase.from("server_members").select("*").eq("server_id", serverId),
+        supabase.from("member_roles").select("*").eq("server_id", serverId),
+        supabase.from("roles").select("*").eq("server_id", serverId),
+      ]);
       if (cancelled) return;
       if (channelResult.error) setError(channelResult.error.message);
       const nextChannels = channelResult.data ?? [];
@@ -2328,6 +2311,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setVoiceStates([]);
       return;
     }
+    // Wait for membership so voice_states doesn't steal REST slots from servers/messages.
+    if (loadingServers) return;
     const serverId = activeServerId;
     const supabase = createClient();
     let cancelled = false;
@@ -2345,7 +2330,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setVoiceStates(data ?? []);
     }
 
-    void load();
+    const boot = window.setTimeout(() => {
+      void load();
+    }, 1_500);
     const channel = supabase
       .channel(`voice:${serverId}`)
       .on(
@@ -2358,9 +2345,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       .subscribe();
     return () => {
       cancelled = true;
+      window.clearTimeout(boot);
       void supabase.removeChannel(channel);
     };
-  }, [activeServerId, previewMode]);
+  }, [activeServerId, previewMode, loadingServers]);
 
   // Listen for speaking rings on occupied voice channels you are NOT joined to.
   // (Joined channel is already handled by VoiceSessionProvider's speaking subscription.)
@@ -2437,7 +2425,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   // websocket cannot cancel in-flight loads or restart the 20s timeout loop.
   useEffect(() => {
     if (!activeChannelId) return;
-    // Don't block on server chrome — messages load in parallel with members/roles.
+    // Wait for membership/servers so those GETs aren't starved behind message RPC.
+    if (loadingServers) return;
     // Skip only when we already know this isn't a text/voice chat channel.
     if (
       activeChannel &&
@@ -2549,9 +2538,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     const loadTimeout = window.setTimeout(() => {
       if (!stillCurrent()) return;
+      // Soft UI only — do not cancel the in-flight fetch (slow PostgREST still 200s).
       setLoadingChannelMessages(false);
       setError((prev) => prev ?? "Timed out loading messages. Try again.");
-    }, 20_000);
+    }, 45_000);
 
     if (previewMode) {
       void loadPreviewMessages().finally(() => {
@@ -2567,7 +2557,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       cancelled = true;
       window.clearTimeout(loadTimeout);
     };
-  }, [activeChannelId, activeChannel?.type, previewMode]);
+  }, [activeChannelId, activeChannel?.type, previewMode, loadingServers]);
 
   // Realtime for the open channel — remounts on realtimeEpoch only.
   useEffect(() => {
