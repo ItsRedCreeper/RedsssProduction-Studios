@@ -613,7 +613,8 @@ export function BigProfileModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto rounded-b-2xl px-6 pb-6 pt-3">
           <div className="rounded-xl border border-white/[0.04] bg-[#1e1f22] p-4">
-            <div className="flex min-w-0 items-center gap-2">
+            {/* Content-hugging row — pills sit immediately after the name, not far right. */}
+            <div className="inline-flex max-w-full items-center gap-2">
               <h2
                 id="big-profile-title"
                 className={`min-w-0 truncate text-2xl font-bold tracking-tight ${

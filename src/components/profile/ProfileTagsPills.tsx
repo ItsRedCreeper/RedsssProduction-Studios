@@ -30,7 +30,7 @@ export function ProfileTagsPills({
   if (variant === "dots") {
     return (
       <span
-        className={`inline-flex shrink-0 items-center gap-[5px] ${className}`}
+        className={`inline-flex shrink-0 items-center gap-1 ${className}`}
         aria-label={items.map((t) => t.label).join(", ")}
       >
         {items.map((tag) => (
@@ -41,7 +41,7 @@ export function ProfileTagsPills({
             side="top"
           >
             <span
-              className={`inline-block h-[11px] w-[11px] shrink-0 rounded-full shadow-[inset_0_1px_1px_rgba(255,255,255,0.22),0_0_0_1px_rgba(0,0,0,0.18)] ${tag.dotClassName}`}
+              className={`inline-block h-3 w-3 shrink-0 rounded-full shadow-[inset_0_1px_1px_rgba(255,255,255,0.28),0_0_0_1px_rgba(0,0,0,0.22)] ${tag.dotClassName}`}
               aria-label={tag.label}
             />
           </HoverTip>
@@ -50,20 +50,20 @@ export function ProfileTagsPills({
     );
   }
 
+  // Compact matched pills — hug content, never stretch.
   const pad =
     size === "md"
-      ? "h-4 px-1.5 text-[10px] leading-none"
-      : "h-3.5 px-1.5 text-[9px] leading-none";
+      ? "h-[18px] px-[7px] text-[10px] leading-none"
+      : "h-[15px] px-[6px] text-[9px] leading-none";
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 ${className}`}
     >
       {items.map((tag) => (
         <HoverTip key={tag.id} label={tag.tip} delayMs={40} side="top">
           <span
-            className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium tracking-wide whitespace-nowrap ${pad} ${tag.className}`}
-            // Beat inherited button / role WebkitTextFillColor on profile cards.
+            className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold tracking-wide whitespace-nowrap ${pad} ${tag.className}`}
             style={{
               color: tag.textColor,
               WebkitTextFillColor: tag.textColor,

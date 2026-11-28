@@ -39,8 +39,8 @@ export type ProfileTagMeta = {
 const TAG_ORDER: ProfileTagId[] = [PROFILE_TAG_PIONEER, PROFILE_TAG_FUNDER];
 
 /**
- * Soft fills, quieter than role colors.
- * Pioneer = muted red + light text; Funder = soft gold + dark text.
+ * Matched pair — soft but clear, quieter than role colors.
+ * Pioneer = refined muted red + light text; Funder = soft gold + dark text.
  */
 export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
   pioneer: {
@@ -48,20 +48,18 @@ export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
     label: "Pioneer",
     tip: "Funded before official release",
     className:
-      "border border-[rgba(252,165,165,0.28)] bg-[rgba(185,28,28,0.24)] text-[#fecaca]",
-    dotClassName:
-      "border border-[rgba(254,202,202,0.4)] bg-[#c23b3b]",
-    textColor: "#fecaca",
+      "border border-[#f0a0a0]/45 bg-[#8f2f2f] text-[#ffe4e6] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]",
+    dotClassName: "bg-[#c43c3c] ring-1 ring-[#f5b5b5]/55",
+    textColor: "#ffe4e6",
   },
   funder: {
     id: PROFILE_TAG_FUNDER,
     label: "Funder",
     tip: "Funded RedsssProduction Studios",
     className:
-      "border border-[rgba(212,168,75,0.4)] bg-[#dfb04a] text-[#1f1608]",
-    dotClassName:
-      "border border-[rgba(253,230,138,0.45)] bg-[#dfb04a]",
-    textColor: "#1f1608",
+      "border border-[#f0d48a]/55 bg-[#e6bc52] text-[#241a08] shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]",
+    dotClassName: "bg-[#e6bc52] ring-1 ring-[#f5e0a8]/60",
+    textColor: "#241a08",
   },
 };
 

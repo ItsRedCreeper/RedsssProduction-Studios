@@ -201,15 +201,16 @@ export function SmallProfileCard({
           onClick={onViewProfile}
           className="block w-full text-left"
         >
-          <span className="flex min-w-0 items-center gap-1.5">
+          {/* Content-hugging row — no flex-1 / ml-auto so pills stay next to the name. */}
+          <span className="inline-flex max-w-full items-center gap-1.5">
             <HoverTip
               label={shownName}
               onlyIfTruncated
               delayMs={40}
-              className="min-w-0 flex-1 overflow-hidden"
+              className="min-w-0 overflow-hidden"
             >
-              <p
-                className={`truncate text-base font-semibold ${
+              <span
+                className={`block truncate text-base font-semibold ${
                   nameColor ? "" : "text-white"
                 }`}
                 style={
@@ -219,7 +220,7 @@ export function SmallProfileCard({
                 }
               >
                 {shownName}
-              </p>
+              </span>
             </HoverTip>
             <ProfileTagsPills tags={profile.profile_tags} size="sm" />
           </span>

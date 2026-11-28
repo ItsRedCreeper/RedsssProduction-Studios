@@ -1,22 +1,21 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Tags inline with username + restyle)
+**Last updated:** 2026-11-28 (Fix tag inline position + visible restyle)
 
 ## Localhost health
 **Healthy** (prior).
 
 ## Profile tags
-Display-only — who has tags unchanged (ItsRed Creeper = pioneer + funder).
+Display-only — ItsRed Creeper still has pioneer + funder.
 
-### Small / big profile
-- Full-text pills sit on the **same line** as the username (to the right)
-- Name truncates first; pills stay `shrink-0`
-- Smaller/lighter pills: soft muted red + soft gold, fully rounded
+### Layout fix
+- Small/big profile use `inline-flex` content-hugging rows (no `flex-1` / `ml-auto`)
+- Result: `[Username] [Pioneer] [Funder]` with ~6–8px gaps, not far-right
 
-### Member list
-- Circles stay on the username line
-- Cleaner 11px circles with soft fill + subtle border/highlight
-- Hover: tag name + description
+### Style
+- Pills: clearer red/gold fills, light inset highlight + border, compact height
+- Member circles: 12px, soft ring, clear Pioneer red / Funder gold
+- Hover still shows name + description on circles
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)
