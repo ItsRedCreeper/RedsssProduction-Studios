@@ -22,12 +22,24 @@ export function CreatePollModal({
   const [options, setOptions] = useState(["", ""]);
   const [allowMultiple, setAllowMultiple] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open) return;
     setQuestion("");
     setOptions(["", ""]);
     setAllowMultiple(false);
+    setError(null);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -35,9 +47,22 @@ export function CreatePollModal({
     event.preventDefault();
     const cleaned = options.map((item) => item.trim()).filter(Boolean);
     if (!question.trim() || cleaned.length < 2) return;
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const option of cleaned) {
+      const key = option.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(option);
+    }
+    if (unique.length < 2) {
+      setError("Add at least two different options.");
+      return;
+    }
+    setError(null);
     onCreate({
       question: question.trim(),
-      options: cleaned.slice(0, 10),
+      options: unique.slice(0, 10),
       allowMultiple,
     });
     onClose();
@@ -67,6 +92,11 @@ export function CreatePollModal({
           </button>
         </div>
         <div className="space-y-3 px-4 py-3">
+          {error ? (
+            <p className="rounded-md border border-accent/40 bg-accent-muted px-3 py-2 text-sm text-accent">
+              {error}
+            </p>
+          ) : null}
           <label className="block space-y-1">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">
               Question

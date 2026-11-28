@@ -42,6 +42,7 @@ import {
   SERVER_NAME_MIN,
 } from "@/lib/field-limits";
 import { sanitizeEmojiName, type ServerEmoji } from "@/lib/emoji";
+import { invalidateEmojiCache } from "@/lib/emoji-resolve";
 import {
   EMOJI_IMAGE_ACCEPT,
   GIF_NOT_ALLOWED_HERE,
@@ -1604,6 +1605,8 @@ export function ServerSettingsModal({
       void supabase.storage.from("server-emojis").remove([decodeURIComponent(pathMatch[1])]);
     }
     setServerEmojis((prev) => prev.filter((row) => row.id !== emoji.id));
+    // Drop cached render so deleted IDs don't keep showing in messages/picker.
+    invalidateEmojiCache(emoji.id);
     setEmojiBusy(false);
     onEmojisChanged?.();
   }

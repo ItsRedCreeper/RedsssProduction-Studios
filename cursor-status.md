@@ -1,33 +1,35 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 00:45
+**Last updated:** 2026-11-28 (Pass 7)
 
 ## Localhost health
-**Healthy.** `/messenger` returns 200; `next build` succeeds after Pass 6.
+**Healthy.** `/messenger` returns 200; `next build` succeeds after Pass 7.
 
-## Pass 6 — Final verdicts (no Partial)
+## Pass 7 — Final verdicts (no Partial)
 
 | ID | Final verdict | Evidence |
 |---|---|---|
-| **AQ** | **Fixed and verified** | `openDm` only reuses non-group 1:1 convos; thread reuse compares `participantIds`; group create requires ≥2 friends; late call join updates `peerUserIds` + `mesh.connectPeer`. |
-| **AR** | **Fixed and verified** | Speaking rings intersect current voice occupants; leave DELETE prunes watched speaking; voice occupancy re-ticks every 8s so stale seats drop without realtime. |
-| **AS** | **Fixed and verified** | Hoist/status sections already correct (disproved duplicates). Group member count fixed via `participantIds` refresh (AQ). |
-| **AT** | **Fixed and verified** | Forward uses `attachmentsFromMessage` (legacy URL rows); copy link includes `?thread=`; deep-link waits for messages + opens thread + retries DOM. |
-| **AU** | **Fixed and verified** | Channel message load has 20s timeout + cleanup; loading flags clear on hang. Voice “connecting forever” not observed (disproved). |
-| **AV** | **Fixed and verified** | Edit rollback only if optimistic content still shown; delete restore only if row still missing (no full-list resurrection). |
-| **AW** | **Fixed and verified** | HomeSidebar keeps parent DM order (no unread re-sort scroll jump); `selectServer` prefers recalled channel path. Full scroll restore not required for selection correctness. |
-| **AX** | **Fixed and verified** | Opening lightbox pauses/hides inline videos so audio doesn’t dual-play; Escape/route unmount already OK. |
-| **AY** | **Disproved** | Custom status caption is separate from presence dots; idle doesn’t clear `status_text` in UI paths audited. |
-| **AZ** | **Fixed and verified** | Voice occupant list no longer capped at 8 (missing rows); member-list regroup interval 30s to cut thrash. Full virtualization not required to clear the confirmed bugs. |
+| **BA** | **Fixed and verified** | `poll_votes` PK → `(message_id, user_id, option_index)`; `votePoll` respects `allowMultiple` with error rollback; duplicate options blocked in `CreatePollModal`; realtime publication + client subscribe; older-page votes loaded with history. |
+| **BB** | **Disproved** | Pin inserts one system notice (no dup). Join/leave/kick/call channel system lines are not implemented product surfaces (missed-call + pin only) — no incorrect/duplicated insertion points found. |
+| **BC** | **Fixed and verified** | `invalidateEmojiCache` on delete; picker already groups by `server_id` (no cross-server leak); DMs already load membership emojis via `loadCustomEmojis`. |
+| **BD** | **Fixed and verified** | Login `next` keeps query (`msg`/`thread`); preview upgrade preserves deep-link params; jump pages older history until found (or toast). Permission redirects still drop inaccessible targets. |
+| **AE-follow / BF** | **Fixed and verified** | Escape on notifications, poll, forward, create-server, create-group-DM; notification mark-read/delete visible on `:focus-visible`; pins panel already traps Tab + Escape. |
+| **BG** | **Fixed and verified** | Duplicate channel copies live form overrides, keeps category, inserts at `position + 1` and shifts siblings. |
+| **BH** | **Fixed and verified** | `formatTimestamp` includes year when not current; ChatTimeline re-ticks day dividers past midnight so Today/Yesterday stay correct; hover titles already use `formatTimestamp`. |
+| **BI** | **Disproved** | No multi-select / bulk message-member-invite UI exists to leave orphaned selection state. |
+| **BJ** | **Disproved** | `LinkEmbeds` refetches on `url` change (edit-safe); only `http(s)` unfurls; `rel="noreferrer"` on anchors. |
+| **BK** | **Disproved** | Audited messenger realtime effects pair `.subscribe()` with `removeChannel` on cleanup; new poll channel follows the same pattern. |
 
 ### Code / DB changes this pass
-- `MessengerShell.tsx` — group DM open, participantIds, speaking prune, voice tick, forward media, msg/thread deep links, load timeout, edit/delete conflict handling, selectServer channel path
-- `CallSessionProvider.tsx` / `webrtcMesh.ts` — late joiner mesh connect
-- `CreateGroupDmModal.tsx` — min 2 friends
-- `HomeSidebar.tsx` — preserve parent sort
-- `MessageMedia.tsx` — pause inline video under lightbox
-- `ChannelSidebar.tsx` — show all voice occupants
-- `MemberList.tsx` — slower stale tick
+- DB: `poll_votes` PK multi-answer; `poll_votes` added to `supabase_realtime`
+- `MessengerShell.tsx` — poll vote/realtime/older votes, deep-link paging + query preserve, login next query
+- `CreatePollModal.tsx` — duplicate option validation + Escape
+- `EditChannelModal.tsx` — duplicate channel overrides/placement
+- `ServerSettingsModal.tsx` — emoji cache invalidate on delete
+- `emoji-resolve.ts` — `invalidateEmojiCache`
+- `data.ts` / `ChatTimeline.tsx` — timestamp year + day-divider tick
+- `NotificationsPanel.tsx` / `Navbar.tsx` — Escape, focus-visible actions, login next query
+- `ForwardMessageModal.tsx` / `CreateServerModal.tsx` / `CreateGroupDmModal.tsx` — Escape
 
 ## Still open / broken
 - Jump-to-unread pill not built
@@ -39,4 +41,4 @@
 - None
 
 ## Suggested next focus
-- Two-client QA: group call late join; voice leave speaking ring; forward attachment; concurrent delete/edit
+- Two-client QA: multi-answer polls live; deep-link after login; duplicate channel overrides; emoji delete while message open

@@ -236,22 +236,39 @@ export function EditChannelModal({
     setSaving(true);
     setError(null);
     const supabase = createClient();
-    const { count } = await supabase
+    // Place the copy immediately after the original in the same category.
+    const insertPosition = channel.position + 1;
+    const categoryFilter = categoryId || null;
+    const siblingsQuery = supabase
       .from("channels")
-      .select("id", { count: "exact", head: true })
-      .eq("server_id", channel.server_id);
+      .select("id, position")
+      .eq("server_id", channel.server_id)
+      .gte("position", insertPosition);
+    const { data: siblings } =
+      categoryFilter === null
+        ? await siblingsQuery.is("category_id", null)
+        : await siblingsQuery.eq("category_id", categoryFilter);
+    for (const sibling of [...(siblings ?? [])].sort(
+      (a, b) => b.position - a.position,
+    )) {
+      await supabase
+        .from("channels")
+        .update({ position: sibling.position + 1 })
+        .eq("id", sibling.id);
+    }
     const { data, error: insertError } = await supabase
       .from("channels")
       .insert({
         server_id: channel.server_id,
         name: `${channel.name}-copy`,
         type: channel.type,
-        category_id: channel.category_id,
-        topic: channel.topic,
-        position: (count ?? 0) + 1,
-        permission_overrides: channel.permission_overrides,
-        slowmode_seconds: channel.slowmode_seconds ?? 0,
-        nsfw: Boolean(channel.nsfw),
+        category_id: categoryFilter,
+        topic: topic.trim() || channel.topic,
+        position: insertPosition,
+        // Use current (possibly edited) overrides so duplicate matches the form.
+        permission_overrides: overrides,
+        slowmode_seconds: slowmode,
+        nsfw,
         permissions_synced: false,
       })
       .select("*")

@@ -105,6 +105,7 @@ import {
   type ServerEmoji,
 } from "@/lib/emoji";
 import {
+  invalidateEmojiCache,
   resolveServerEmojisByIds,
   seedEmojiCache,
 } from "@/lib/emoji-resolve";
@@ -410,6 +411,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const paneRef = useRef(pane);
   const routeServerRef = useRef(routeServerId);
   const activeChannelRef = useRef(activeChannelId);
+  const messagesRef = useRef(messages);
   const conversationRef = useRef(activeConversationId);
   const userIdRef = useRef<string | null>(user?.id ?? null);
   const channelIdsRef = useRef<Set<string>>(new Set());
@@ -436,6 +438,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   paneRef.current = pane;
   routeServerRef.current = routeServerId;
   activeChannelRef.current = activeChannelId;
+  messagesRef.current = messages;
   conversationRef.current = activeConversationId;
   userIdRef.current = user?.id ?? null;
   channelIdsRef.current = new Set(channels.map((channel) => channel.id));
@@ -1331,7 +1334,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const path = routeChannelId
       ? messengerChannelPath(routeServerId, routeChannelId)
       : messengerServerPath(routeServerId);
-    router.replace(path);
+    // Keep deep-link query params (msg/thread) when dropping preview=1.
+    const keep = new URLSearchParams();
+    const msg = searchParams.get("msg");
+    const thread = searchParams.get("thread");
+    if (msg) keep.set("msg", msg);
+    if (thread) keep.set("thread", thread);
+    const qs = keep.toString();
+    router.replace(qs ? `${path}?${qs}` : path);
   }, [
     wantsPreview,
     loadingServers,
@@ -1340,6 +1350,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     servers,
     pane,
     router,
+    searchParams,
   ]);
 
   useEffect(() => {
@@ -2301,10 +2312,96 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       )
       .subscribe();
 
+    const pollChannel = supabase
+      .channel(`poll-votes:${channelId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "poll_votes",
+        },
+        (payload) => {
+          if (!stillCurrent()) return;
+          if (payload.eventType === "DELETE") {
+            const row = payload.old as {
+              message_id?: string;
+              user_id?: string;
+              option_index?: number;
+            };
+            if (!row.message_id || !row.user_id) return;
+            if (!messageIdsRef.current.has(row.message_id)) return;
+            setPollVotesByMessage((prev) => {
+              const list = prev[row.message_id!] ?? [];
+              if (list.length === 0) return prev;
+              const nextList = list.filter(
+                (vote) =>
+                  !(
+                    vote.user_id === row.user_id &&
+                    (row.option_index == null ||
+                      vote.option_index === row.option_index)
+                  ),
+              );
+              return { ...prev, [row.message_id!]: nextList };
+            });
+            return;
+          }
+          const row = payload.new as {
+            message_id?: string;
+            user_id?: string;
+            option_index?: number;
+          };
+          if (
+            !row.message_id ||
+            !row.user_id ||
+            typeof row.option_index !== "number"
+          ) {
+            return;
+          }
+          if (!messageIdsRef.current.has(row.message_id)) return;
+          setPollVotesByMessage((prev) => {
+            const list = prev[row.message_id!] ?? [];
+            const without = list.filter(
+              (vote) =>
+                !(
+                  vote.user_id === row.user_id &&
+                  vote.option_index === row.option_index
+                ),
+            );
+            // Single-choice polls historically had one row per user; drop other
+            // options for this user when a new vote lands (multi keeps many).
+            const pollMsg = messagesRef.current.find(
+              (message) => message.id === row.message_id,
+            );
+            const allowMultiple = Boolean(
+              pollMsg?.poll &&
+                typeof pollMsg.poll === "object" &&
+                !Array.isArray(pollMsg.poll) &&
+                (pollMsg.poll as { allowMultiple?: boolean }).allowMultiple,
+            );
+            const cleaned = allowMultiple
+              ? without
+              : without.filter((vote) => vote.user_id !== row.user_id);
+            return {
+              ...prev,
+              [row.message_id!]: [
+                ...cleaned,
+                {
+                  user_id: row.user_id!,
+                  option_index: row.option_index!,
+                },
+              ],
+            };
+          });
+        },
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
       window.clearTimeout(loadTimeout);
       void supabase.removeChannel(channel);
+      void supabase.removeChannel(pollChannel);
     };
   }, [activeChannelId, activeChannel?.type, previewMode]);
 
@@ -3405,6 +3502,41 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       });
     }
     setChannelHasMore(result.hasMore);
+    const pollIds = result.messages
+      .filter((message) => message.message_kind === "poll")
+      .map((message) => message.id);
+    if (pollIds.length > 0) {
+      const supabase = createClient();
+      const { data: votes } = await supabase
+        .from("poll_votes")
+        .select("message_id, user_id, option_index")
+        .in("message_id", pollIds);
+      if (stillHere() && votes) {
+        setPollVotesByMessage((prev) => {
+          const next = { ...prev };
+          for (const vote of votes) {
+            const list = next[vote.message_id] ?? [];
+            if (
+              list.some(
+                (row) =>
+                  row.user_id === vote.user_id &&
+                  row.option_index === vote.option_index,
+              )
+            ) {
+              continue;
+            }
+            next[vote.message_id] = [
+              ...list,
+              {
+                user_id: vote.user_id,
+                option_index: vote.option_index,
+              },
+            ];
+          }
+          return next;
+        });
+      }
+    }
     setLoadingOlderMessages(false);
   }, [
     activeChannelId,
@@ -3901,7 +4033,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
   }
 
-  function jumpToMessage(messageId: string) {
+  function highlightMessageNode(messageId: string) {
+    const nodes = document.querySelectorAll<HTMLElement>(
+      `[data-message-id="${CSS.escape(messageId)}"]`,
+    );
+    const element =
+      [...nodes].find((node) => node.getClientRects().length > 0) ??
+      nodes[0] ??
+      null;
+    if (!element) return false;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.classList.add("bg-accent/15");
+    window.setTimeout(() => element.classList.remove("bg-accent/15"), 1200);
+    setPinsOpen(false);
+    return true;
+  }
+
+  async function jumpToMessage(messageId: string) {
     // Leave thread view when the target is a main-channel / other-thread row.
     if (activeThreadId) {
       const inThread = threadScopedMessages.some(
@@ -3909,54 +4057,76 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       );
       if (!inThread) {
         setActiveThreadId(null);
-        window.setTimeout(() => jumpToMessage(messageId), 50);
+        window.setTimeout(() => {
+          void jumpToMessage(messageId);
+        }, 50);
         return;
       }
     }
-    const nodes = document.querySelectorAll<HTMLElement>(
-      `[data-message-id="${CSS.escape(messageId)}"]`,
-    );
-    // Prefer a visible node (voice chat had duplicate mobile/desktop trees).
-    const element =
-      [...nodes].find((node) => node.getClientRects().length > 0) ??
-      nodes[0] ??
-      null;
-    if (!element) {
-      setToast("That message isn't in the loaded history.");
-      return;
+    if (highlightMessageNode(messageId)) return;
+
+    // Page older history until the target is in the DOM (deep links / pins).
+    for (let page = 0; page < 20; page += 1) {
+      const canPage = dmMode ? dmHasMore : channelHasMore;
+      if (!canPage || loadingOlderMessages) break;
+      if (dmMode) await loadOlderDm();
+      else await loadOlderChannel();
+      await new Promise((resolve) => window.setTimeout(resolve, 60));
+      if (highlightMessageNode(messageId)) return;
     }
-    element.scrollIntoView({ behavior: "smooth", block: "center" });
-    element.classList.add("bg-accent/15");
-    window.setTimeout(() => element.classList.remove("bg-accent/15"), 1200);
-    setPinsOpen(false);
+    setToast("That message isn't in the loaded history.");
   }
+
+  const deepLinkHandledRef = useRef<string | null>(null);
 
   // Deep-link ?msg= / ?thread= from copied message links.
   useEffect(() => {
     const msgId = searchParams.get("msg");
     const threadId = searchParams.get("thread");
     if (!msgId || loadingChannels || loadingChannelMessages) return;
+    const handleKey = `${activeChannelId ?? activeConversationId ?? ""}:${msgId}:${threadId ?? ""}`;
+    if (deepLinkHandledRef.current === handleKey) return;
     if (threadId && threadId !== activeThreadId) {
       setActiveThreadId(threadId);
       return;
     }
-    let tries = 0;
+    let cancelled = false;
     let timer = 0;
-    const attempt = () => {
-      const nodes = document.querySelectorAll(
-        `[data-message-id="${CSS.escape(msgId)}"]`,
-      );
-      if (nodes.length > 0) {
-        jumpToMessage(msgId);
+    let pages = 0;
+    const attempt = async () => {
+      if (cancelled) return;
+      if (highlightMessageNode(msgId)) {
+        deepLinkHandledRef.current = handleKey;
         return;
       }
-      tries += 1;
-      if (tries < 8) {
-        timer = window.setTimeout(attempt, 150);
+      const canPage = dmMode ? dmHasMore : channelHasMore;
+      if (canPage && !loadingOlderMessages && pages < 20) {
+        pages += 1;
+        if (dmMode) await loadOlderDm();
+        else await loadOlderChannel();
+        if (cancelled) return;
+        timer = window.setTimeout(() => {
+          void attempt();
+        }, 80);
+        return;
       }
+      for (let tries = 0; tries < 6; tries += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
+        if (cancelled) return;
+        if (highlightMessageNode(msgId)) {
+          deepLinkHandledRef.current = handleKey;
+          return;
+        }
+      }
+      deepLinkHandledRef.current = handleKey;
     };
-    timer = window.setTimeout(attempt, 80);
-    return () => window.clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      void attempt();
+    }, 80);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [
     searchParams,
     loadingChannels,
@@ -3964,6 +4134,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     activeChannelId,
     activeConversationId,
     activeThreadId,
+    dmMode,
+    dmHasMore,
+    channelHasMore,
+    loadingOlderMessages,
+    loadOlderDm,
+    loadOlderChannel,
   ]);
 
   async function sendChannel(contentOverride?: string) {
@@ -5021,26 +5197,81 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   async function votePoll(messageId: string, optionIndex: number) {
     if (!user) return;
+    const pollMessage = messages.find((message) => message.id === messageId);
+    const allowMultiple = Boolean(
+      pollMessage?.poll &&
+        typeof pollMessage.poll === "object" &&
+        !Array.isArray(pollMessage.poll) &&
+        (pollMessage.poll as { allowMultiple?: boolean }).allowMultiple,
+    );
     const supabase = createClient();
     const existing = pollVotesByMessage[messageId] ?? [];
-    const mine = existing.find((vote) => vote.user_id === user.id);
-    if (mine?.option_index === optionIndex) {
-      await supabase
-        .from("poll_votes")
-        .delete()
-        .eq("message_id", messageId)
-        .eq("user_id", user.id);
+    const mine = existing.filter((vote) => vote.user_id === user.id);
+    const alreadyOnOption = mine.some(
+      (vote) => vote.option_index === optionIndex,
+    );
+    const previous = existing;
+
+    if (allowMultiple) {
+      if (alreadyOnOption) {
+        setPollVotesByMessage((prev) => ({
+          ...prev,
+          [messageId]: existing.filter(
+            (vote) =>
+              !(
+                vote.user_id === user.id &&
+                vote.option_index === optionIndex
+              ),
+          ),
+        }));
+        const { error: deleteError } = await supabase
+          .from("poll_votes")
+          .delete()
+          .eq("message_id", messageId)
+          .eq("user_id", user.id)
+          .eq("option_index", optionIndex);
+        if (deleteError) {
+          setPollVotesByMessage((prev) => ({ ...prev, [messageId]: previous }));
+          setError(deleteError.message);
+        }
+        return;
+      }
+      setPollVotesByMessage((prev) => ({
+        ...prev,
+        [messageId]: [
+          ...existing,
+          { user_id: user.id, option_index: optionIndex },
+        ],
+      }));
+      const { error: insertError } = await supabase.from("poll_votes").insert({
+        message_id: messageId,
+        user_id: user.id,
+        option_index: optionIndex,
+      });
+      if (insertError) {
+        setPollVotesByMessage((prev) => ({ ...prev, [messageId]: previous }));
+        setError(insertError.message);
+      }
+      return;
+    }
+
+    if (alreadyOnOption) {
       setPollVotesByMessage((prev) => ({
         ...prev,
         [messageId]: existing.filter((vote) => vote.user_id !== user.id),
       }));
+      const { error: deleteError } = await supabase
+        .from("poll_votes")
+        .delete()
+        .eq("message_id", messageId)
+        .eq("user_id", user.id);
+      if (deleteError) {
+        setPollVotesByMessage((prev) => ({ ...prev, [messageId]: previous }));
+        setError(deleteError.message);
+      }
       return;
     }
-    await supabase.from("poll_votes").upsert({
-      message_id: messageId,
-      user_id: user.id,
-      option_index: optionIndex,
-    });
+
     setPollVotesByMessage((prev) => {
       const without = (prev[messageId] ?? []).filter(
         (vote) => vote.user_id !== user.id,
@@ -5053,6 +5284,27 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         ],
       };
     });
+    const { error: upsertError } = await supabase.from("poll_votes").upsert(
+      {
+        message_id: messageId,
+        user_id: user.id,
+        option_index: optionIndex,
+      },
+      { onConflict: "message_id,user_id,option_index" },
+    );
+    // Single-choice: replace any other option the user had.
+    if (!upsertError) {
+      await supabase
+        .from("poll_votes")
+        .delete()
+        .eq("message_id", messageId)
+        .eq("user_id", user.id)
+        .neq("option_index", optionIndex);
+    }
+    if (upsertError) {
+      setPollVotesByMessage((prev) => ({ ...prev, [messageId]: previous }));
+      setError(upsertError.message);
+    }
   }
 
   async function leaveServer() {
@@ -5725,7 +5977,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 Sign in to open your servers and direct messages.
               </p>
               <Link
-                href={`/login?next=${encodeURIComponent(pathname || "/messenger")}`}
+                href={`/login?next=${encodeURIComponent(
+                  `${pathname || "/messenger"}${
+                    searchParams.toString()
+                      ? `?${searchParams.toString()}`
+                      : ""
+                  }`,
+                )}`}
                 className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-[#dbdee1]"
               >
                 Sign in
@@ -6153,7 +6411,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 }
                 mentionSuggestions={textMode ? mentionSuggestions : []}
                 typingPeople={typingPeople}
-                customEmojis={dmMode ? [] : customEmojis}
+                customEmojis={customEmojis}
                 serverNamesById={serverNamesById}
                 preferredServerId={dmMode ? null : (activeServer?.id ?? null)}
                 onDraft={setDraft}

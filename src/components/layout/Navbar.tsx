@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Bell, LogOut, Menu, Settings, Users, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { SiteLogo } from "@/components/layout/SiteLogo";
@@ -30,6 +30,7 @@ function isActive(pathname: string, href: string) {
 
 export function Navbar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useCurrentProfile();
   const voice = useOptionalVoiceSession();
@@ -210,7 +211,13 @@ export function Navbar() {
                 </>
               ) : (
                 <Link
-                  href={`/login?next=${encodeURIComponent(pathname || "/")}`}
+                  href={`/login?next=${encodeURIComponent(
+                    `${pathname || "/"}${
+                      searchParams.toString()
+                        ? `?${searchParams.toString()}`
+                        : ""
+                    }`,
+                  )}`}
                   className="rounded-md px-2.5 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-surface-hover"
                 >
                   Sign in

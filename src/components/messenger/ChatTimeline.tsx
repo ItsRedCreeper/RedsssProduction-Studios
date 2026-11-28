@@ -175,6 +175,20 @@ export function ChatTimeline({
   const ignoreScrollRef = useRef(false);
   const ignoreScrollClearRef = useRef<number | null>(null);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
+  /** Re-render day dividers when the local calendar day rolls over. */
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const next = Date.now();
+      setNowMs((prev) =>
+        localDayKey(new Date(prev).toISOString()) ===
+        localDayKey(new Date(next).toISOString())
+          ? prev
+          : next,
+      );
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // New channel/DM → pin to latest unless an unread divider needs the viewport.
   if (lastKeyRef.current !== scrollKey) {
@@ -437,9 +451,9 @@ export function ChatTimeline({
               const compact =
                 !dayChanged && shouldGroupWithPrevious(previous, message);
               const dayLabel = dayChanged
-                ? formatDayDivider(message.created_at)
+                ? formatDayDivider(message.created_at, nowMs)
                 : index === 0
-                  ? formatDayDivider(message.created_at)
+                  ? formatDayDivider(message.created_at, nowMs)
                   : "";
               const isUnreadAnchor =
                 !!firstUnreadMessageId &&

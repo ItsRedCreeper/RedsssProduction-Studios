@@ -64,6 +64,18 @@ export function NotificationsPanel({
     onUnreadChange?.(bellCount);
   }, [bellCount, onUnreadChange]);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const loading = unread?.loading ?? false;
@@ -338,7 +350,7 @@ export function NotificationsPanel({
               <button
                 type="button"
                 onClick={(event) => void toggleRead(entry, event)}
-                className="rounded-md p-1.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 hover:bg-white/10 hover:text-white"
+                className="rounded-md p-1.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/10 hover:text-white"
                 aria-label={entry.read ? "Mark as unread" : "Mark as read"}
               >
                 {entry.read ? (
@@ -353,7 +365,7 @@ export function NotificationsPanel({
                 <button
                   type="button"
                   onClick={(event) => void deleteItem(entry, event)}
-                  className="rounded-md p-1.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 hover:bg-white/10 hover:text-[#ed4245]"
+                  className="rounded-md p-1.5 text-[#b5bac1] opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/10 hover:text-[#ed4245]"
                   aria-label="Delete notification"
                 >
                   <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />

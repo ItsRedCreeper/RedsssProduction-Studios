@@ -23,7 +23,7 @@ const MONTHS = [
   "Dec",
 ];
 
-export function formatTimestamp(iso: string) {
+export function formatTimestamp(iso: string, now = Date.now()) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   const month = MONTHS[date.getMonth()];
@@ -32,7 +32,10 @@ export function formatTimestamp(iso: string) {
   const minutes = String(date.getMinutes()).padStart(2, "0");
   const ampm = hours >= 12 ? "PM" : "AM";
   hours = hours % 12 || 12;
-  return `${month} ${day}, ${hours}:${minutes} ${ampm}`;
+  const year = date.getFullYear();
+  const yearPart =
+    year !== new Date(now).getFullYear() ? `, ${year}` : "";
+  return `${month} ${day}${yearPart}, ${hours}:${minutes} ${ampm}`;
 }
 
 /** Short time for compact message gutter hover (Discord-style). */

@@ -13,6 +13,12 @@ export function seedEmojiCache(emojis: ServerEmoji[]) {
   }
 }
 
+/** Mark an emoji as gone so deleted IDs stop rendering from cache. */
+export function invalidateEmojiCache(id: string) {
+  cache.set(id, null);
+  inflight.delete(id);
+}
+
 export function getCachedEmoji(id: string): ServerEmoji | null | undefined {
   if (!cache.has(id)) return undefined;
   return cache.get(id) ?? null;
