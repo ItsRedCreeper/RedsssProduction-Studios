@@ -586,8 +586,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const draftRef = useRef(draft);
   const draftsByScopeRef = useRef(new Map<string, string>());
   draftRef.current = draft;
-  /** Bumped on browser online so channel/DM load effects refetch missed rows. */
+  /** Bumped on browser online / realtime drop so channel/DM effects refetch. */
   const [reconnectTick, setReconnectTick] = useState(0);
+  /** Remounts realtime subscriptions after CHANNEL_ERROR / TIMED_OUT. */
+  const [realtimeEpoch, setRealtimeEpoch] = useState(0);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+  const [settingsServerId, setSettingsServerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -595,13 +599,34 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return () => window.clearTimeout(id);
   }, [toast]);
 
+  const bumpReconnectRef = useRef((opts?: { resubscribe?: boolean }) => {
+    void opts;
+  });
+  bumpReconnectRef.current = (opts?: { resubscribe?: boolean }) => {
+    setReconnectTick((n) => n + 1);
+    if (opts?.resubscribe) setRealtimeEpoch((n) => n + 1);
+    void unreadFeedRef.current?.refresh();
+  };
+  function bumpReconnect(opts?: { resubscribe?: boolean }) {
+    bumpReconnectRef.current(opts);
+  }
+
   useEffect(() => {
     function onOnline() {
-      setReconnectTick((n) => n + 1);
-      void unreadFeedRef.current?.refresh();
+      bumpReconnectRef.current({ resubscribe: true });
+    }
+    function onVisible() {
+      // Soft gap-fill when returning to the tab (no full resubscribe thrash).
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        bumpReconnectRef.current({ resubscribe: false });
+      }
     }
     window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   // After offline gaps, merge the latest page instead of wiping paged history.
@@ -687,6 +712,25 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
           );
         });
+        const ids = hydrated
+          .map((row) => row.id)
+          .filter((id) => !id.startsWith("temp-"));
+        if (ids.length > 0) {
+          const { data: reactionRows } = await supabase
+            .from("dm_message_reactions")
+            .select("*")
+            .in("message_id", ids);
+          if (!cancelled && reactionRows) {
+            const idSet = new Set(ids);
+            setReactions((prev) => {
+              let next = prev.filter((row) => !idSet.has(row.message_id));
+              for (const row of reactionRows as Reaction[]) {
+                next = upsertReaction(next, row);
+              }
+              return next;
+            });
+          }
+        }
       }
     }
     void recover();
@@ -757,6 +801,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     sendingRef.current = false;
     sendingRef.current = false;
     setSending(false);
+    uploadAbortRef.current?.abort();
+    uploadAbortRef.current = null;
     setDraft(draftsByScopeRef.current.get(scope) ?? "");
     setReplyTo(null);
     setPendingFiles((prev) => {
@@ -1961,25 +2007,106 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       );
     if (activeServerId) {
       const serverId = activeServerId;
-      channel = channel.on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "server_members",
-          filter: `server_id=eq.${serverId}`,
-        },
-        (payload) => {
-          const row = payload.old as { user_id?: string; server_id?: string } | null;
-          if (!row?.user_id || row.server_id !== serverId) return;
-          if (row.user_id === user.id) return;
-          setMembers((prev) =>
-            prev.filter((member) => member.user_id !== row.user_id),
-          );
-        },
-      );
+      channel = channel
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "server_members",
+            filter: `server_id=eq.${serverId}`,
+          },
+          (payload) => {
+            const row = payload.old as {
+              user_id?: string;
+              server_id?: string;
+            } | null;
+            if (!row?.user_id || row.server_id !== serverId) return;
+            if (row.user_id === user.id) return;
+            setMembers((prev) =>
+              prev.filter((member) => member.user_id !== row.user_id),
+            );
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "server_members",
+            filter: `server_id=eq.${serverId}`,
+          },
+          (payload) => {
+            const row = payload.new as {
+              user_id?: string;
+              nickname?: string | null;
+              timed_out_until?: string | null;
+            } | null;
+            if (!row?.user_id) return;
+            setMembers((prev) =>
+              prev.map((member) =>
+                member.user_id === row.user_id
+                  ? {
+                      ...member,
+                      nickname: row.nickname ?? null,
+                      timed_out_until: row.timed_out_until ?? null,
+                    }
+                  : member,
+              ),
+            );
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "server_members",
+            filter: `server_id=eq.${serverId}`,
+          },
+          (payload) => {
+            const row = payload.new as {
+              user_id?: string;
+              nickname?: string | null;
+              joined_at?: string;
+              timed_out_until?: string | null;
+            } | null;
+            if (!row?.user_id || row.user_id === user.id) return;
+            void (async () => {
+              const profiles = await loadProfiles([row.user_id!]);
+              const profile = profiles.find((p) => p.id === row.user_id);
+              setMembers((prev) => {
+                if (prev.some((member) => member.user_id === row.user_id)) {
+                  return prev;
+                }
+                return [
+                  ...prev,
+                  {
+                    user_id: row.user_id!,
+                    nickname: row.nickname ?? null,
+                    joined_at: row.joined_at ?? new Date().toISOString(),
+                    timed_out_until: row.timed_out_until ?? null,
+                    username: profile?.username ?? "Unknown",
+                    avatar_url: profile?.avatar_url ?? null,
+                    status: profile?.status ?? "offline",
+                    status_text: profile?.status_text ?? null,
+                    last_seen_at: profile?.last_seen_at ?? null,
+                    bio: profile?.bio ?? null,
+                    banner_url: profile?.banner_url ?? null,
+                    banner_color: profile?.banner_color ?? null,
+                    roleIds: [],
+                  },
+                ];
+              });
+            })();
+          },
+        );
     }
-    channel.subscribe();
+    channel.subscribe((status) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        bumpReconnect({ resubscribe: true });
+      }
+    });
     return () => {
       void supabase.removeChannel(channel);
     };
@@ -2517,7 +2644,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          bumpReconnect({ resubscribe: true });
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -2525,7 +2656,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       void supabase.removeChannel(channel);
       void supabase.removeChannel(pollChannel);
     };
-  }, [activeChannelId, activeChannel?.type, previewMode]);
+  }, [activeChannelId, activeChannel?.type, previewMode, realtimeEpoch]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -2583,6 +2714,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const requestId = ++dmMessagesRequest.current;
     const supabase = createClient();
     let cancelled = false;
+    // Clear immediately so rapid DM switches never flash the previous thread.
+    setDmMessages([]);
+    setReactions([]);
+    setDmHasMore(false);
+    setLoadingDmMessages(true);
     function stillCurrent() {
       return (
         !cancelled &&
@@ -2592,7 +2728,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
 
     async function load() {
-      setLoadingDmMessages(true);
       const { data, error: dmError } = await supabase
         .from("dm_messages")
         .select("*")
@@ -2735,13 +2870,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           setDmMessages((prev) => prev.filter((message) => message.id !== row.id));
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          bumpReconnect({ resubscribe: true });
+        }
+      });
 
     return () => {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [activeConversationId]);
+  }, [activeConversationId, realtimeEpoch]);
 
   const activeLast = activeChannelId ? lastMessageAt[activeChannelId] : undefined;
 
@@ -4488,15 +4627,26 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       thisSend === sendRequest.current && scopeRef.current === sendScope;
 
     const uploadedAttachments: MessageAttachment[] = [];
+    uploadAbortRef.current?.abort();
+    const uploadAbort = new AbortController();
+    uploadAbortRef.current = uploadAbort;
     for (const item of filesSnapshot) {
-      const uploaded = await uploadAttachment(user.id, item.file);
-      if (!sendStillCurrent()) {
+      const uploaded = await uploadAttachment(
+        user.id,
+        item.file,
+        uploadAbort.signal,
+      );
+      if (!sendStillCurrent() || uploadAbort.signal.aborted) {
         sendingRef.current = false;
-    sendingRef.current = false;
-    setSending(false);
+        setSending(false);
         return;
       }
       if (uploaded.error || !uploaded.attachment) {
+        if (uploaded.error === "aborted") {
+          sendingRef.current = false;
+          setSending(false);
+          return;
+        }
         setMessages((prev) => {
           if (activeChannelRef.current !== channelId) {
             return prev.filter((message) => message.id !== tempId);
@@ -4508,8 +4658,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setError(uploaded.error ?? "Upload failed");
         restoreComposer();
         sendingRef.current = false;
-    sendingRef.current = false;
-    setSending(false);
+        setSending(false);
         return;
       }
       uploadedAttachments.push({
@@ -4712,15 +4861,26 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       thisSend === sendRequest.current && scopeRef.current === sendScope;
 
     const uploadedAttachments: MessageAttachment[] = [];
+    uploadAbortRef.current?.abort();
+    const uploadAbort = new AbortController();
+    uploadAbortRef.current = uploadAbort;
     for (const item of filesSnapshot) {
-      const uploaded = await uploadAttachment(user.id, item.file);
-      if (!sendStillCurrent()) {
+      const uploaded = await uploadAttachment(
+        user.id,
+        item.file,
+        uploadAbort.signal,
+      );
+      if (!sendStillCurrent() || uploadAbort.signal.aborted) {
         sendingRef.current = false;
-    sendingRef.current = false;
-    setSending(false);
+        setSending(false);
         return;
       }
       if (uploaded.error || !uploaded.attachment) {
+        if (uploaded.error === "aborted") {
+          sendingRef.current = false;
+          setSending(false);
+          return;
+        }
         setDmMessages((prev) => {
           if (conversationRef.current !== conversationId) {
             return prev.filter((message) => message.id !== tempId);
@@ -4732,8 +4892,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setError(uploaded.error ?? "Upload failed");
         restoreComposer();
         sendingRef.current = false;
-    sendingRef.current = false;
-    setSending(false);
+        setSending(false);
         return;
       }
       uploadedAttachments.push({
@@ -5544,8 +5703,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       else if (canCreateInvites) next = "invites";
     }
     setSettingsTab(next);
+    setSettingsServerId(activeServerId);
     setSettingsOpen(true);
   }
+
+  // Don't retarget settings to another server mid-edit — close instead.
+  useEffect(() => {
+    if (!settingsOpen || !settingsServerId) return;
+    if (activeServerId !== settingsServerId) {
+      setSettingsOpen(false);
+      setSettingsServerId(null);
+    }
+  }, [activeServerId, settingsOpen, settingsServerId]);
 
   async function chooseFiles(files: File[]) {
     if (files.length === 0) return;
@@ -6940,9 +7109,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         onCreate={(poll) => void postPoll(poll)}
       />
 
-      {user && activeServer && (
+      {user && activeServer && settingsOpen && settingsServerId === activeServer.id && (
         <ServerSettingsModal
-          open={settingsOpen && canOpenServerSettings}
+          open={canOpenServerSettings}
           server={activeServer}
           userId={user.id}
           members={members}
@@ -6958,12 +7127,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           canCreateInvites={canCreateInvites}
           canManageEmojis={canManageEmojis || !!myPerms.ADMINISTRATOR}
           actorRoleIds={myRoleIds}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsServerId(null);
+          }}
           onServerUpdated={(next) => {
             setServers((prev) => prev.map((server) => (server.id === next.id ? next : server)));
           }}
           onServerDeleted={(serverId) => {
             setSettingsOpen(false);
+            setSettingsServerId(null);
             if (voice.connection?.serverId === serverId) {
               void voice.leaveVoice();
             }

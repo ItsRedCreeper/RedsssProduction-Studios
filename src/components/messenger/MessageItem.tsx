@@ -345,7 +345,12 @@ export function MessageItem({
   const statusBits = (
     <>
       {message.edited_at && (
-        <span className="text-[11px] text-[var(--ms-text-muted)]">(edited)</span>
+        <span
+          className="text-[11px] text-[var(--ms-text-muted)]"
+          title={formatTimestamp(message.edited_at)}
+        >
+          (edited)
+        </span>
       )}
       {message.pinned && (
         <span className="inline-flex items-center gap-1 text-[11px] text-accent">

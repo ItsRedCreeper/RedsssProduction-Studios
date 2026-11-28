@@ -671,11 +671,18 @@ export function upsertReaction(prev: Reaction[], row: Reaction): Reaction[] {
   return [...prev, row];
 }
 
-export async function uploadAttachment(userId: string, file: File) {
+export async function uploadAttachment(
+  userId: string,
+  file: File,
+  signal?: AbortSignal,
+) {
   const { fitImageToMaxBytes, MESSAGE_ATTACHMENT_MAX_BYTES } = await import(
     "@/lib/compress-image"
   );
   const { measureImage } = await import("@/lib/message-media");
+  if (signal?.aborted) {
+    return { attachment: null as null, error: "aborted" };
+  }
   const fitted = await fitImageToMaxBytes(file, MESSAGE_ATTACHMENT_MAX_BYTES, {
     maxEdge: 4096,
   });
@@ -685,9 +692,15 @@ export async function uploadAttachment(userId: string, file: File) {
       error: fitted.error,
     };
   }
+  if (signal?.aborted) {
+    return { attachment: null as null, error: "aborted" };
+  }
 
   const uploadFile = fitted.file;
   const dims = await measureImage(uploadFile);
+  if (signal?.aborted) {
+    return { attachment: null as null, error: "aborted" };
+  }
   const supabase = createClient();
   const path = `${userId}/${Date.now()}-${safeFileName(uploadFile.name)}`;
   const { error } = await supabase.storage
@@ -698,6 +711,10 @@ export async function uploadAttachment(userId: string, file: File) {
     });
   if (error) {
     return { attachment: null as null, error: error.message };
+  }
+  if (signal?.aborted) {
+    void supabase.storage.from("message-attachments").remove([path]);
+    return { attachment: null as null, error: "aborted" };
   }
   const { data } = supabase.storage.from("message-attachments").getPublicUrl(path);
   return {

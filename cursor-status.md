@@ -1,32 +1,31 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Pass 9)
+**Last updated:** 2026-11-28 (Pass 10)
 
 ## Localhost health
-**Healthy.** `/messenger` returns 200; `next build` succeeds after Pass 9.
+**Healthy.** `/messenger` returns 200; `next build` succeeds after Pass 10.
 
-## Pass 9 — Final verdicts (no Partial)
+## Pass 10 — Final verdicts (no Partial)
 
 | ID | Final verdict | Evidence |
 |---|---|---|
-| **BV** | **Disproved** | Unread cursors persist via `user_channel_reads` / `user_dm_reads` + `get_unread_summary`; pending watermarks prevent refresh revive; re-login reloads from DB. |
-| **BW** | **Fixed and verified** | CallSession: exact→ideal mic fallback; mid-call input switch replaces tracks on mesh; `track.onended` surfaces mic/camera failure; output device sync. |
-| **BX** | **Fixed and verified** | Private create/toggle auto-allows VIEW for creator `actorRoleIds`; overlapping role resolution already Discord-ordered in `can()`. |
-| **BY** | **Disproved** | System messages skip toolbar; `temp-` ids blocked for delete/react/pin; failed messages expose dismiss-only. |
-| **BZ** | **Fixed and verified** | Empty/long already validated; duplicate channel name blocked on create/rename (Create + Edit + Server Settings). |
-| **CA** | **Fixed and verified** | Group DMs no longer treat one blocked participant as conversation-wide send lock; 1:1 block + null profile “Unknown” paths OK. |
-| **CB** | **Fixed and verified** | Composer `onPaste` attaches clipboard image/files when `allowAttach`; drag-drop already worked. |
-| **CC** | **Fixed and verified** | Shared LIFO `pushOverlayEscape` / `useEscapeToClose` so Escape closes the top overlay only (modals, notifs, lightbox, pins, mobile sheets). |
-| **CD** | **Fixed and verified** | Typing channel teardown + composer unmount send `stop: true`; presence/activity intervals already cleaned. |
-| **CE** | **Disproved** | Build + core messenger paths clean; no new happy-path crash sources found in this pass. |
+| **CF** | **Fixed and verified** | Online + visibility gap-fill; `CHANNEL_ERROR`/`TIMED_OUT` remounts message/DM/membership channels; recover merges channel + DM messages/reactions + unread refresh. |
+| **CG** | **Fixed and verified** | DM load clears sync + loading flag at effect start; Server Settings pinned to open server and closes on server switch (no retarget). |
+| **CH** | **Disproved** | `join_server_via_invite` uses `FOR UPDATE` + conditional `uses` increment; revoke-as-delete fails cleanly for the loser. |
+| **CI** | **Fixed and verified** | Live `server_members` INSERT (join) + UPDATE (nickname/timeout) alongside existing DELETE/kick and role reloads. |
+| **CJ** | **Fixed and verified** | `uploadAttachment` accepts AbortSignal; scope change / send cancel aborts in-flight uploads and cleans orphaned blobs when aborted post-upload. |
+| **CK** | **Disproved** | Camera/screen `replaceTrack` paths already present in Voice/Call + mesh. |
+| **CL** | **Fixed and verified** | Notification RPCs emit `?msg=` (+ `&thread=`); DM replies use `/messenger/channels/@me/…`; panel builds href from meta and rewrites legacy `/dms/` links. |
+| **CM** | **Disproved** | Messenger storage reads already try/catch; drafts are in-memory Maps. |
+| **CN** | **Fixed and verified** | `(edited)` shows `title={formatTimestamp(edited_at)}`; day dividers already tick past midnight. |
+| **CO** | **Disproved** | Subscribe/`removeChannel` pairing + leave-messenger hangup still hold under heavy nav. |
 
-### Code changes this pass
-- `lib/overlay-escape.ts`, `hooks/useEscapeToClose.ts` — Escape stack
-- `CallSessionProvider.tsx` — mid-call device/permission recovery
-- `CreateChannelModal` / `EditChannelModal` / `ServerSettingsModal` — private auto-allow + duplicate names
-- `MessageComposer.tsx` — paste files + typing stop on unmount
-- `MessengerShell.tsx` — group block, typing stop broadcast, Escape stack for pins/sheets
-- Modals/panels migrated to `useEscapeToClose`
+### Code / DB changes this pass
+- DB: `notify_message_mentions` / `notify_message_reply` deep links
+- `MessengerShell.tsx` — reconnect/resubscribe, DM clear, members live, settings pin, upload abort
+- `data.ts` — abortable `uploadAttachment`
+- `NotificationsPanel.tsx` — `notificationHref` from meta
+- `MessageItem.tsx` — edited timestamp tooltip
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)
@@ -37,4 +36,4 @@
 - None
 
 ## Suggested next focus
-- Two-client QA: private channel create as non-admin; paste image; call device switch; stacked Escape
+- Two-client QA: offline gap fill; single-use invite race; thread mention jump; attach then switch channel mid-upload

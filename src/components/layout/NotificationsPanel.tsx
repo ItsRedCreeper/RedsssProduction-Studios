@@ -46,6 +46,53 @@ function serverInitials(name: string) {
   return avatarLetter(name);
 }
 
+/** Prefer deep links with msg/thread; rewrite legacy /messenger/dms/ paths. */
+function notificationHref(item: AppNotification): string | null {
+  const meta = item.meta ?? {};
+  const messageId =
+    typeof meta.message_id === "string" ? meta.message_id : null;
+  const threadId =
+    typeof meta.thread_id === "string" ? meta.thread_id : null;
+  const serverId =
+    typeof meta.server_id === "string" ? meta.server_id : null;
+  const channelId =
+    typeof meta.channel_id === "string" ? meta.channel_id : null;
+  const conversationId =
+    typeof meta.conversation_id === "string" ? meta.conversation_id : null;
+
+  if (serverId && channelId) {
+    const params = new URLSearchParams();
+    if (messageId) params.set("msg", messageId);
+    if (threadId) params.set("thread", threadId);
+    const qs = params.toString();
+    return `${messengerChannelPath(serverId, channelId)}${qs ? `?${qs}` : ""}`;
+  }
+  if (conversationId) {
+    const params = new URLSearchParams();
+    if (messageId) params.set("msg", messageId);
+    const qs = params.toString();
+    return `${messengerDmPath(conversationId)}${qs ? `?${qs}` : ""}`;
+  }
+
+  let link = item.link?.trim() || null;
+  if (!link) return null;
+  // Legacy DM reply links used /messenger/dms/:id
+  const legacyDm = link.match(/^\/messenger\/dms\/([^/?#]+)/i);
+  if (legacyDm?.[1]) {
+    const params = new URLSearchParams();
+    if (messageId) params.set("msg", messageId);
+    const qs = params.toString();
+    return `${messengerDmPath(legacyDm[1])}${qs ? `?${qs}` : ""}`;
+  }
+  if (messageId && !/[?&]msg=/.test(link)) {
+    link += `${link.includes("?") ? "&" : "?"}msg=${encodeURIComponent(messageId)}`;
+  }
+  if (threadId && !/[?&]thread=/.test(link)) {
+    link += `${link.includes("?") ? "&" : "?"}thread=${encodeURIComponent(threadId)}`;
+  }
+  return link;
+}
+
 export function NotificationsPanel({
   open,
   onClose,
@@ -204,7 +251,8 @@ export function NotificationsPanel({
       onOpenFriends?.(friendsTab);
       return;
     }
-    if (entry.item.link) router.push(entry.item.link);
+    const href = notificationHref(entry.item);
+    if (href) router.push(href);
   }
 
   async function toggleRead(
