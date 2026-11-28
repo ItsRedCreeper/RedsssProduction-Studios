@@ -320,6 +320,15 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           if (peersLive) playSound("voice-user-leave");
         },
         onRemoteVideo: applyRemoteVideo,
+        onAudioPlaybackBlocked: (blocked) => {
+          if (blocked) {
+            setMicError("Click anywhere to enable voice audio.");
+          } else {
+            setMicError((prev) =>
+              prev === "Click anywhere to enable voice audio." ? null : prev,
+            );
+          }
+        },
         onError: (message) => setMicError(message),
       });
       mesh.setMuted(mutedRef.current);
@@ -443,23 +452,29 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         return;
       }
       const source = ctx.createMediaStreamSource(stream);
-      // Gain scales what peers hear; slider previously only affected the local meter.
+      // Input gain still drives the local meter / speaking gate. Outbound WebRTC
+      // uses a raw mic clone — MediaStreamDestination tracks often reach peers as
+      // silence in Chromium even while ScriptProcessor metering works.
       const inputGain = ctx.createGain();
       inputGain.gain.value = inputVolumeRef.current;
       inputGainRef.current = inputGain;
-      const outboundDest = ctx.createMediaStreamDestination();
       source.connect(inputGain);
-      inputGain.connect(outboundDest);
-      const outboundStream = outboundDest.stream;
+      if (!captureTrack) {
+        for (const track of stream.getTracks()) track.stop();
+        rawStreamRef.current = null;
+        setMicError("No microphone track available.");
+        return;
+      }
+      const outboundTrack = captureTrack.clone();
+      outboundTrack.enabled = !mutedRef.current;
+      const outboundStream = new MediaStream([outboundTrack]);
       streamRef.current = outboundStream;
-      const outbound = outboundStream.getAudioTracks()[0];
-      if (outbound) outbound.enabled = !mutedRef.current;
       void meshRef.current?.setLocalStream(outboundStream);
       // ScriptProcessor reads real PCM samples — more reliable than AnalyserNode alone.
       const processor = ctx.createScriptProcessor(2048, 1, 1);
       const silent = ctx.createGain();
       silent.gain.value = 0;
-      source.connect(processor);
+      inputGain.connect(processor);
       processor.connect(silent);
       silent.connect(ctx.destination);
       silentGainRef.current = silent;
@@ -1129,6 +1144,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       if (!streamRef.current && connectionRef.current) {
         void startMicMonitor();
       }
+      meshRef.current?.unlockRemoteAudio();
       // Remote <audio> elements need a gesture in some browsers.
       for (const el of document.querySelectorAll<HTMLAudioElement>("audio[data-peer-id]")) {
         void el.play().catch(() => undefined);

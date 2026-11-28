@@ -66,7 +66,8 @@ type PeerSlot = {
   ignoreOffer: boolean;
   polite: boolean;
   audioEl: HTMLAudioElement;
-  /** Dedicated video m-lines — first camera, second screen (same order on every peer). */
+  /** Fixed m-line order on every peer: audio → camera → screen. Never addTrack later. */
+  audioTransceiver: RTCRtpTransceiver;
   cameraTransceiver: RTCRtpTransceiver;
   screenTransceiver: RTCRtpTransceiver;
   /** What the remote peer last announced they are sending. */
@@ -93,6 +94,8 @@ export type VoiceMeshOptions = {
     stream: MediaStream | null,
     kind: "camera" | "screen" | "unknown",
   ) => void;
+  /** Browser blocked remote <audio> autoplay — UI should prompt a click-to-enable. */
+  onAudioPlaybackBlocked?: (blocked: boolean) => void;
   onError?: (message: string) => void;
 };
 
@@ -124,6 +127,7 @@ export class VoiceMesh {
   private blockedPeerIds = new Set<string>();
   private closed = false;
   private started = false;
+  private audioPlaybackBlocked = false;
   /** Poll timers waiting for a muted receiver track to become renderable after announce. */
   private pendingVideoPublish = new Map<string, number>();
 
@@ -138,14 +142,46 @@ export class VoiceMesh {
     await this.ensurePeer(peerId);
   }
 
+  /** User gesture path when autoplay blocked remote peer audio. */
+  unlockRemoteAudio() {
+    if (this.peers.size === 0) {
+      this.setAudioPlaybackBlocked(false);
+      return;
+    }
+    for (const [, slot] of this.peers) {
+      if (!slot.audioEl.srcObject) continue;
+      void slot.audioEl.play().then(
+        () => this.setAudioPlaybackBlocked(false),
+        () => this.setAudioPlaybackBlocked(true),
+      );
+    }
+  }
+
   async start(existingPeerIds: string[] = []) {
     if (this.started || this.closed) return;
     this.started = true;
     const { supabase, channelId, userId } = this.opts;
 
     const prefix = this.opts.topicPrefix ?? "voice-rtc";
+    const topic = `${prefix}:${channelId}`;
+    // Drop any stale reused channel so subscribe() always fires SUBSCRIBED + hello.
+    for (const existing of [...supabase.getChannels()]) {
+      const t = existing.topic ?? "";
+      const sub = (existing as { subTopic?: string }).subTopic ?? "";
+      if (sub === topic || t === topic || t === `realtime:${topic}`) {
+        void supabase.removeChannel(existing);
+      }
+    }
+    const onReady = () => {
+      if (this.closed) return;
+      void this.send({ kind: "hello", from: userId });
+      for (const peerId of existingPeerIds) {
+        if (peerId !== userId) void this.ensurePeer(peerId);
+      }
+      void this.announceMedia();
+    };
     this.signal = supabase
-      .channel(`${prefix}:${channelId}`, {
+      .channel(topic, {
         config: { broadcast: { self: false } },
       })
       .on("broadcast", { event: "signal" }, ({ payload }) => {
@@ -153,12 +189,15 @@ export class VoiceMesh {
       })
       .subscribe((status) => {
         if (status !== "SUBSCRIBED" || this.closed) return;
-        void this.send({ kind: "hello", from: userId });
-        for (const peerId of existingPeerIds) {
-          if (peerId !== userId) void this.ensurePeer(peerId);
-        }
-        void this.announceMedia();
+        onReady();
       });
+    // If supabase-js reused a still-joined channel, subscribe() skips the callback.
+    if (
+      this.signal &&
+      (this.signal as { state?: string }).state === "joined"
+    ) {
+      onReady();
+    }
   }
 
   async stop() {
@@ -278,6 +317,7 @@ export class VoiceMesh {
       return false;
     }
     this.cameraLive = true;
+    await this.renegotiateLocalMedia();
     await this.announceMedia();
     return true;
   }
@@ -347,11 +387,14 @@ export class VoiceMesh {
     }
     this.screenEpoch += 1;
     this.screenLive = true;
+    // Direction flips need a fresh offer — don't rely solely on negotiationneeded.
+    await this.renegotiateLocalMedia();
     await this.announceMedia();
     // Late unmute / negotiation: nudge remotes once packets are flowing.
     window.setTimeout(() => {
       if (this.closed || !this.screenLive || this.localScreenTrack !== track) return;
       void this.announceMedia();
+      void this.renegotiateLocalMedia();
     }, 500);
     return true;
   }
@@ -403,6 +446,30 @@ export class VoiceMesh {
     });
   }
 
+  private setAudioPlaybackBlocked(blocked: boolean) {
+    if (this.audioPlaybackBlocked === blocked) return;
+    this.audioPlaybackBlocked = blocked;
+    this.opts.onAudioPlaybackBlocked?.(blocked);
+  }
+
+  private playPeerAudio(slot: PeerSlot, stream: MediaStream) {
+    slot.audioEl.srcObject = stream;
+    this.applyRemoteAudio();
+    void slot.audioEl.play().then(
+      () => this.setAudioPlaybackBlocked(false),
+      () => this.setAudioPlaybackBlocked(true),
+    );
+  }
+
+  /** Impolite peer drives offers so polite glare cannot drop screen/camera upgrades. */
+  private async renegotiateLocalMedia() {
+    for (const [peerId, slot] of this.peers) {
+      if (slot.polite) continue;
+      if (slot.makingOffer || slot.pc.signalingState !== "stable") continue;
+      await this.makeOffer(peerId, slot);
+    }
+  }
+
   private async applyOutboundToPeer(peerId: string) {
     const slot = this.peers.get(peerId);
     if (!slot) return;
@@ -413,29 +480,13 @@ export class VoiceMesh {
         : null;
     if (track) track.enabled = !this.muted;
 
-    const senders = slot.pc.getSenders();
-    const micSender =
-      senders.find((s) => s.track?.kind === "audio") ??
-      senders.find(
-        (s) =>
-          !s.track &&
-          s !== slot.cameraTransceiver.sender &&
-          s !== slot.screenTransceiver.sender,
-      ) ??
-      null;
-
-    if (micSender) {
-      try {
-        await micSender.replaceTrack(track);
-      } catch {
-        /* ignore */
+    try {
+      await slot.audioTransceiver.sender.replaceTrack(track);
+      if (track && slot.audioTransceiver.direction !== "sendrecv") {
+        slot.audioTransceiver.direction = "sendrecv";
       }
-    } else if (track && this.localStream) {
-      try {
-        slot.pc.addTrack(track, this.localStream);
-      } catch {
-        /* ignore */
-      }
+    } catch (error) {
+      console.warn("[voice-mesh] audio replaceTrack failed", error);
     }
     await this.applyVideoToPeer(peerId, "camera");
     await this.applyVideoToPeer(peerId, "screen");
@@ -615,12 +666,33 @@ export class VoiceMesh {
     }
     if (payload.kind === "media") {
       await this.ensurePeer(payload.from);
+      const slot = this.peers.get(payload.from);
+      const prevScreen = slot?.remoteScreen ?? false;
+      const prevCamera = slot?.remoteCamera ?? false;
+      const prevEpoch = slot?.remoteScreenEpoch ?? 0;
+      const nextEpoch =
+        typeof payload.screenEpoch === "number" ? payload.screenEpoch : 0;
       this.syncRemoteMediaFromAnnounce(
         payload.from,
         !!payload.camera,
         !!payload.screen,
-        typeof payload.screenEpoch === "number" ? payload.screenEpoch : 0,
+        nextEpoch,
       );
+      // If the polite peer started camera/screen, their offer may have been
+      // dropped under glare — impolite peer must re-offer so RTP can flow.
+      const startedMedia =
+        (!!payload.screen && !prevScreen) ||
+        (!!payload.camera && !prevCamera) ||
+        (!!payload.screen && nextEpoch > 0 && nextEpoch !== prevEpoch);
+      if (
+        startedMedia &&
+        slot &&
+        !slot.polite &&
+        !slot.makingOffer &&
+        slot.pc.signalingState === "stable"
+      ) {
+        await this.makeOffer(payload.from, slot);
+      }
       return;
     }
     if (payload.kind === "offer" || payload.kind === "answer" || payload.kind === "ice") {
@@ -679,7 +751,11 @@ export class VoiceMesh {
     audioEl.dataset.peerId = peerId;
     document.body.appendChild(audioEl);
 
-    // Always create camera then screen video m-lines in the same order so peers align.
+    // Fixed m-line order everywhere: audio → camera → screen. Never addTrack later
+    // (that appends m-lines and breaks subsequent offer/answer order).
+    const audioTransceiver = pc.addTransceiver("audio", {
+      direction: "sendrecv",
+    });
     const cameraTransceiver = pc.addTransceiver("video", {
       direction: "sendrecv",
     });
@@ -693,6 +769,7 @@ export class VoiceMesh {
       ignoreOffer: false,
       polite,
       audioEl,
+      audioTransceiver,
       cameraTransceiver,
       screenTransceiver,
       remoteCamera: false,
@@ -705,7 +782,8 @@ export class VoiceMesh {
     this.applyRemoteAudio();
 
     pc.onnegotiationneeded = () => {
-      if (slot.makingOffer) return;
+      if (slot.makingOffer || slot.pc.signalingState !== "stable") return;
+      // Impolite always offers; polite only when needed (Perfect Negotiation).
       void this.makeOffer(peerId, slot);
     };
 
@@ -778,14 +856,10 @@ export class VoiceMesh {
       }
       const [stream] = event.streams;
       if (stream) {
-        audioEl.srcObject = stream;
-        void audioEl.play().catch(() => undefined);
+        this.playPeerAudio(slot, stream);
       } else if (track) {
-        const ms = new MediaStream([track]);
-        audioEl.srcObject = ms;
-        void audioEl.play().catch(() => undefined);
+        this.playPeerAudio(slot, new MediaStream([track]));
       }
-      this.applyRemoteAudio();
     };
 
     pc.onconnectionstatechange = () => {
@@ -795,31 +869,8 @@ export class VoiceMesh {
       }
     };
 
-    const localTrack =
-      !this.isAudioBlocked(peerId) && this.localStream
-        ? (this.localStream.getAudioTracks()[0] ?? null)
-        : null;
-    if (localTrack && this.localStream) {
-      localTrack.enabled = !this.muted;
-      try {
-        pc.addTrack(localTrack, this.localStream);
-      } catch {
-        try {
-          pc.addTransceiver("audio", { direction: "sendrecv" });
-        } catch {
-          /* ignore */
-        }
-      }
-    } else {
-      try {
-        pc.addTransceiver("audio", { direction: "sendrecv" });
-      } catch {
-        /* ignore */
-      }
-    }
-
-    await this.applyVideoToPeer(peerId, "camera");
-    await this.applyVideoToPeer(peerId, "screen");
+    // Attach mic via replaceTrack on the pre-created audio transceiver (no addTrack).
+    await this.applyOutboundToPeer(peerId);
 
     if (!polite) {
       await this.makeOffer(peerId, slot);

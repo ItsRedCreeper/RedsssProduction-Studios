@@ -473,6 +473,19 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     meshRef.current?.setOutputDeviceId(devices.outputDeviceId);
   }, [devices.outputDeviceId, connection]);
 
+  useEffect(() => {
+    if (!connection) return;
+    function unlock() {
+      meshRef.current?.unlockRemoteAudio();
+    }
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [connection]);
+
   const joinMesh = useCallback(
     async (args: {
       conversationId: string;
@@ -532,6 +545,15 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
             }
             return { ...prev, [peerId]: next };
           });
+        },
+        onAudioPlaybackBlocked: (blocked) => {
+          if (blocked) {
+            setMicError("Click anywhere to enable voice audio.");
+          } else {
+            setMicError((prev) =>
+              prev === "Click anywhere to enable voice audio." ? null : prev,
+            );
+          }
         },
         onError: (message) => setMicError(message),
       });
