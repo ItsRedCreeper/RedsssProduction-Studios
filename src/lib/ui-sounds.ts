@@ -1,6 +1,6 @@
 /**
  * Subtle messenger UI sounds from `/public/sounds/*.mp3`.
- * Prefetches + decodes into AudioBuffers so join/leave fire with no fetch lag.
+ * Lazy-load only — never mass-prefetch on messenger boot (that stalled the UI).
  */
 
 export type UiSoundName =
@@ -41,21 +41,6 @@ const DEBOUNCE_MS: Partial<Record<UiSoundName, number>> = {
   "screenshare-stop": 80,
 };
 
-const EAGER: UiSoundName[] = [
-  "voice-leave",
-  "voice-join",
-  "voice-user-join",
-  "voice-user-leave",
-  "mute",
-  "unmute",
-  "deafen",
-  "undeafen",
-  "screenshare-start",
-  "screenshare-stop",
-  "message-send",
-  "message-receive",
-];
-
 const missing = new Set<UiSoundName>();
 const lastPlayedAt = new Map<UiSoundName, number>();
 const buffers = new Map<UiSoundName, AudioBuffer>();
@@ -82,7 +67,6 @@ function readEnabled(): boolean {
 let enabled = true;
 
 function srcFor(name: UiSoundName) {
-  // Absolute URL avoids odd relative-path resolution on some production hosts.
   if (typeof window !== "undefined" && window.location?.origin) {
     return `${window.location.origin}/sounds/${name}.mp3`;
   }
@@ -114,9 +98,8 @@ async function loadBuffer(name: UiSoundName): Promise<AudioBuffer | null> {
 
   const promise = (async () => {
     try {
-      const res = await fetch(srcFor(name), { cache: "default" });
+      const res = await fetch(srcFor(name), { cache: "force-cache" });
       if (!res.ok) {
-        // Only permanently skip hard 404s — transient CDN blips should retry.
         if (res.status === 404) missing.add(name);
         return null;
       }
@@ -128,7 +111,6 @@ async function loadBuffer(name: UiSoundName): Promise<AudioBuffer | null> {
       buffers.set(name, buffer);
       return buffer;
     } catch {
-      // Don't blacklist on decode/network flukes — next play can retry.
       return null;
     } finally {
       loading.delete(name);
@@ -139,16 +121,11 @@ async function loadBuffer(name: UiSoundName): Promise<AudioBuffer | null> {
   return promise;
 }
 
-function prefetchEager() {
-  for (const name of EAGER) void loadBuffer(name);
-}
-
 function unlockAudio() {
   if (unlocked) return;
   unlocked = true;
   const ctx = getCtx();
   void ctx?.resume().catch(() => undefined);
-  prefetchEager();
 }
 
 if (typeof window !== "undefined") {
@@ -159,8 +136,7 @@ if (typeof window !== "undefined") {
       if (!enabled) stopSoundLoop();
     }
   });
-  // Production browsers require a user gesture before AudioContext can play.
-  // Prefetch files after first pointer/key — don't create a blocked context early.
+  // Only unlock AudioContext — do not fetch/decode a pile of MP3s on boot.
   const unlock = () => {
     unlockAudio();
     window.removeEventListener("pointerdown", unlock, true);
@@ -168,12 +144,6 @@ if (typeof window !== "undefined") {
   };
   window.addEventListener("pointerdown", unlock, true);
   window.addEventListener("keydown", unlock, true);
-  // Warm the MP3 bytes without touching AudioContext (safe before gesture).
-  window.setTimeout(() => {
-    for (const name of EAGER) {
-      void fetch(srcFor(name), { cache: "default" }).catch(() => undefined);
-    }
-  }, 900);
 }
 
 export function areUiSoundsEnabled() {
@@ -220,10 +190,11 @@ function playBuffer(buffer: AudioBuffer, opts?: { loop?: boolean; volume?: numbe
   return { source, gain };
 }
 
-/** HTMLAudio fallback — works even when Web Audio is still suspended. */
-function playHtmlFallback(name: UiSoundName) {
+/** Immediate playback — does not wait on Web Audio decode. */
+function playHtml(name: UiSoundName) {
   try {
     const audio = new Audio(srcFor(name));
+    audio.preload = "auto";
     audio.volume = VOLUME;
     const play = audio.play();
     if (play && typeof play.catch === "function") {
@@ -235,31 +206,27 @@ function playHtmlFallback(name: UiSoundName) {
 }
 
 /**
- * Fire-and-forget one-shot. Prefetched buffers start in the same tick.
+ * Fire-and-forget. HTMLAudio plays now; buffer warms in the background for next time.
  */
 export function playSound(name: UiSoundName) {
   if (shouldSkip(name)) return;
   unlockAudio();
+
   const ready = buffers.get(name);
-  if (ready) {
+  const ctx = getCtx();
+  if (ready && ctx && ctx.state === "running") {
     try {
-      const ctx = getCtx();
-      // Suspended Web Audio is silent on production until resume settles —
-      // HTMLAudio plays immediately from the same user gesture.
-      if (!ctx || ctx.state === "suspended") {
-        void ctx?.resume().catch(() => undefined);
-        playHtmlFallback(name);
-        return;
-      }
       playBuffer(ready);
+      return;
     } catch {
-      playHtmlFallback(name);
+      /* fall through */
     }
-    return;
   }
-  // Not warm yet — kick decode and use HTMLAudio this time.
+
+  // Always prefer a snappy HTMLAudio path for the current gesture.
+  playHtml(name);
+  // Warm decoded buffer quietly for subsequent plays (one file, not all).
   void loadBuffer(name);
-  playHtmlFallback(name);
 }
 
 /** Soft looping ringtone (incoming call). */
@@ -282,7 +249,7 @@ export function startSoundLoop(name: UiSoundName = "incoming-call") {
       loopGain = nodes.gain;
       loopName = name;
     } catch {
-      /* fall through to HTMLAudio below if needed */
+      /* ignore */
     }
   };
 
@@ -292,7 +259,6 @@ export function startSoundLoop(name: UiSoundName = "incoming-call") {
     if (loopSource) return { stop: () => stopSoundLoop() };
   }
 
-  // Fallback element until decode finishes / AudioContext unlocks.
   try {
     const audio = new Audio(srcFor(name));
     audio.loop = true;
