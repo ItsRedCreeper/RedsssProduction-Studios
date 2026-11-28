@@ -192,6 +192,92 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [serverMemberRoles, setServerMemberRoles] =
     useState<ServerMemberRolesContext | null>(null);
 
+  const openSmallFriendId =
+    user && small && small.profile.id !== user.id && !small.ready.restricted
+      ? small.profile.id
+      : null;
+  const openBigFriendId =
+    user && big && big.profile.id !== user.id && !big.ready.restricted
+      ? big.profile.id
+      : null;
+
+  // Keep open profile cards' friendship status in sync with friends panel / other tabs.
+  useEffect(() => {
+    if (!user) return;
+    const openIds = [...new Set(
+      [openSmallFriendId, openBigFriendId].filter(
+        (id): id is string => !!id,
+      ),
+    )];
+    if (openIds.length === 0) return;
+
+    let cancelled = false;
+    async function refreshOpenFriendships() {
+      for (const otherId of openIds) {
+        const friendship = await loadFriendshipWith(otherId);
+        if (cancelled) return;
+        const since =
+          friendship.status === "friends"
+            ? await loadFriendsSince(otherId)
+            : { friendsSince: null as string | null };
+        if (cancelled) return;
+        setSmall((prev) => {
+          if (!prev || prev.profile.id !== otherId) return prev;
+          if (
+            prev.ready.friendStatus === friendship.status &&
+            prev.ready.friendEdgeId === friendship.edgeId
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            ready: {
+              ...prev.ready,
+              friendStatus: friendship.status,
+              friendEdgeId: friendship.edgeId,
+            },
+          };
+        });
+        setBig((prev) => {
+          if (!prev || prev.profile.id !== otherId) return prev;
+          if (
+            prev.ready.friendStatus === friendship.status &&
+            prev.ready.friendEdgeId === friendship.edgeId &&
+            prev.ready.friendsSince === since.friendsSince
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            ready: {
+              ...prev.ready,
+              friendStatus: friendship.status,
+              friendEdgeId: friendship.edgeId,
+              friendsSince: since.friendsSince,
+            },
+          };
+        });
+      }
+    }
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`profile-open-friends:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "friends" },
+        () => {
+          void refreshOpenFriendships();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [user, openSmallFriendId, openBigFriendId]);
+
   // Keep own big/small profile status + expiry labels in sync after StatusPicker /
   // heartbeat / timed revert (clear_expired_status_text).
   useEffect(() => {

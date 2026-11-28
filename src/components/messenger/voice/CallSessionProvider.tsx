@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useAudioDevices } from "@/hooks/useAudioDevices";
@@ -210,6 +211,7 @@ function startRingtone(): RingtoneHandle {
 }
 
 export function CallSessionProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const { user, profile } = useCurrentProfile();
   const voice = useOptionalVoiceSession();
   const devices = useAudioDevices();
@@ -1131,6 +1133,21 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("redsss-leave-dm-call", onLeaveForVoice);
     };
   }, []);
+
+  // Leaving messenger drops DM/group calls (same rule as server voice).
+  // Without this, AppShell keeps CallSessionProvider mounted and audio can
+  // keep playing with no overlay / disconnect chrome.
+  useEffect(() => {
+    if (pathname.startsWith("/messenger")) return;
+    if (
+      !connectionRef.current &&
+      !outgoingRef.current &&
+      !incomingRef.current
+    ) {
+      return;
+    }
+    void leaveCallRef.current();
+  }, [pathname]);
 
   // Unmount-only teardown. Deps on leaveCall re-ran cleanup and hung up live calls.
   useEffect(() => {

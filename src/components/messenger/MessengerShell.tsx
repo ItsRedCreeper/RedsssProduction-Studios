@@ -410,6 +410,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const dmLocks = useRef(new Map<string, Promise<string | null>>());
   const serversRequest = useRef(0);
   const messagesRequest = useRef(0);
+  const dmMessagesRequest = useRef(0);
   const messagesChannelRef = useRef<string | null>(null);
   const typingChannelRef = useRef<ReturnType<
     ReturnType<typeof createClient>["channel"]
@@ -2142,8 +2143,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
     const conversationId = activeConversationId;
+    const requestId = ++dmMessagesRequest.current;
     const supabase = createClient();
     let cancelled = false;
+    function stillCurrent() {
+      return (
+        !cancelled &&
+        requestId === dmMessagesRequest.current &&
+        conversationRef.current === conversationId
+      );
+    }
 
     async function load() {
       setLoadingDmMessages(true);
@@ -2153,7 +2162,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(CHANNEL_MESSAGE_PAGE_SIZE);
-      if (cancelled) return;
+      if (!stillCurrent()) return;
       if (dmError || !data) {
         setError(dmError?.message ?? "Failed to load direct messages");
         setDmMessages([]);
@@ -2187,7 +2196,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               .select("*")
               .in("message_id", ids)
           : { data: [] as Tables<"dm_message_reactions">[] };
-      if (cancelled) return;
+      if (!stillCurrent()) return;
       setDmMessages(hydrateMessages(rows, profiles, parents));
       setReactions((reactionRows as Reaction[]) ?? []);
       setDmHasMore(data.length >= CHANNEL_MESSAGE_PAGE_SIZE);
@@ -2207,19 +2216,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload) => {
-          if (cancelled) return;
+          if (!stillCurrent()) return;
           const row = payload.new as Tables<"dm_messages">;
           const { data } = await supabase
             .from("dm_messages")
             .select("*")
             .eq("id", row.id)
             .maybeSingle();
-          if (cancelled || !data) return;
+          if (!stillCurrent() || !data) return;
           const [hydrated] = hydrateMessages(
             dmRowsToMessages([data]),
             await loadProfiles([data.user_id]),
           );
-          if (!hydrated || cancelled) return;
+          if (!hydrated || !stillCurrent()) return;
           setDmMessages((prev) => mergeIncoming(prev, hydrated));
           // Message sent → drop that user's typing indicator immediately.
           if (hydrated.user_id && hydrated.user_id !== userIdRef.current) {
@@ -2248,6 +2257,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
+          if (!stillCurrent()) return;
           const row = payload.new as Tables<"dm_messages">;
           setDmMessages((prev) =>
             prev.map((message) =>
@@ -2275,6 +2285,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
+          if (!stillCurrent()) return;
           const row = payload.old as { id?: string };
           if (!row.id) return;
           setDmMessages((prev) => prev.filter((message) => message.id !== row.id));
@@ -2613,17 +2624,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [pinsOpen]);
 
   useEffect(() => {
-    if (!membersOpen) return;
+    if (!membersOpen && !voiceChatOpen) return;
     function onKey(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      // Only intercept Escape on the mobile members sheet (desktop list is persistent).
+      // Only intercept Escape on the mobile sheets (desktop lists are persistent).
       if (window.matchMedia("(min-width: 1024px)").matches) return;
       event.preventDefault();
-      setMembersOpen(false);
+      if (membersOpen) setMembersOpen(false);
+      if (voiceChatOpen) setVoiceChatOpen(false);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [membersOpen]);
+  }, [membersOpen, voiceChatOpen]);
 
   useEffect(() => {
     if (!pinsOpen) return;
