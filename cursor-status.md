@@ -6,7 +6,7 @@
 **Healthy** (prior).
 
 ## Profile tags
-Display-only — ItsRed Creeper still has pioneer + funder.
+Display-only. ItsRed Creeper tags cleared (`profile_tags = {}`).
 
 ### Member list
 - Replaced plain color dots with symbolic badges:
