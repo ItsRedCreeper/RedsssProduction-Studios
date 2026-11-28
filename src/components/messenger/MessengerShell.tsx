@@ -154,12 +154,29 @@ function mergeIncoming(prev: ChatMessage[], incoming: ChatMessage): ChatMessage[
         : message,
     );
   }
-  const optimisticIndex = prev.findIndex(
-    (message) =>
-      message.optimistic &&
-      message.user_id === incoming.user_id &&
-      message.content === incoming.content,
-  );
+  // Prefer closest created_at among same user/content/thread/reply so identical
+  // rapid sends (or attachment-only empties) do not collide on the first match.
+  let optimisticIndex = -1;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < prev.length; i++) {
+    const message = prev[i];
+    if (
+      !message.optimistic ||
+      message.user_id !== incoming.user_id ||
+      message.content !== incoming.content ||
+      (message.thread_id ?? null) !== (incoming.thread_id ?? null) ||
+      (message.reply_to_id ?? null) !== (incoming.reply_to_id ?? null)
+    ) {
+      continue;
+    }
+    const delta = Math.abs(
+      Date.parse(message.created_at) - Date.parse(incoming.created_at),
+    );
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      optimisticIndex = i;
+    }
+  }
   if (optimisticIndex >= 0) {
     const copy = [...prev];
     copy[optimisticIndex] = { ...incoming, optimistic: false, failed: false };
@@ -306,6 +323,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [replyPing, setReplyPing] = useState(true);
   const lastChannelSendAt = useRef<Record<string, number>>({});
+  /** After manual mark-unread, skip auto-mark while still viewing that channel. */
+  const suppressAutoMarkRef = useRef<Record<string, boolean>>({});
+  const unreadFeedRef = useRef(unreadFeed);
+  unreadFeedRef.current = unreadFeed;
   const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const [groupDmOpen, setGroupDmOpen] = useState(false);
   const [pollOpen, setPollOpen] = useState(false);
@@ -2190,20 +2211,25 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       !user ||
       pane !== "server" ||
       !activeChannelId ||
-      activeChannel?.type !== "text"
+      activeChannel?.type !== "text" ||
+      !activeLast
     ) {
       return;
     }
     const channelId = activeChannelId;
-    const at = activeLast ?? new Date().toISOString();
+    const at = activeLast;
+    if (suppressAutoMarkRef.current[channelId]) {
+      return;
+    }
     const timer = window.setTimeout(() => {
+      if (suppressAutoMarkRef.current[channelId]) return;
       setReadAt((prev) => {
         const current = prev[channelId];
         if (current && Date.parse(current) >= Date.parse(at)) return prev;
         return { ...prev, [channelId]: at };
       });
       void saveChannelRead(user.id, channelId, at);
-      void unreadFeed?.markChannelRead(channelId, at);
+      void unreadFeedRef.current?.markChannelRead(channelId, at);
     }, 1600);
     return () => window.clearTimeout(timer);
   }, [
@@ -2212,7 +2238,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     activeChannelId,
     activeChannel?.type,
     activeLast,
-    unreadFeed,
   ]);
 
   function applyTypingBroadcast(
@@ -3042,24 +3067,39 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       unblockedDmMessages.length > 0
         ? unblockedDmMessages[unblockedDmMessages.length - 1]?.created_at
         : null;
-    if (!latest && unblockedDmMessages.length === 0) return;
-    const at = latest ?? new Date().toISOString();
+    if (!latest) return;
+    const at = latest;
     const timer = window.setTimeout(() => {
       setDmReadAt((prev) => {
         const current = prev[conversationId];
         if (current && Date.parse(current) >= Date.parse(at)) return prev;
         return { ...prev, [conversationId]: at };
       });
-      void unreadFeed?.markDmRead(conversationId, at);
+      void unreadFeedRef.current?.markDmRead(conversationId, at);
     }, 1600);
     return () => window.clearTimeout(timer);
-  }, [user, pane, activeConversationId, unblockedDmMessages, unreadFeed]);
+  }, [user, pane, activeConversationId, unblockedDmMessages]);
+
+  // Allow auto-mark again after leaving a channel that was manually marked unread.
+  useEffect(() => {
+    return () => {
+      if (activeChannelId) {
+        delete suppressAutoMarkRef.current[activeChannelId];
+      }
+    };
+  }, [activeChannelId]);
 
   const firstUnreadMessageId = useMemo(() => {
     if (!user || !dividerFloor || !showUnreadDivider) return null;
+    // Match the visible timeline (main channel vs active thread) so a
+    // thread-only unread never disables stick-to-bottom without a divider.
     const list = dividerFloor.key.startsWith("dm:")
       ? unblockedDmMessages
-      : unblockedMessages;
+      : activeThreadId
+        ? unblockedMessages.filter(
+            (message) => message.thread_id === activeThreadId,
+          )
+        : unblockedMessages.filter((message) => !message.thread_id);
     const floorAt = dividerFloor.at;
     for (const message of list) {
       if (message.user_id === user.id) continue;
@@ -3075,6 +3115,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     showUnreadDivider,
     unblockedMessages,
     unblockedDmMessages,
+    activeThreadId,
   ]);
 
   const pinList = useMemo(() => {
@@ -3987,8 +4028,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   async function markMessageUnread(message: ChatMessage) {
     if (!user || pane !== "server" || !activeChannelId) return;
     const at = new Date(Date.parse(message.created_at) - 1).toISOString();
+    suppressAutoMarkRef.current[activeChannelId] = true;
     setReadAt((prev) => ({ ...prev, [activeChannelId]: at }));
+    setDividerFloor({ key: `channel:${activeChannelId}`, at });
+    setShowUnreadDivider(true);
     await saveChannelRead(user.id, activeChannelId, at);
+    void unreadFeedRef.current?.markChannelRead(activeChannelId, at);
     setToast("Marked as unread");
   }
 
@@ -5174,13 +5219,15 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             ) : (
               <MessageComposer
                 placeholder={
-                  textMode && !canSendMessages
-                    ? "You don't have permission to send messages"
-                    : replyTo
-                      ? `Reply to @${replyTo.profiles?.username ?? "user"}`
-                      : dmMode
-                        ? `Message @${activeThread?.username ?? "user"}`
-                        : `Message #${activeChannel?.name ?? "channel"}`
+                  textMode && viewAsRoleId
+                    ? "Exit View Server As Role to send messages"
+                    : textMode && !canSendMessages
+                      ? "You don't have permission to send messages"
+                      : replyTo
+                        ? `Reply to @${replyTo.profiles?.username ?? "user"}`
+                        : dmMode
+                          ? `Message @${activeThread?.username ?? "user"}`
+                          : `Message #${activeChannel?.name ?? "channel"}`
                 }
                 draft={draft}
                 replyAuthor={
@@ -5202,9 +5249,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 pendingFiles={pendingFiles}
                 sending={sending}
                 allowAttach={
-                  dmMode || (textMode && canSendMessages)
+                  dmMode || (textMode && canSendMessages && !viewAsRoleId)
                 }
-                disabled={!user || (textMode && !canSendMessages)}
+                disabled={
+                  !user ||
+                  (textMode && (!canSendMessages || !!viewAsRoleId))
+                }
                 mentionSuggestions={textMode ? mentionSuggestions : []}
                 typingPeople={typingPeople}
                 customEmojis={customEmojis}
@@ -5224,7 +5274,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                   textMode ? (sticker) => void pickSticker(sticker) : undefined
                 }
                 onOpenPoll={
-                  textMode && canSendMessages
+                  textMode && canSendMessages && !viewAsRoleId
                     ? () => setPollOpen(true)
                     : undefined
                 }
@@ -5343,11 +5393,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               />
               <MessageComposer
                 placeholder={
-                  !canSendMessages
-                    ? "You don't have permission to send messages"
-                    : replyTo
-                      ? `Reply to @${replyTo.profiles?.username ?? "user"}`
-                      : `Message ${activeChannel?.name ?? "voice"}`
+                  viewAsRoleId
+                    ? "Exit View Server As Role to send messages"
+                    : !canSendMessages
+                      ? "You don't have permission to send messages"
+                      : replyTo
+                        ? `Reply to @${replyTo.profiles?.username ?? "user"}`
+                        : `Message ${activeChannel?.name ?? "voice"}`
                 }
                 draft={draft}
                 replyAuthor={
@@ -5368,8 +5420,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onReplyPingChange={setReplyPing}
                 pendingFiles={pendingFiles}
                 sending={sending}
-                allowAttach={canSendMessages}
-                disabled={!user || !canSendMessages}
+                allowAttach={canSendMessages && !viewAsRoleId}
+                disabled={!user || !canSendMessages || !!viewAsRoleId}
                 mentionSuggestions={mentionSuggestions}
                 typingPeople={typingPeople}
                 customEmojis={customEmojis}
@@ -5387,7 +5439,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 stickers={serverStickers}
                 onPickSticker={(sticker) => void pickSticker(sticker)}
                 onOpenPoll={
-                  canSendMessages ? () => setPollOpen(true) : undefined
+                  canSendMessages && !viewAsRoleId
+                    ? () => setPollOpen(true)
+                    : undefined
                 }
                 onTyping={publishTyping}
                 onTypingStop={publishTypingStop}

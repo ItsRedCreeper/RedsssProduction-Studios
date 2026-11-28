@@ -1092,22 +1092,29 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     };
   }, [handleCtrlMessage, user]);
 
+  // leaveCall identity changes often — keep stable refs for listeners/teardown.
+  const leaveCallRef = useRef(leaveCall);
+  leaveCallRef.current = leaveCall;
+  const clearRingTimerRef = useRef(clearRingTimer);
+  clearRingTimerRef.current = clearRingTimer;
+
   useEffect(() => {
     function onLeaveForVoice() {
-      void leaveCall();
+      void leaveCallRef.current();
     }
     window.addEventListener("redsss-leave-dm-call", onLeaveForVoice);
     return () => {
       window.removeEventListener("redsss-leave-dm-call", onLeaveForVoice);
     };
-  }, [leaveCall]);
+  }, []);
 
+  // Unmount-only teardown. Deps on leaveCall re-ran cleanup and hung up live calls.
   useEffect(() => {
     return () => {
-      clearRingTimer();
-      void leaveCall();
+      clearRingTimerRef.current();
+      void leaveCallRef.current();
     };
-  }, [clearRingTimer, leaveCall]);
+  }, []);
 
   const value = useMemo<CallSessionContextValue>(
     () => ({
