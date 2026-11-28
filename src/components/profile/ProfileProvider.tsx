@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useBlockedUsers } from "@/hooks/useBlockedUsers";
@@ -146,6 +146,7 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, profile: current } = useCurrentProfile();
   const {
     blockedIds,
@@ -191,6 +192,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [messageNotice, setMessageNotice] = useState<string | null>(null);
   const [serverMemberRoles, setServerMemberRoles] =
     useState<ServerMemberRolesContext | null>(null);
+
+  // Close overlays when leaving messenger ↔ site pages (not every channel switch).
+  const routeSection = pathname.startsWith("/messenger")
+    ? "messenger"
+    : pathname.split("/")[1] || "home";
+  useEffect(() => {
+    setFriendsOpen(false);
+    setSmall(null);
+    setBig(null);
+    setBigFocus(null);
+    setEditOpen(false);
+    setBlockTarget(null);
+    setIgnoreTarget(null);
+    setMessageNotice(null);
+  }, [routeSection]);
 
   const openSmallFriendId =
     user && small && small.profile.id !== user.id && !small.ready.restricted

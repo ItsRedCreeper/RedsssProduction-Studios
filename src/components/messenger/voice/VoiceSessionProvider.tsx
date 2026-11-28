@@ -629,7 +629,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         .update({ muted: nextMuted, deafened: nextDeafened, updated_at: updatedAt })
         .eq("user_id", userId);
       if (muteOp !== muteOpRef.current) return;
-      if (error) console.error(error.message);
+      void error;
     },
     [setLocalSpeaking, startMicMonitor],
   );
@@ -647,7 +647,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
           updated_at: new Date().toISOString(),
         })
         .eq("user_id", userId);
-      if (error) console.error(error.message);
+      void error;
     },
     [],
   );
@@ -685,7 +685,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     if (!userId) return;
     const supabase = createClient();
     const { error } = await supabase.from("voice_states").delete().eq("user_id", userId);
-    if (error) console.error(error.message);
+    void error;
   }, [detachBroadcast, setLocalSpeaking, stopMesh, stopMicMonitor]);
 
   const joinVoice = useCallback(
@@ -743,7 +743,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         connectionRef.current = null;
         return;
       }
-      if (voiceError) console.error(voiceError);
+      void voiceError;
       void startMicMonitor();
     },
     [attachBroadcast, detachBroadcast, startMesh, startMicMonitor, stopMesh, stopMicMonitor],
@@ -987,6 +987,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     void leaveVoice();
   }, [pathname, leaveVoice]);
 
+  // Sign-out (or session loss) must delete the voice seat, not wait for stale cleanup.
+  useEffect(() => {
+    const supabase = createClient();
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_OUT") return;
+      void leaveVoice();
+    });
+    return () => {
+      data.subscription.unsubscribe();
+    };
+  }, [leaveVoice]);
+
   // Heartbeat so other clients know we're still here; stopping implies grace disconnect.
   useEffect(() => {
     if (!connection || !user) return;
@@ -1000,7 +1012,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         .from("voice_states")
         .update({ updated_at: updatedAt })
         .eq("user_id", userId);
-      if (error) console.error(error.message);
+      // Ignore transient heartbeat failures (tab sleep / brief offline).
+      void error;
     }
 
     void beat();
@@ -1017,7 +1030,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.rpc("cleanup_stale_voice_states", {
         max_age: VOICE_STALE_INTERVAL,
       });
-      if (error) console.error(error.message);
+      void error;
     }
 
     void prune();

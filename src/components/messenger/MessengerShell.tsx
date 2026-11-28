@@ -578,12 +578,117 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const scope = `${pane}:${activeChannelId ?? ""}:${activeConversationId ?? ""}`;
   const scopeRef = useRef(scope);
+  const draftRef = useRef(draft);
+  const draftsByScopeRef = useRef(new Map<string, string>());
+  draftRef.current = draft;
+  /** Bumped on browser online so channel/DM load effects refetch missed rows. */
+  const [reconnectTick, setReconnectTick] = useState(0);
 
   useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(id);
   }, [toast]);
+
+  useEffect(() => {
+    function onOnline() {
+      setReconnectTick((n) => n + 1);
+      void unreadFeedRef.current?.refresh();
+    }
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
+  // After offline gaps, merge the latest page instead of wiping paged history.
+  useEffect(() => {
+    if (reconnectTick === 0) return;
+    let cancelled = false;
+    async function recover() {
+      if (activeChannelId && !previewMode) {
+        const channelId = activeChannelId;
+        const result = await loadChannelMessages(channelId);
+        if (cancelled || result.error) return;
+        setMessages((prev) => {
+          const map = new Map(prev.map((row) => [row.id, row]));
+          for (const row of result.messages) map.set(row.id, row);
+          return [...map.values()].sort(
+            (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
+          );
+        });
+        if (result.reactions?.length) {
+          setReactions((prev) => {
+            let next = prev;
+            for (const row of result.reactions) {
+              next = upsertReaction(next, row);
+            }
+            return next;
+          });
+        }
+        const pollIds = result.messages
+          .filter((message) => message.message_kind === "poll")
+          .map((message) => message.id);
+        if (pollIds.length > 0) {
+          const supabase = createClient();
+          const { data: votes } = await supabase
+            .from("poll_votes")
+            .select("message_id, user_id, option_index")
+            .in("message_id", pollIds);
+          if (!cancelled && votes) {
+            setPollVotesByMessage((prev) => {
+              const next = { ...prev };
+              for (const vote of votes) {
+                const list = next[vote.message_id] ?? [];
+                if (
+                  list.some(
+                    (row) =>
+                      row.user_id === vote.user_id &&
+                      row.option_index === vote.option_index,
+                  )
+                ) {
+                  continue;
+                }
+                next[vote.message_id] = [
+                  ...list,
+                  {
+                    user_id: vote.user_id,
+                    option_index: vote.option_index,
+                  },
+                ];
+              }
+              return next;
+            });
+          }
+        }
+      }
+      if (activeConversationId) {
+        const conversationId = activeConversationId;
+        const supabase = createClient();
+        const { data } = await supabase
+          .from("dm_messages")
+          .select("*")
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: false })
+          .limit(CHANNEL_MESSAGE_PAGE_SIZE);
+        if (cancelled || !data) return;
+        const hydrated = hydrateMessages(
+          dmRowsToMessages(data.reverse()),
+          await loadProfiles(data.map((row) => row.user_id)),
+        );
+        if (cancelled) return;
+        setDmMessages((prev) => {
+          const map = new Map(prev.map((row) => [row.id, row]));
+          for (const row of hydrated) map.set(row.id, row);
+          return [...map.values()].sort(
+            (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at),
+          );
+        });
+      }
+    }
+    void recover();
+    return () => {
+      cancelled = true;
+    };
+  }, [reconnectTick, activeChannelId, activeConversationId, previewMode]);
 
   useEffect(() => {
     if (!dmMode || !dmOtherId || dmBlocked || !user) {
@@ -641,12 +746,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   useEffect(() => {
     if (scopeRef.current === scope) return;
+    draftsByScopeRef.current.set(scopeRef.current, draftRef.current);
     scopeRef.current = scope;
     sendRequest.current += 1;
     sendingRef.current = false;
     sendingRef.current = false;
     setSending(false);
-    setDraft("");
+    setDraft(draftsByScopeRef.current.get(scope) ?? "");
     setReplyTo(null);
     setPendingFiles((prev) => {
       for (const item of prev) {
@@ -1663,6 +1769,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     };
   }, [user?.id]);
 
+  const bareServerRedirectRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (pane !== "server" || !routeServerId) return;
     if (loadingChannels || loadedServerId !== routeServerId) return;
@@ -1676,6 +1784,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       !!routeChannelId &&
       previewSafeChannels.some((channel) => channel.id === routeChannelId);
     if (channelValid && routeChannelId) {
+      bareServerRedirectRef.current = null;
       if (!previewMode) {
         const current = channels.find((channel) => channel.id === routeChannelId);
         // Only remember text channels so returning to a server doesn't auto-open voice.
@@ -1690,6 +1799,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     const target = pickFallbackChannel(previewSafeChannels, routeServerId);
     if (!target || target.id === routeChannelId) return;
+    // Back to a bare server URL after an auto-pick → go home instead of looping.
+    const bareKey = `${routeServerId}:bare`;
+    if (!routeChannelId && bareServerRedirectRef.current === bareKey) {
+      bareServerRedirectRef.current = null;
+      router.replace(messengerHomePath());
+      return;
+    }
+    if (!routeChannelId) bareServerRedirectRef.current = bareKey;
     router.replace(
       withPreviewQuery(
         messengerChannelPath(routeServerId, target.id),
@@ -3045,6 +3162,53 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     roleIds: myRoleIds,
     userId: user?.id,
   });
+  const canSpeakVoice = can(myPerms, PERMISSIONS.SPEAK, {
+    isOwner: isServerOwner,
+    overrides: activeChannel?.permission_overrides,
+    roleIds: myRoleIds,
+    userId: user?.id,
+  });
+  const canAttachFiles = can(myPerms, PERMISSIONS.ATTACH_FILES, {
+    isOwner: isServerOwner,
+    overrides: activeChannel?.permission_overrides,
+    roleIds: myRoleIds,
+    userId: user?.id,
+  });
+  const canAddReactions = can(myPerms, PERMISSIONS.ADD_REACTIONS, {
+    isOwner: isServerOwner,
+    overrides: activeChannel?.permission_overrides,
+    roleIds: myRoleIds,
+    userId: user?.id,
+  });
+
+  const canSpeakInConnectedChannel = useMemo(() => {
+    if (!connection) return true;
+    if (isServerOwner && connection.serverId === activeServerId) return true;
+    const connectedChannel = channels.find(
+      (channel) => channel.id === connection.channelId,
+    );
+    return can(myPerms, PERMISSIONS.SPEAK, {
+      isOwner: isServerOwner && connection.serverId === activeServerId,
+      overrides: connectedChannel?.permission_overrides,
+      roleIds: myRoleIds,
+      userId: user?.id,
+    });
+  }, [
+    connection,
+    channels,
+    myPerms,
+    isServerOwner,
+    activeServerId,
+    myRoleIds,
+    user?.id,
+  ]);
+
+  // SPEAK denied → stay muted while in that voice channel.
+  useEffect(() => {
+    if (!connection || canSpeakInConnectedChannel) return;
+    if (!muted) voice.toggleMute();
+  }, [connection, canSpeakInConnectedChannel, muted, voice]);
+
   const canCreateInvites = can(myPerms, PERMISSIONS.CREATE_INVITES, {
     isOwner: isServerOwner,
   });
@@ -4205,6 +4369,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError(MESSAGE_MAX_REACHED);
       return;
     }
+    if (filesSnapshot.length > 0 && !canAttachFiles) {
+      setError("You don't have permission to attach files.");
+      return;
+    }
     const automodHit = findAutomodHit(content, automodRules);
     if (automodHit && !isServerOwner && !myPerms.ADMINISTRATOR) {
       setError(`Message blocked by AutoMod (matched “${automodHit}”).`);
@@ -4871,6 +5039,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   async function toggleReaction(messageId: string, emoji: string) {
     if (!user || messageId.startsWith("temp-")) return;
+    if (!dmMode && !canAddReactions) {
+      setError("You don't have permission to add reactions.");
+      return;
+    }
     const userId = user.id;
     const existing = reactions.find(
       (reaction) =>
@@ -5555,7 +5727,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         }
         router.push(messengerChannelPath(connection.serverId, connection.channelId));
       }}
-      onToggleMute={voice.toggleMute}
+      onToggleMute={() => {
+        if (!canSpeakInConnectedChannel && muted) {
+          setError("You don't have permission to speak in this channel.");
+          return;
+        }
+        voice.toggleMute();
+      }}
       onToggleDeafen={voice.toggleDeafen}
       onLeave={() => void voice.leaveVoice()}
       {...deviceProps}
@@ -6234,7 +6412,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onDelete={deleteChannel}
                 onJumpToReply={jumpToMessage}
                 onReact={
-                  previewMode
+                  previewMode || !canAddReactions
                     ? undefined
                     : (messageId, emoji) => void toggleReaction(messageId, emoji)
                 }
@@ -6307,7 +6485,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 )}
                 membersById={membersById}
                 speakingUserIds={speakingUserIds}
-                onToggleMute={voice.toggleMute}
+                onToggleMute={() => {
+                  if (!canSpeakInConnectedChannel && muted) {
+                    setError("You don't have permission to speak in this channel.");
+                    return;
+                  }
+                  voice.toggleMute();
+                }}
                 onToggleDeafen={voice.toggleDeafen}
                 onLeave={() => void voice.leaveVoice()}
                 onRejoin={() => {
@@ -6403,7 +6587,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 pendingFiles={pendingFiles}
                 sending={sending}
                 allowAttach={
-                  dmMode || (textMode && canSendMessages && !viewAsRoleId)
+                  dmMode ||
+                  (textMode &&
+                    canSendMessages &&
+                    canAttachFiles &&
+                    !viewAsRoleId)
                 }
                 disabled={
                   !user ||
@@ -6525,8 +6713,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onEdit={editChannel}
                 onDelete={deleteChannel}
                 onJumpToReply={jumpToMessage}
-                onReact={(messageId, emoji) =>
-                  void toggleReaction(messageId, emoji)
+                onReact={
+                  canAddReactions
+                    ? (messageId, emoji) => void toggleReaction(messageId, emoji)
+                    : undefined
                 }
                 onTogglePin={
                   canManageMessages
@@ -6579,7 +6769,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 onReplyPingChange={setReplyPing}
                 pendingFiles={pendingFiles}
                 sending={sending}
-                allowAttach={canSendMessages && !viewAsRoleId}
+                allowAttach={
+                  canSendMessages && canAttachFiles && !viewAsRoleId
+                }
                 disabled={!user || !canSendMessages || !!viewAsRoleId}
                 mentionSuggestions={mentionSuggestions}
                 typingPeople={typingPeople}

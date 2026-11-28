@@ -91,6 +91,9 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
   const [channels, setChannels] = useState<UnreadChannelRow[]>([]);
   const [dms, setDms] = useState<UnreadDmRow[]>([]);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Optimistic read watermarks — refresh must not revive older badges. */
+  const pendingChannelReadsRef = useRef(new Map<string, string>());
+  const pendingDmReadsRef = useRef(new Map<string, string>());
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -137,10 +140,34 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       }
     }
     if (summary.error) {
-      console.warn("get_unread_summary", summary.error.message);
+      // Transient RPC blips are common during reconnect; avoid console spam.
     }
-    setChannels(Array.isArray(raw?.channels) ? raw!.channels : []);
-    setDms(Array.isArray(raw?.dms) ? raw!.dms : []);
+    const nextChannels = Array.isArray(raw?.channels) ? raw!.channels : [];
+    const nextDms = Array.isArray(raw?.dms) ? raw!.dms : [];
+    setChannels(
+      nextChannels.filter((row) => {
+        const pending = pendingChannelReadsRef.current.get(row.channel_id);
+        if (!pending) return true;
+        if (Date.parse(pending) >= Date.parse(row.latest_at)) {
+          pendingChannelReadsRef.current.delete(row.channel_id);
+          return false;
+        }
+        pendingChannelReadsRef.current.delete(row.channel_id);
+        return true;
+      }),
+    );
+    setDms(
+      nextDms.filter((row) => {
+        const pending = pendingDmReadsRef.current.get(row.conversation_id);
+        if (!pending) return true;
+        if (Date.parse(pending) >= Date.parse(row.latest_at)) {
+          pendingDmReadsRef.current.delete(row.conversation_id);
+          return false;
+        }
+        pendingDmReadsRef.current.delete(row.conversation_id);
+        return true;
+      }),
+    );
     setLoading(false);
   }, [user]);
 
@@ -153,6 +180,14 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    function onOnline() {
+      void refresh();
+    }
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
   }, [refresh]);
 
   useEffect(() => {
@@ -275,69 +310,69 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     async (channelId: string, at?: string) => {
       if (!user) return;
       const when = at ?? new Date().toISOString();
+      pendingChannelReadsRef.current.set(channelId, when);
       setChannels((prev) => prev.filter((row) => row.channel_id !== channelId));
       publishReadSync({ type: "channel", channelId, at: when });
       await saveChannelRead(user.id, channelId, when);
       // Mark related mention/reply notifs for this channel as read
+      const toMark: string[] = [];
       setNotifications((prev) =>
         prev.map((item) => {
           if (item.read) return item;
           const meta = item.meta ?? {};
-          if (meta.channel_id === channelId) return { ...item, read: true };
-          if (item.link?.includes(channelId)) return { ...item, read: true };
+          if (meta.channel_id === channelId || item.link?.includes(channelId)) {
+            toMark.push(item.id);
+            return { ...item, read: true };
+          }
           return item;
         }),
       );
-      const supabase = createClient();
-      const unread = notifications.filter(
-        (n) =>
-          !n.read &&
-          (n.meta?.channel_id === channelId || n.link?.includes(channelId)),
-      );
-      await Promise.all(
-        unread.map((n) =>
-          supabase.from("notifications").update({ read: true }).eq("id", n.id),
-        ),
-      );
+      if (toMark.length > 0) {
+        const supabase = createClient();
+        await Promise.all(
+          toMark.map((id) =>
+            supabase.from("notifications").update({ read: true }).eq("id", id),
+          ),
+        );
+      }
     },
-    [user, notifications],
+    [user],
   );
 
   const markDmRead = useCallback(
     async (conversationId: string, at?: string) => {
       if (!user) return;
       const when = at ?? new Date().toISOString();
+      pendingDmReadsRef.current.set(conversationId, when);
       setDms((prev) =>
         prev.filter((row) => row.conversation_id !== conversationId),
       );
       publishReadSync({ type: "dm", conversationId, at: when });
       await saveDmRead(user.id, conversationId, when);
+      const toMark: string[] = [];
       setNotifications((prev) =>
         prev.map((item) => {
           if (item.read) return item;
-          if (item.meta?.conversation_id === conversationId) {
-            return { ...item, read: true };
-          }
-          if (item.link?.includes(conversationId)) {
+          if (
+            item.meta?.conversation_id === conversationId ||
+            item.link?.includes(conversationId)
+          ) {
+            toMark.push(item.id);
             return { ...item, read: true };
           }
           return item;
         }),
       );
-      const supabase = createClient();
-      const unread = notifications.filter(
-        (n) =>
-          !n.read &&
-          (n.meta?.conversation_id === conversationId ||
-            n.link?.includes(conversationId)),
-      );
-      await Promise.all(
-        unread.map((n) =>
-          supabase.from("notifications").update({ read: true }).eq("id", n.id),
-        ),
-      );
+      if (toMark.length > 0) {
+        const supabase = createClient();
+        await Promise.all(
+          toMark.map((id) =>
+            supabase.from("notifications").update({ read: true }).eq("id", id),
+          ),
+        );
+      }
     },
-    [user, notifications],
+    [user],
   );
 
   const markServerRead = useCallback(
@@ -373,6 +408,8 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       at: string,
       meta?: { serverId?: string; serverName?: string; channelName?: string },
     ) => {
+      const pending = pendingChannelReadsRef.current.get(channelId);
+      if (pending && Date.parse(pending) >= Date.parse(at)) return;
       setChannels((prev) => {
         const idx = prev.findIndex((row) => row.channel_id === channelId);
         if (idx >= 0) {
@@ -412,6 +449,8 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       at: string,
       meta?: { title?: string; avatarUrl?: string | null },
     ) => {
+      const pending = pendingDmReadsRef.current.get(conversationId);
+      if (pending && Date.parse(pending) >= Date.parse(at)) return;
       setDms((prev) => {
         const idx = prev.findIndex(
           (row) => row.conversation_id === conversationId,

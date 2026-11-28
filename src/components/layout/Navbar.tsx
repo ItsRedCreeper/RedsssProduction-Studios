@@ -14,6 +14,7 @@ import { AccountSettingsModal } from "@/components/settings/AccountSettingsModal
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { createClient } from "@/lib/supabase/client";
 import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
+import { useOptionalCallSession } from "@/components/messenger/voice/CallSessionProvider";
 import { useProfileUi } from "@/components/profile/ProfileProvider";
 import { NAV_LINKS } from "@/lib/nav";
 import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
@@ -34,6 +35,7 @@ export function Navbar() {
   const router = useRouter();
   const { user } = useCurrentProfile();
   const voice = useOptionalVoiceSession();
+  const call = useOptionalCallSession();
   const profileUi = useProfileUi();
   const speaking = !!voice?.selfSpeaking;
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -68,6 +70,17 @@ export function Navbar() {
   );
 
   async function handleSignOut() {
+    // Drop voice/call seats before auth dies so ghost occupants don't linger.
+    try {
+      await call?.leaveCall?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await voice?.leaveVoice?.();
+    } catch {
+      /* ignore */
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
