@@ -87,7 +87,7 @@ function MemberButton({
           >
             {displayName || "…"}
           </span>
-          <ProfileTagsPills tags={member.profile_tags} variant="dots" />
+          <ProfileTagsPills tags={member.profile_tags} variant="badges" />
           {owner && (
             <Crown
               className="h-3.5 w-3.5 shrink-0 text-[#f0b232]"

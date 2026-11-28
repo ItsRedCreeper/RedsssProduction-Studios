@@ -30,8 +30,6 @@ export type ProfileTagMeta = {
   tip: string;
   /** Tailwind classes for profile text pills. */
   className: string;
-  /** Tailwind classes for member-list circle dots. */
-  dotClassName: string;
   /** Explicit text fill for pills (beats inherited WebkitTextFillColor). */
   textColor: string;
 };
@@ -49,7 +47,6 @@ export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
     tip: "Funded before official release",
     className:
       "border border-[#f0a0a0]/45 bg-[#8f2f2f] text-[#ffe4e6] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]",
-    dotClassName: "bg-[#c43c3c] ring-1 ring-[#f5b5b5]/55",
     textColor: "#ffe4e6",
   },
   funder: {
@@ -58,7 +55,6 @@ export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
     tip: "Funded RedsssProduction Studios",
     className:
       "border border-[#f0d48a]/55 bg-[#e6bc52] text-[#241a08] shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]",
-    dotClassName: "bg-[#e6bc52] ring-1 ring-[#f5e0a8]/60",
     textColor: "#241a08",
   },
 };

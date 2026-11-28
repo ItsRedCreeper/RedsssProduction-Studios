@@ -1,6 +1,6 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Fix tag inline position + visible restyle)
+**Last updated:** 2026-11-28 (Member list symbolic tag badges)
 
 ## Localhost health
 **Healthy** (prior).
@@ -8,14 +8,14 @@
 ## Profile tags
 Display-only — ItsRed Creeper still has pioneer + funder.
 
-### Layout fix
-- Small/big profile use `inline-flex` content-hugging rows (no `flex-1` / `ml-auto`)
-- Result: `[Username] [Pioneer] [Funder]` with ~6–8px gaps, not far-right
+### Member list
+- Replaced plain color dots with symbolic badges:
+  - Pioneer = muted-red star
+  - Funder = soft-gold coin with gem center
+- Same line as username; hover still shows name + description
 
-### Style
-- Pills: clearer red/gold fills, light inset highlight + border, compact height
-- Member circles: 12px, soft ring, clear Pioneer red / Funder gold
-- Hover still shows name + description on circles
+### Profiles
+- Full-text pills still inline beside the username (unchanged this pass)
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)
