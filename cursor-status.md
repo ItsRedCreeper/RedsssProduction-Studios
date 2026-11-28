@@ -1,28 +1,22 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Funder / Pioneer profile tags)
+**Last updated:** 2026-11-28 (Funder / Pioneer tag display fix)
 
 ## Localhost health
 **Healthy** (prior).
 
 ## Profile tags
-Added site reward tags (not server roles; no permission effect).
+Site reward tags (not server roles).
 
-### Data
-- Column: `profiles.profile_tags text[]` default `{}`
-- Values: `pioneer`, `funder`
-- Seeded **ItsRed Creeper** with both: `['pioneer','funder']`
-- Everyone else empty
-- Ops helper: `setProfileTagsByUsername` in `src/lib/profile-tags.ts` (+ SQL notes in that file)
+### Display fix
+- Funder pill used near-transparent gold + dark text → invisible on dark cards
+- Now: solid soft gold `#e8b84a` + dark `#1f1608` (with explicit `WebkitTextFillColor`)
+- Pioneer: muted red fill + light `#fecaca` text
+- Fixed min-height / padding so pills never collapse empty
+- Small card: tags sit under the name button (not inside it) so styles don’t fight
 
-### UI
-- Shared `ProfileTagsPills` — Pioneer (muted red) then Funder (soft gold/amber), with tooltips
-- Shown on: big profile (under name), small profile card, member list
-- Not on navbar or chat messages
-
-### Confirmed
-- DB: ItsRed Creeper has `pioneer` + `funder`
-- No other profile has tags
+### Data (unchanged)
+- ItsRed Creeper still has both `pioneer` + `funder`
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)

@@ -227,11 +227,6 @@ export function SmallProfileCard({
               </p>
             </HoverTip>
           )}
-          <ProfileTagsPills
-            tags={profile.profile_tags}
-            size="sm"
-            className="mt-1"
-          />
           {!restricted ? (
             <PresenceCaption
               userId={profile.id}
@@ -242,6 +237,11 @@ export function SmallProfileCard({
             />
           ) : null}
         </button>
+        <ProfileTagsPills
+          tags={profile.profile_tags}
+          size="sm"
+          className="mt-1"
+        />
 
         {roles.length > 0 && (
           <div className="mt-2">

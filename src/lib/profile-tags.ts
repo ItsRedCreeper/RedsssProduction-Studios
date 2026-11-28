@@ -28,26 +28,30 @@ export type ProfileTagMeta = {
   id: ProfileTagId;
   label: string;
   tip: string;
-  /** Tailwind classes for the pill. */
+  /** Tailwind classes for the pill surface + label. */
   className: string;
 };
 
 const TAG_ORDER: ProfileTagId[] = [PROFILE_TAG_PIONEER, PROFILE_TAG_FUNDER];
 
+/**
+ * Solid-enough fills so labels stay readable on dark messenger cards.
+ * Pioneer = muted red + light text; Funder = soft gold + dark text.
+ */
 export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
   pioneer: {
     id: PROFILE_TAG_PIONEER,
     label: "Pioneer",
     tip: "Funded before official release",
     className:
-      "bg-accent/20 text-[#fca5a5] ring-1 ring-accent/30",
+      "border border-accent/40 bg-[rgba(220,38,38,0.28)] text-[#fecaca]",
   },
   funder: {
     id: PROFILE_TAG_FUNDER,
     label: "Funder",
     tip: "Funded RedsssProduction Studios",
     className:
-      "bg-[#f0b232]/20 text-[#3d2e0a] ring-1 ring-[#f0b232]/35",
+      "border border-[#c9922e]/50 bg-[#e8b84a] text-[#1f1608]",
   },
 };
 
