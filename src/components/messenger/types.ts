@@ -1,4 +1,5 @@
 import type { Tables } from "@/lib/supabase/database.types";
+import type { ProfileTagId } from "@/lib/profile-tags";
 
 export type Server = Tables<"servers">;
 export type Channel = Tables<"channels">;
@@ -19,6 +20,7 @@ export type MiniProfile = {
   bio?: string | null;
   banner_url?: string | null;
   banner_color?: string | null;
+  profile_tags?: ProfileTagId[];
 };
 
 export type ReplyPreview = {
@@ -57,6 +59,7 @@ export type MemberView = {
   bio?: string | null;
   banner_url?: string | null;
   banner_color?: string | null;
+  profile_tags?: ProfileTagId[];
   roleIds: string[];
 };
 

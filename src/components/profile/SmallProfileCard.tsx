@@ -17,6 +17,7 @@ import type {
 } from "@/lib/friends";
 import type { Role } from "@/components/messenger/types";
 import { RolePills } from "@/components/messenger/RolePills";
+import { ProfileTagsPills } from "@/components/profile/ProfileTagsPills";
 
 export type MutualFocus = "friends" | "servers";
 
@@ -226,6 +227,11 @@ export function SmallProfileCard({
               </p>
             </HoverTip>
           )}
+          <ProfileTagsPills
+            tags={profile.profile_tags}
+            size="sm"
+            className="mt-1"
+          />
           {!restricted ? (
             <PresenceCaption
               userId={profile.id}

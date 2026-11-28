@@ -1604,6 +1604,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           bio: row.bio,
           banner_url: row.banner_url,
           banner_color: row.banner_color,
+          profile_tags: [],
           roleIds: [] as string[],
         })),
       );
@@ -1695,6 +1696,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           bio: null as string | null,
           banner_url: null as string | null,
           banner_color: null as string | null,
+          profile_tags: [] as MemberView["profile_tags"],
           roleIds,
         };
       });
@@ -1716,6 +1718,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             bio: memberProfile?.bio ?? null,
             banner_url: memberProfile?.banner_url ?? null,
             banner_color: memberProfile?.banner_color ?? null,
+            profile_tags: memberProfile?.profile_tags ?? [],
           };
         }),
       );
@@ -2119,6 +2122,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     bio: profile?.bio ?? null,
                     banner_url: profile?.banner_url ?? null,
                     banner_color: profile?.banner_color ?? null,
+                    profile_tags: profile?.profile_tags ?? [],
                     roleIds: [],
                   },
                 ];

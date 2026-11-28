@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
+import {
+  normalizeProfileTags,
+  type ProfileTagId,
+} from "@/lib/profile-tags";
 
 export type FriendStatus = "none" | "outgoing" | "incoming" | "friends";
 
@@ -19,13 +23,21 @@ export type FriendProfile = {
   banner_url: string | null;
   banner_color: string | null;
   created_at?: string | null;
+  /** Site reward tags (pioneer / funder) — not server roles. */
+  profile_tags?: ProfileTagId[];
 };
 
 export type FriendEdge = Tables<"friends"> & {
   other: FriendProfile;
 };
 
-function asProfile(row: Partial<FriendProfile> & { id: string; username: string }): FriendProfile {
+function asProfile(
+  row: Partial<FriendProfile> & {
+    id: string;
+    username: string;
+    profile_tags?: unknown;
+  },
+): FriendProfile {
   return {
     id: row.id,
     username: row.username,
@@ -40,6 +52,7 @@ function asProfile(row: Partial<FriendProfile> & { id: string; username: string 
     banner_url: row.banner_url ?? null,
     banner_color: row.banner_color ?? null,
     created_at: row.created_at ?? null,
+    profile_tags: normalizeProfileTags(row.profile_tags),
   };
 }
 
@@ -97,7 +110,7 @@ export async function loadFriendEdges(userId: string) {
 
   const { data: profiles, error: profileError } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, status, status_text, last_seen_at, manual_status, bio, banner_url, banner_color")
+    .select("id, username, avatar_url, status, status_text, last_seen_at, manual_status, bio, banner_url, banner_color, profile_tags")
     .in("id", unique);
   if (profileError) return { edges: [] as FriendEdge[], error: profileError.message };
 
@@ -222,7 +235,7 @@ export async function searchProfiles(query: string, excludeId: string) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, status, status_text, last_seen_at, manual_status, bio, banner_url, banner_color")
+    .select("id, username, avatar_url, status, status_text, last_seen_at, manual_status, bio, banner_url, banner_color, profile_tags")
     .ilike("username", `%${trimmed}%`)
     .neq("id", excludeId)
     .limit(20);

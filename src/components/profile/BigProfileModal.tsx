@@ -33,6 +33,7 @@ import {
 } from "@/lib/presence";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { avatarLetter } from "@/lib/avatar";
+import { ProfileTagsPills } from "@/components/profile/ProfileTagsPills";
 import type { MutualFocus } from "@/components/profile/SmallProfileCard";
 import {
   formatSinceDate,
@@ -628,6 +629,11 @@ export function BigProfileModal({
             {shownName !== profile.username && (
               <p className="mt-0.5 text-sm text-[#6d6f78]">@{profile.username}</p>
             )}
+            <ProfileTagsPills
+              tags={profile.profile_tags}
+              size="md"
+              className="mt-1.5"
+            />
             {!restricted ? (
               <PresenceCaption
                 userId={profile.id}

@@ -499,6 +499,8 @@ export type Database = {
           bio: string | null
           banner_url: string | null
           banner_color: string | null
+          /** Site reward tags: pioneer, funder (not server roles). */
+          profile_tags: string[]
           created_at: string
         }
         Insert: {
@@ -514,6 +516,7 @@ export type Database = {
           bio?: string | null
           banner_url?: string | null
           banner_color?: string | null
+          profile_tags?: string[]
           created_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>

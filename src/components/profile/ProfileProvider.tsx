@@ -47,6 +47,7 @@ import {
   displayRolesForMember,
   profileNameColorForMember,
 } from "@/lib/roles";
+import { normalizeProfileTags } from "@/lib/profile-tags";
 
 export type FriendsTab =
   | "online"
@@ -122,7 +123,7 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
   const { data } = await supabase
     .from("profiles")
     .select(
-      "id, username, avatar_url, status, status_text, last_seen_at, manual_status, manual_status_expires_at, status_text_expires_at, bio, banner_url, banner_color, created_at",
+      "id, username, avatar_url, status, status_text, last_seen_at, manual_status, manual_status_expires_at, status_text_expires_at, bio, banner_url, banner_color, created_at, profile_tags",
     )
     .eq("id", userId)
     .maybeSingle();
@@ -141,6 +142,7 @@ async function fetchProfile(userId: string): Promise<FriendProfile | null> {
     banner_url: data.banner_url,
     banner_color: data.banner_color,
     created_at: data.created_at,
+    profile_tags: normalizeProfileTags(data.profile_tags),
   };
 }
 
@@ -316,14 +318,18 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           const row = payload.new as FriendProfile | null;
           if (!row?.id || !openIds.includes(row.id)) return;
           if (cancelled) return;
+          const merged = {
+            ...row,
+            profile_tags: normalizeProfileTags(row.profile_tags),
+          };
           setSmall((prev) =>
             prev && prev.profile.id === row.id
-              ? { ...prev, profile: { ...prev.profile, ...row } }
+              ? { ...prev, profile: { ...prev.profile, ...merged } }
               : prev,
           );
           setBig((prev) =>
             prev && prev.profile.id === row.id
-              ? { ...prev, profile: { ...prev.profile, ...row } }
+              ? { ...prev, profile: { ...prev.profile, ...merged } }
               : prev,
           );
         },
@@ -343,6 +349,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setBig((prev) => {
       if (!prev || prev.profile.id !== current.id) return prev;
       const p = prev.profile;
+      const nextTags = normalizeProfileTags(current.profile_tags);
+      const tagsSame =
+        (p.profile_tags ?? []).join(",") === nextTags.join(",");
       if (
         p.status === current.status &&
         p.status_text === current.status_text &&
@@ -354,7 +363,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         p.username === current.username &&
         p.bio === current.bio &&
         p.banner_url === current.banner_url &&
-        p.banner_color === current.banner_color
+        p.banner_color === current.banner_color &&
+        tagsSame
       ) {
         return prev;
       }
@@ -373,12 +383,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           bio: current.bio,
           banner_url: current.banner_url,
           banner_color: current.banner_color,
+          profile_tags: nextTags,
         },
       };
     });
     setSmall((prev) => {
       if (!prev || prev.profile.id !== current.id) return prev;
       const p = prev.profile;
+      const nextTags = normalizeProfileTags(current.profile_tags);
+      const tagsSame =
+        (p.profile_tags ?? []).join(",") === nextTags.join(",");
       if (
         p.status === current.status &&
         p.status_text === current.status_text &&
@@ -390,7 +404,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         p.username === current.username &&
         p.bio === current.bio &&
         p.banner_url === current.banner_url &&
-        p.banner_color === current.banner_color
+        p.banner_color === current.banner_color &&
+        tagsSame
       ) {
         return prev;
       }
@@ -409,6 +424,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           bio: current.bio,
           banner_url: current.banner_url,
           banner_color: current.banner_color,
+          profile_tags: nextTags,
         },
       };
     });
@@ -425,6 +441,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     current?.bio,
     current?.banner_url,
     current?.banner_color,
+    current?.profile_tags,
   ]);
 
   const messageUser = useCallback(

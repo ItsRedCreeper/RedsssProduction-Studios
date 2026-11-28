@@ -7,6 +7,7 @@ import type {
   ReactionGroup,
   ReplyPreview,
 } from "@/components/messenger/types";
+import { normalizeProfileTags } from "@/lib/profile-tags";
 
 const MONTHS = [
   "Jan",
@@ -187,7 +188,7 @@ export async function loadProfiles(ids: string[]): Promise<MiniProfile[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, username, avatar_url, status, status_text, last_seen_at, bio, banner_url, banner_color",
+      "id, username, avatar_url, status, status_text, last_seen_at, bio, banner_url, banner_color, profile_tags",
     )
     .in("id", unique);
   if (error || !data) return [];
@@ -201,6 +202,7 @@ export async function loadProfiles(ids: string[]): Promise<MiniProfile[]> {
     bio: row.bio,
     banner_url: row.banner_url,
     banner_color: row.banner_color,
+    profile_tags: normalizeProfileTags(row.profile_tags),
   }));
 }
 
