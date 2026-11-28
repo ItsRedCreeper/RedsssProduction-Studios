@@ -20,6 +20,7 @@ import { VoiceMesh } from "@/components/messenger/voice/webrtcMesh";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import type { VoiceState } from "@/components/messenger/types";
 import { playSound } from "@/lib/ui-sounds";
+import { publishVoiceRoster } from "@/lib/voice-roster";
 import {
   VoiceSessionContext,
   type JoinVoiceArgs,
@@ -582,7 +583,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       } else if (connectionRef.current && !streamRef.current) {
         void startMicMonitor();
       }
-      if (!userId || !connectionRef.current) return;
+      const conn = connectionRef.current;
+      if (!userId || !conn) return;
       const updatedAt = new Date().toISOString();
       const supabase = createClient();
       const { error } = await supabase
@@ -591,6 +593,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         .eq("user_id", userId);
       if (muteOp !== muteOpRef.current) return;
       void error;
+      void publishVoiceRoster(conn.serverId, {
+        type: "upsert",
+        state: {
+          user_id: userId,
+          channel_id: conn.channelId,
+          server_id: conn.serverId,
+          muted: nextMuted,
+          deafened: nextDeafened,
+          camera_on: !!cameraTrackRef.current,
+          screen_on: !!screenTrackRef.current,
+          updated_at: updatedAt,
+        },
+      });
     },
     [setLocalSpeaking, startMicMonitor],
   );
@@ -598,17 +613,32 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const persistMediaFlags = useCallback(
     async (camera: boolean, screen: boolean) => {
       const userId = userIdRef.current;
-      if (!userId || !connectionRef.current) return;
+      const conn = connectionRef.current;
+      if (!userId || !conn) return;
+      const updatedAt = new Date().toISOString();
       const supabase = createClient();
       const { error } = await supabase
         .from("voice_states")
         .update({
           camera_on: camera,
           screen_on: screen,
-          updated_at: new Date().toISOString(),
+          updated_at: updatedAt,
         })
         .eq("user_id", userId);
       void error;
+      void publishVoiceRoster(conn.serverId, {
+        type: "upsert",
+        state: {
+          user_id: userId,
+          channel_id: conn.channelId,
+          server_id: conn.serverId,
+          muted: mutedRef.current,
+          deafened: deafenedRef.current,
+          camera_on: camera,
+          screen_on: screen,
+          updated_at: updatedAt,
+        },
+      });
     },
     [],
   );
@@ -642,10 +672,20 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     await stopMesh();
     detachBroadcast();
     setSpeakingUserIds(new Set());
+    const left = connectionRef.current;
     setConnection(null);
     connectionRef.current = null;
     const userId = userIdRef.current;
     if (!userId) return;
+    // Push leave to peers immediately — don't wait for postgres_changes / REST.
+    if (left) {
+      void publishVoiceRoster(left.serverId, {
+        type: "remove",
+        user_id: userId,
+        server_id: left.serverId,
+        channel_id: left.channelId,
+      });
+    }
     const supabase = createClient();
     const { error } = await supabase.from("voice_states").delete().eq("user_id", userId);
     void error;
@@ -697,10 +737,18 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       };
 
       if (op !== voiceOpRef.current) return;
+      // Announce seat before/during DB write so peers update without waiting on REST.
+      void publishVoiceRoster(args.serverId, { type: "upsert", state: row });
       const voiceError = await saveVoiceState(row);
       if (op !== voiceOpRef.current || skipAutoJoinRef.current.has(args.channelId)) {
         const supabase = createClient();
         await supabase.from("voice_states").delete().eq("user_id", userId);
+        void publishVoiceRoster(args.serverId, {
+          type: "remove",
+          user_id: userId,
+          server_id: args.serverId,
+          channel_id: args.channelId,
+        });
         stopMicMonitor();
         await stopMesh();
         detachBroadcast();

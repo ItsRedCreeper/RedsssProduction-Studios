@@ -220,6 +220,11 @@ import {
 } from "@/lib/blocking";
 import { previewMissedCallContent } from "@/lib/missed-call";
 import { playSound } from "@/lib/ui-sounds";
+import {
+  VOICE_ROSTER_EVENT,
+  voiceRosterTopic,
+  type VoiceRosterPayload,
+} from "@/lib/voice-roster";
 import { useOptionalUnread } from "@/components/notifications/UnreadProvider";
 import {
   loadFriendEdges,
@@ -2396,42 +2401,122 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setVoiceStates([]);
       return;
     }
-    // Wait for membership so voice_states doesn't steal REST slots from servers/messages.
-    if (loadingServers) return;
     const serverId = activeServerId;
     const supabase = createClient();
     let cancelled = false;
+    let reconcileTimer: number | null = null;
 
-    async function load() {
+    function upsertLocal(row: VoiceState) {
+      if (!row?.user_id || row.server_id !== serverId) return;
+      setVoiceStates((prev) => {
+        const idx = prev.findIndex((state) => state.user_id === row.user_id);
+        if (idx >= 0) {
+          const cur = prev[idx]!;
+          if (
+            cur.channel_id === row.channel_id &&
+            cur.muted === row.muted &&
+            cur.deafened === row.deafened &&
+            cur.camera_on === row.camera_on &&
+            cur.screen_on === row.screen_on &&
+            cur.updated_at === row.updated_at
+          ) {
+            return prev;
+          }
+          const next = prev.slice();
+          next[idx] = row;
+          return next;
+        }
+        return [...prev, row];
+      });
+    }
+
+    function removeLocal(userId: string) {
+      if (!userId) return;
+      setVoiceStates((prev) => {
+        if (!prev.some((state) => state.user_id === userId)) return prev;
+        return prev.filter((state) => state.user_id !== userId);
+      });
+    }
+
+    function scheduleReconcile(delayMs = 1_500) {
+      if (reconcileTimer != null) window.clearTimeout(reconcileTimer);
+      reconcileTimer = window.setTimeout(() => {
+        reconcileTimer = null;
+        void load(true);
+      }, delayMs);
+    }
+
+    async function load(silent = false) {
+      // Avoid competing with critical boot REST unless we're reconciling.
+      if (!silent && loadingServers) return;
       const { data, error: voiceError } = await supabase
         .from("voice_states")
         .select("*")
         .eq("server_id", serverId);
       if (cancelled) return;
       if (voiceError) {
-        setError(voiceError.message);
+        if (!silent) setError(voiceError.message);
         return;
       }
       setVoiceStates(data ?? []);
     }
 
+    // Initial snapshot — short yield so servers/messages keep pool priority.
     const boot = window.setTimeout(() => {
-      void load();
-    }, 300);
+      void load(false);
+    }, loadingServers ? 400 : 0);
+
     const channel = supabase
       .channel(`voice:${serverId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "voice_states" },
-        () => {
-          void load();
+        {
+          event: "*",
+          schema: "public",
+          table: "voice_states",
+          filter: `server_id=eq.${serverId}`,
+        },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldRow = payload.old as { user_id?: string };
+            if (oldRow?.user_id) removeLocal(oldRow.user_id);
+            // Catch missed deletes from replica/RLS edge cases.
+            scheduleReconcile(2_000);
+            return;
+          }
+          const row = payload.new as VoiceState;
+          upsertLocal(row);
+          // Heartbeat UPDATEs are frequent — only reconcile on join INSERT.
+          if (payload.eventType === "INSERT") scheduleReconcile(2_000);
         },
       )
       .subscribe();
+
+    // Fast path: join/leave/mute broadcast from VoiceSessionProvider.
+    const roster = supabase
+      .channel(voiceRosterTopic(serverId), {
+        config: { broadcast: { self: true } },
+      })
+      .on("broadcast", { event: VOICE_ROSTER_EVENT }, ({ payload }) => {
+        const msg = payload as VoiceRosterPayload;
+        if (!msg || typeof msg !== "object") return;
+        if (msg.type === "upsert") {
+          upsertLocal(msg.state);
+          return;
+        }
+        if (msg.type === "remove") {
+          if (msg.server_id && msg.server_id !== serverId) return;
+          removeLocal(msg.user_id);
+        }
+      })
+      .subscribe();
+
     return () => {
       cancelled = true;
       window.clearTimeout(boot);
+      if (reconcileTimer != null) window.clearTimeout(reconcileTimer);
       void supabase.removeChannel(channel);
+      void supabase.removeChannel(roster);
     };
   }, [activeServerId, previewMode, loadingServers]);
 
