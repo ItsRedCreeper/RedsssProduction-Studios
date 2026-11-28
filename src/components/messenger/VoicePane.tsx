@@ -8,7 +8,7 @@ import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControl
 import { avatarAccentColor } from "@/lib/avatar";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import type { MemberView, VoiceState } from "@/components/messenger/types";
-import type { VoiceRemoteMedia } from "@/components/messenger/voice/VoiceSessionProvider";
+import type { VoiceRemoteMedia } from "@/components/messenger/voice/voiceSessionContext";
 
 /** Discord lists voice members A→Z by nickname/username and keeps that order stable. */
 function voiceDisplayName(

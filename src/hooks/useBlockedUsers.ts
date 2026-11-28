@@ -51,7 +51,7 @@ async function refreshBlocked(userId: string) {
   return loadPromise;
 }
 
-let bootTimer: ReturnType<typeof setTimeout> | null = null;
+let bootTimer: number | null = null;
 
 function ensureBlockedStore(userId: string | null) {
   if (typeof window === "undefined") return;

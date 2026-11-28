@@ -26,13 +26,29 @@ import {
   User,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import {
   TypingIndicator,
   type TypingPerson,
 } from "@/components/messenger/TypingIndicator";
-import { EmojiPicker, type EmojiPick } from "@/components/messenger/EmojiPicker";
-import { GifPicker, type GifResult } from "@/components/messenger/GifPicker";
+import type { EmojiPick } from "@/components/messenger/EmojiPicker";
+import type { GifResult } from "@/components/messenger/GifPicker";
 import { ComposerDraftMirror } from "@/components/messenger/ComposerDraftMirror";
+
+const EmojiPicker = dynamic(
+  () =>
+    import("@/components/messenger/EmojiPicker").then((m) => ({
+      default: m.EmojiPicker,
+    })),
+  { ssr: false },
+);
+const GifPicker = dynamic(
+  () =>
+    import("@/components/messenger/GifPicker").then((m) => ({
+      default: m.GifPicker,
+    })),
+  { ssr: false },
+);
 import { CustomEmoji } from "@/components/messenger/CustomEmoji";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";

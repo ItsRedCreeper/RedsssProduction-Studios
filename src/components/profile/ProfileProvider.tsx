@@ -31,17 +31,35 @@ import {
   type MutualServer,
 } from "@/lib/friends";
 import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
-import {
-  SmallProfileCard,
-  type MutualFocus,
-  type SmallProfileReadyData,
+import dynamic from "next/dynamic";
+import type {
+  MutualFocus,
+  SmallProfileReadyData,
 } from "@/components/profile/SmallProfileCard";
-import {
-  BigProfileModal,
-  type BigProfileReadyData,
-} from "@/components/profile/BigProfileModal";
-import { EditProfileModal } from "@/components/profile/EditProfileModal";
+import type { BigProfileReadyData } from "@/components/profile/BigProfileModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+
+const SmallProfileCard = dynamic(
+  () =>
+    import("@/components/profile/SmallProfileCard").then((m) => ({
+      default: m.SmallProfileCard,
+    })),
+  { ssr: false },
+);
+const BigProfileModal = dynamic(
+  () =>
+    import("@/components/profile/BigProfileModal").then((m) => ({
+      default: m.BigProfileModal,
+    })),
+  { ssr: false },
+);
+const EditProfileModal = dynamic(
+  () =>
+    import("@/components/profile/EditProfileModal").then((m) => ({
+      default: m.EditProfileModal,
+    })),
+  { ssr: false },
+);
 import type { Role } from "@/components/messenger/types";
 import {
   displayRolesForMember,

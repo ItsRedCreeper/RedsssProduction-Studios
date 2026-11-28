@@ -734,6 +734,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_dm_last_messages: {
+        Args: { convo_ids: string[] }
+        Returns: {
+          conversation_id: string
+          content: string | null
+          created_at: string
+          user_id: string
+        }[]
+      }
       get_unread_summary: {
         Args: Record<string, never>
         Returns: Json

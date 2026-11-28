@@ -38,9 +38,17 @@ import {
 } from "@/components/messenger/data";
 import { formatMessageContent } from "@/components/messenger/formatMessageContent";
 import { LinkEmbeds } from "@/components/messenger/LinkEmbeds";
+import dynamic from "next/dynamic";
 import { MessageMedia } from "@/components/messenger/MessageMedia";
-import { EmojiPicker } from "@/components/messenger/EmojiPicker";
 import { ReactionEmoji } from "@/components/messenger/CustomEmoji";
+
+const EmojiPicker = dynamic(
+  () =>
+    import("@/components/messenger/EmojiPicker").then((m) => ({
+      default: m.EmojiPicker,
+    })),
+  { ssr: false },
+);
 import { ReactionInfoTip } from "@/components/messenger/EmojiInfo";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { displayMentionText, type MentionMaps } from "@/lib/mentions";

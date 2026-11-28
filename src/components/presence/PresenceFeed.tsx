@@ -246,109 +246,123 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Defer privacy + self fetch so critical messenger REST wins the pool.
     const bootTimer = window.setTimeout(() => {
       if (cancelled) return;
       void fetchUsers([user.id]);
       void refreshPrivacy();
-    }, 400);
+    }, 900);
 
     const supabase = createClient();
-    const privacyChannel = supabase
-      .channel(`presence-privacy:${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "friends" },
-        () => {
-          void refreshPrivacy();
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "server_members" },
-        () => {
-          void refreshPrivacy();
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "friend_nicknames" },
-        () => {
-          void refreshPrivacy();
-        },
-      )
-      .subscribe();
+    let privacyChannel: ReturnType<typeof supabase.channel> | null = null;
+    const subTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      privacyChannel = supabase
+        .channel(`presence-privacy:${user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "friends" },
+          () => {
+            void refreshPrivacy();
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "server_members" },
+          () => {
+            void refreshPrivacy();
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "friend_nicknames" },
+          () => {
+            void refreshPrivacy();
+          },
+        )
+        .subscribe();
+    }, 900);
 
     return () => {
       cancelled = true;
       window.clearTimeout(bootTimer);
-      void supabase.removeChannel(privacyChannel);
+      window.clearTimeout(subTimer);
+      if (privacyChannel) void supabase.removeChannel(privacyChannel);
     };
   }, [user?.id, upsert, fetchUsers]);
 
-  // One shared realtime channel for the whole app.
+  // One shared realtime channel for the whole app (deferred past critical boot).
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     const supabase = createClient();
-    const channel = supabase
-      .channel(`presence-feed:${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        (payload) => {
-          const row = payload.new as {
-            id?: string;
-            status?: string;
-            status_text?: string | null;
-            last_seen_at?: string | null;
-          } | null;
-          if (!row?.id) return;
-          if (!watchedRef.current.has(row.id) && row.id !== user.id) return;
-          watchedRef.current.add(row.id);
-          const patch: Partial<{
-            status: string;
-            statusText: string | null;
-            lastSeenAt: string | null;
-          }> = {};
-          // Never invent "offline" from a partial payload — that caused the flicker.
-          if (typeof row.status === "string") patch.status = row.status;
-          if (row.status_text !== undefined) patch.statusText = row.status_text;
-          if (row.last_seen_at !== undefined) patch.lastSeenAt = row.last_seen_at;
-          if (Object.keys(patch).length) upsert(row.id, patch);
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "user_activity" },
-        (payload) => {
-          const row = payload.new as UserActivityRow | null;
-          if (!row?.user_id) return;
-          if (!watchedRef.current.has(row.user_id) && row.user_id !== user.id) {
-            return;
-          }
-          watchedRef.current.add(row.user_id);
-          upsert(row.user_id, { activity: row });
-        },
-      )
-      .subscribe();
-
-    const poll = window.setInterval(() => {
-      const ids = [...watchedRef.current];
-      if (ids.length) void fetchUsers(ids);
-    }, POLL_MS);
-
-    // StatusPicker / heartbeats notify here — refresh self immediately so dots
-    // don't keep a stale feed status until the next poll/realtime event.
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let poll: number | null = null;
     const selfId = user.id;
+
     function onProfileUpdated() {
       watchedRef.current.add(selfId);
       void fetchUsers([selfId]);
     }
-    window.addEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
+
+    const subTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`presence-feed:${user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "profiles" },
+          (payload) => {
+            const row = payload.new as {
+              id?: string;
+              status?: string;
+              status_text?: string | null;
+              last_seen_at?: string | null;
+            } | null;
+            if (!row?.id) return;
+            if (!watchedRef.current.has(row.id) && row.id !== user.id) return;
+            watchedRef.current.add(row.id);
+            const patch: Partial<{
+              status: string;
+              statusText: string | null;
+              lastSeenAt: string | null;
+            }> = {};
+            // Never invent "offline" from a partial payload — that caused the flicker.
+            if (typeof row.status === "string") patch.status = row.status;
+            if (row.status_text !== undefined) patch.statusText = row.status_text;
+            if (row.last_seen_at !== undefined) patch.lastSeenAt = row.last_seen_at;
+            if (Object.keys(patch).length) upsert(row.id, patch);
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "user_activity" },
+          (payload) => {
+            const row = payload.new as UserActivityRow | null;
+            if (!row?.user_id) return;
+            if (!watchedRef.current.has(row.user_id) && row.user_id !== user.id) {
+              return;
+            }
+            watchedRef.current.add(row.user_id);
+            upsert(row.user_id, { activity: row });
+          },
+        )
+        .subscribe();
+
+      poll = window.setInterval(() => {
+        const ids = [...watchedRef.current];
+        if (ids.length) void fetchUsers(ids);
+      }, POLL_MS);
+
+      window.addEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
+    }, 900);
 
     return () => {
-      window.clearInterval(poll);
+      cancelled = true;
+      window.clearTimeout(subTimer);
+      if (poll != null) window.clearInterval(poll);
       window.removeEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [user?.id, upsert, fetchUsers]);
 

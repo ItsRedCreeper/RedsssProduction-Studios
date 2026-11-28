@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
-import { useCallSession } from "@/components/messenger/voice/CallSessionProvider";
+import { useCallSession } from "@/components/messenger/voice/callSessionContext";
 import { HoverTip } from "@/components/ui/HoverTip";
 import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import { createClient } from "@/lib/supabase/client";

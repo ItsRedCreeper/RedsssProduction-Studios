@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Download, FileText, Film, Paperclip } from "lucide-react";
-import { MediaLightbox } from "@/components/messenger/MediaLightbox";
 import { SpoilerMedia } from "@/components/messenger/SpoilerMedia";
+
+const MediaLightbox = dynamic(
+  () =>
+    import("@/components/messenger/MediaLightbox").then((m) => ({
+      default: m.MediaLightbox,
+    })),
+  { ssr: false },
+);
 import {
   attachmentsFromMessage,
   formatFileSize,

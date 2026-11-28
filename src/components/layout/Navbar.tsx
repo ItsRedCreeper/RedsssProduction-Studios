@@ -1,20 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Bell, LogOut, Menu, Settings, Users, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { SiteLogo } from "@/components/layout/SiteLogo";
-import {
-  FriendsPanel,
-  type FriendListItem,
-} from "@/components/layout/FriendsPanel";
-import { NotificationsPanel } from "@/components/layout/NotificationsPanel";
-import { AccountSettingsModal } from "@/components/settings/AccountSettingsModal";
+import type { FriendListItem } from "@/components/layout/FriendsPanel";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { createClient } from "@/lib/supabase/client";
-import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
-import { useOptionalCallSession } from "@/components/messenger/voice/CallSessionProvider";
+import { useOptionalVoiceSession } from "@/components/messenger/voice/voiceSessionContext";
+import { useOptionalCallSession } from "@/components/messenger/voice/callSessionContext";
 import { useProfileUi } from "@/components/profile/ProfileProvider";
 import { NAV_LINKS } from "@/lib/nav";
 import { messengerDmPath, messengerHomePath } from "@/lib/messenger-routes";
@@ -23,6 +19,28 @@ import { HoverTip } from "@/components/ui/HoverTip";
 import { UserPresenceBar } from "@/components/messenger/UserPresenceBar";
 import { useOptionalUnread } from "@/components/notifications/UnreadProvider";
 import { formatUnreadCount, UNREAD_BADGE_RED } from "@/lib/unread";
+
+const FriendsPanel = dynamic(
+  () =>
+    import("@/components/layout/FriendsPanel").then((m) => ({
+      default: m.FriendsPanel,
+    })),
+  { ssr: false },
+);
+const NotificationsPanel = dynamic(
+  () =>
+    import("@/components/layout/NotificationsPanel").then((m) => ({
+      default: m.NotificationsPanel,
+    })),
+  { ssr: false },
+);
+const AccountSettingsModal = dynamic(
+  () =>
+    import("@/components/settings/AccountSettingsModal").then((m) => ({
+      default: m.AccountSettingsModal,
+    })),
+  { ssr: false },
+);
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -266,30 +284,36 @@ export function Navbar() {
         ) : null}
       </header>
 
-      <FriendsPanel
-        open={profileUi.friendsOpen}
-        onClose={profileUi.closeFriends}
-        onMessage={handleMessage}
-        userId={user?.id ?? null}
-        initialTab={profileUi.friendsTab}
-      />
+      {profileUi.friendsOpen ? (
+        <FriendsPanel
+          open={profileUi.friendsOpen}
+          onClose={profileUi.closeFriends}
+          onMessage={handleMessage}
+          userId={user?.id ?? null}
+          initialTab={profileUi.friendsTab}
+        />
+      ) : null}
 
-      <NotificationsPanel
-        open={notificationsOpen}
-        onClose={() => setNotificationsOpen(false)}
-        userId={user?.id ?? null}
-        onUnreadChange={setUnreadNotifications}
-        onOpenFriends={(tab) => {
-          setNotificationsOpen(false);
-          profileUi.openFriends(tab);
-        }}
-      />
+      {notificationsOpen ? (
+        <NotificationsPanel
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          userId={user?.id ?? null}
+          onUnreadChange={setUnreadNotifications}
+          onOpenFriends={(tab) => {
+            setNotificationsOpen(false);
+            profileUi.openFriends(tab);
+          }}
+        />
+      ) : null}
 
-      <AccountSettingsModal
-        open={accountSettingsOpen}
-        user={user}
-        onClose={() => setAccountSettingsOpen(false)}
-      />
+      {accountSettingsOpen ? (
+        <AccountSettingsModal
+          open={accountSettingsOpen}
+          user={user}
+          onClose={() => setAccountSettingsOpen(false)}
+        />
+      ) : null}
 
       {toast && (
         <div

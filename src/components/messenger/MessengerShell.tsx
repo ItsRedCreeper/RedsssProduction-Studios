@@ -28,20 +28,12 @@ import {
   rememberServerChannel,
   withPreviewQuery,
 } from "@/lib/messenger-routes";
-import { CreateServerModal } from "@/components/messenger/CreateServerModal";
-import { CreateChannelModal } from "@/components/messenger/CreateChannelModal";
-import { EditChannelModal } from "@/components/messenger/EditChannelModal";
-import { ForwardMessageModal } from "@/components/messenger/ForwardMessageModal";
-import { CreateGroupDmModal } from "@/components/messenger/CreateGroupDmModal";
-import { CreatePollModal } from "@/components/messenger/CreatePollModal";
-import { CreateCategoryModal } from "@/components/messenger/CreateCategoryModal";
+import dynamic from "next/dynamic";
 import { expandSlashCommand } from "@/lib/slash-commands";
 import { findAutomodHit, type AutomodRule } from "@/lib/automod";
-import { InvitePeopleModal } from "@/components/messenger/InvitePeopleModal";
 import { ServerRail } from "@/components/messenger/ServerRail";
 import { ChannelSidebar } from "@/components/messenger/ChannelSidebar";
 import { HomeSidebar } from "@/components/messenger/HomeSidebar";
-import { DiscoverPane } from "@/components/messenger/DiscoverPane";
 import { ChannelHeader } from "@/components/messenger/ChannelHeader";
 import { ChatTimeline } from "@/components/messenger/ChatTimeline";
 import {
@@ -52,17 +44,97 @@ import {
 import type { GifResult } from "@/components/messenger/GifPicker";
 import type { TypingPerson } from "@/components/messenger/TypingIndicator";
 import { MemberList } from "@/components/messenger/MemberList";
-import { VoicePane } from "@/components/messenger/VoicePane";
 import { VoiceConnectionBar } from "@/components/messenger/VoiceConnectionBar";
-import { CallOverlay } from "@/components/messenger/CallOverlay";
 import { ResizableSidebar } from "@/components/messenger/ResizableSidebar";
 import { ServerHeaderMenu } from "@/components/messenger/ServerHeaderMenu";
-import { ServerSettingsModal } from "@/components/messenger/ServerSettingsModal";
-import {
-  useVoiceSession,
-  VOICE_STALE_AFTER_MS,
-} from "@/components/messenger/voice/VoiceSessionProvider";
-import { useCallSession } from "@/components/messenger/voice/CallSessionProvider";
+import { useVoiceSession } from "@/components/messenger/voice/voiceSessionContext";
+import { VOICE_STALE_AFTER_MS } from "@/components/messenger/voice/voiceConstants";
+import { useCallSession } from "@/components/messenger/voice/callSessionContext";
+
+const CreateServerModal = dynamic(
+  () =>
+    import("@/components/messenger/CreateServerModal").then((m) => ({
+      default: m.CreateServerModal,
+    })),
+  { ssr: false },
+);
+const CreateChannelModal = dynamic(
+  () =>
+    import("@/components/messenger/CreateChannelModal").then((m) => ({
+      default: m.CreateChannelModal,
+    })),
+  { ssr: false },
+);
+const EditChannelModal = dynamic(
+  () =>
+    import("@/components/messenger/EditChannelModal").then((m) => ({
+      default: m.EditChannelModal,
+    })),
+  { ssr: false },
+);
+const ForwardMessageModal = dynamic(
+  () =>
+    import("@/components/messenger/ForwardMessageModal").then((m) => ({
+      default: m.ForwardMessageModal,
+    })),
+  { ssr: false },
+);
+const CreateGroupDmModal = dynamic(
+  () =>
+    import("@/components/messenger/CreateGroupDmModal").then((m) => ({
+      default: m.CreateGroupDmModal,
+    })),
+  { ssr: false },
+);
+const CreatePollModal = dynamic(
+  () =>
+    import("@/components/messenger/CreatePollModal").then((m) => ({
+      default: m.CreatePollModal,
+    })),
+  { ssr: false },
+);
+const CreateCategoryModal = dynamic(
+  () =>
+    import("@/components/messenger/CreateCategoryModal").then((m) => ({
+      default: m.CreateCategoryModal,
+    })),
+  { ssr: false },
+);
+const InvitePeopleModal = dynamic(
+  () =>
+    import("@/components/messenger/InvitePeopleModal").then((m) => ({
+      default: m.InvitePeopleModal,
+    })),
+  { ssr: false },
+);
+const DiscoverPane = dynamic(
+  () =>
+    import("@/components/messenger/DiscoverPane").then((m) => ({
+      default: m.DiscoverPane,
+    })),
+  { ssr: false },
+);
+const VoicePane = dynamic(
+  () =>
+    import("@/components/messenger/VoicePane").then((m) => ({
+      default: m.VoicePane,
+    })),
+  { ssr: false },
+);
+const CallOverlay = dynamic(
+  () =>
+    import("@/components/messenger/CallOverlay").then((m) => ({
+      default: m.CallOverlay,
+    })),
+  { ssr: false },
+);
+const ServerSettingsModal = dynamic(
+  () =>
+    import("@/components/messenger/ServerSettingsModal").then((m) => ({
+      default: m.ServerSettingsModal,
+    })),
+  { ssr: false },
+);
 import { useMessengerSidebarWidth } from "@/hooks/useMessengerSidebarWidth";
 import {
   useVoiceChatSidebarWidth,
@@ -935,33 +1007,39 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     void loadServers();
   }, [loadServers]);
 
-  const loadCustomEmojis = useCallback(async () => {
+  useEffect(() => {
     if (!user) {
       setCustomEmojis([]);
       return;
     }
-    const supabase = createClient();
-    const { loadMyServerIds } = await import("@/lib/messenger/membership");
-    const { serverIds } = await loadMyServerIds(user.id);
+    // Wait for server list, then defer emoji catalog — not needed for first paint.
+    const serverIds = servers.map((server) => server.id);
     if (serverIds.length === 0) {
-      setCustomEmojis([]);
+      if (!loadingServers) setCustomEmojis([]);
       return;
     }
-    const { data, error: emojiError } = await supabase
-      .from("server_emojis")
-      .select("*")
-      .in("server_id", serverIds)
-      .order("name", { ascending: true });
-    if (emojiError) {
-      setCustomEmojis([]);
-      return;
-    }
-    setCustomEmojis((data as ServerEmoji[]) ?? []);
-  }, [user]);
-
-  useEffect(() => {
-    void loadCustomEmojis();
-  }, [loadCustomEmojis, servers]);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const supabase = createClient();
+        const { data, error: emojiError } = await supabase
+          .from("server_emojis")
+          .select("*")
+          .in("server_id", serverIds)
+          .order("name", { ascending: true });
+        if (cancelled) return;
+        if (emojiError) {
+          setCustomEmojis([]);
+          return;
+        }
+        setCustomEmojis((data as ServerEmoji[]) ?? []);
+      })();
+    }, 700);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [user, servers, loadingServers]);
 
   useEffect(() => {
     seedEmojiCache(customEmojis);
@@ -1041,19 +1119,26 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         list.push(part);
         byConvo.set(part.conversation_id, list);
       }
-      const lastRows = await Promise.all(
-        ids.map(async (conversationId) => {
-          const { data: last } = await supabase
-            .from("dm_messages")
-            .select("content, created_at, user_id")
-            .eq("conversation_id", conversationId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          return [conversationId, last] as const;
-        }),
-      );
-      const lastByConvo = new Map(lastRows);
+      // Single RPC instead of N last-message REST calls.
+      const lastByConvo = new Map<
+        string,
+        { content: string | null; created_at: string; user_id: string } | null
+      >();
+      const { data: lastRows } = await supabase.rpc("get_dm_last_messages", {
+        convo_ids: ids,
+      });
+      for (const row of lastRows ?? []) {
+        lastByConvo.set(row.conversation_id, {
+          content: row.content,
+          created_at: row.created_at,
+          user_id: row.user_id,
+        });
+      }
+      for (const conversationId of ids) {
+        if (!lastByConvo.has(conversationId)) {
+          lastByConvo.set(conversationId, null);
+        }
+      }
       const fetched = ids.map((conversationId) => {
         const convo = convoById.get(conversationId);
         const participants = byConvo.get(conversationId) ?? [];
@@ -6204,7 +6289,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   return (
     <div className="messenger-shell flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-      <CallOverlay />
+      {call.connection || call.incoming || call.outgoing ? (
+        <CallOverlay />
+      ) : null}
       <ServerRail
         servers={servers}
         activeServerId={activeServerId}
@@ -7413,7 +7500,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           onMembersChanged={setMembers}
           onRolesChanged={setServerRoles}
           onEmojisChanged={() => {
-            void loadCustomEmojis();
+            const serverIds = servers.map((server) => server.id);
+            if (serverIds.length > 0) {
+              const supabase = createClient();
+              void supabase
+                .from("server_emojis")
+                .select("*")
+                .in("server_id", serverIds)
+                .order("name", { ascending: true })
+                .then(({ data }) => {
+                  setCustomEmojis((data as ServerEmoji[]) ?? []);
+                });
+            }
             if (!activeServer) return;
             const supabase = createClient();
             void supabase

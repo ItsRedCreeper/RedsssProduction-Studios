@@ -1,9 +1,7 @@
 "use client";
 
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -22,72 +20,27 @@ import { VoiceMesh } from "@/components/messenger/voice/webrtcMesh";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import type { VoiceState } from "@/components/messenger/types";
 import { playSound } from "@/lib/ui-sounds";
+import {
+  VoiceSessionContext,
+  type JoinVoiceArgs,
+  type VoiceConnection,
+  type VoiceRemoteMedia,
+  type VoiceSessionContextValue,
+} from "@/components/messenger/voice/voiceSessionContext";
+import { VOICE_STALE_AFTER_MS } from "@/components/messenger/voice/voiceConstants";
 
-export type VoiceConnection = {
-  channelId: string;
-  serverId: string;
-  channelName: string;
-  serverName: string;
-};
-
-export type VoiceRemoteMedia = {
-  camera: MediaStream | null;
-  screen: MediaStream | null;
-};
-
-type JoinVoiceArgs = {
-  channelId: string;
-  serverId: string;
-  channelName: string;
-  serverName: string;
-};
-
-type VoiceSessionContextValue = {
-  connection: VoiceConnection | null;
-  muted: boolean;
-  deafened: boolean;
-  quality: VoiceConnectionQuality;
-  speakingUserIds: ReadonlySet<string>;
-  selfSpeaking: boolean;
-  /** 0–1 input level for the local mic meter */
-  micLevel: number;
-  micError: string | null;
-  isSpeaking: (userId: string) => boolean;
-  inputDeviceId: string;
-  outputDeviceId: string;
-  inputVolume: number;
-  outputVolume: number;
-  inputs: { deviceId: string; label: string }[];
-  outputs: { deviceId: string; label: string }[];
-  joinVoice: (args: JoinVoiceArgs) => Promise<void>;
-  leaveVoice: () => Promise<void>;
-  toggleMute: () => void;
-  toggleDeafen: () => void;
-  cameraOn: boolean;
-  screenSharing: boolean;
-  localVideoStream: MediaStream | null;
-  localScreenStream: MediaStream | null;
-  remoteMedia: Record<string, VoiceRemoteMedia>;
-  toggleCamera: () => Promise<void>;
-  toggleScreenShare: () => Promise<void>;
-  setInputDeviceId: (deviceId: string) => void;
-  setOutputDeviceId: (deviceId: string) => void;
-  setInputVolume: (value: number) => void;
-  setOutputVolume: (value: number) => void;
-  refreshDevices: () => void;
-  shouldSkipAutoJoin: (channelId: string) => boolean;
-  clearSkipAutoJoin: (channelId?: string) => void;
-};
-
-const VoiceSessionContext = createContext<VoiceSessionContextValue | null>(null);
+export type { VoiceConnection, VoiceRemoteMedia };
+export { VOICE_STALE_AFTER_MS } from "@/components/messenger/voice/voiceConstants";
+export {
+  useOptionalVoiceSession,
+  useVoiceSession,
+} from "@/components/messenger/voice/voiceSessionContext";
 
 const SPEAKING_THRESHOLD = 0.04;
 const SPEAKING_HANG_MS = 350;
 const VOICE_SKIP_KEY = "redsss-voice-skip-channels";
 /** Keep presence alive while connected; stop heartbeats → grace kick. */
 const VOICE_HEARTBEAT_MS = 15_000;
-/** Discord-like grace: drop after ~1 min without a heartbeat (tab close / crash). */
-export const VOICE_STALE_AFTER_MS = 60_000;
 const VOICE_STALE_INTERVAL = "60 seconds";
 const VOICE_CLEANUP_POLL_MS = 20_000;
 
@@ -711,7 +664,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
       const already =
         connectionRef.current?.channelId === args.channelId &&
-        connectionRef.current.serverId === args.serverId;
+        connectionRef.current?.serverId === args.serverId;
       if (already) {
         if (!mutedRef.current) void startMicMonitor();
         return;
@@ -1211,16 +1164,4 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   return (
     <VoiceSessionContext.Provider value={value}>{children}</VoiceSessionContext.Provider>
   );
-}
-
-export function useVoiceSession() {
-  const value = useContext(VoiceSessionContext);
-  if (!value) {
-    throw new Error("useVoiceSession must be used within VoiceSessionProvider");
-  }
-  return value;
-}
-
-export function useOptionalVoiceSession() {
-  return useContext(VoiceSessionContext);
 }
