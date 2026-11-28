@@ -16,7 +16,21 @@ export function voiceRosterTopic(serverId: string) {
   return `voice-roster:${serverId}`;
 }
 
-/** Fan out join/leave/mute so other clients update before postgres_changes + REST. */
+function matchRosterChannel(
+  ch: { topic?: string; subTopic?: string },
+  topic: string,
+) {
+  const t = ch.topic ?? "";
+  const sub = ch.subTopic ?? "";
+  return sub === topic || t === topic || t === `realtime:${topic}`;
+}
+
+/**
+ * Fan out join/leave/mute so other clients update before postgres_changes + REST.
+ *
+ * Never removeChannel on this topic — supabase-js reuses RealtimeChannel by topic,
+ * so tearing one down kills MessengerShell's listener (and can disturb speaking/rtc).
+ */
 export async function publishVoiceRoster(
   serverId: string,
   payload: VoiceRosterPayload,
@@ -24,37 +38,37 @@ export async function publishVoiceRoster(
   if (!serverId) return;
   const topic = voiceRosterTopic(serverId);
   const supabase = createClient();
-  const existing = supabase.getChannels().find((ch) => {
-    const t = ch.topic ?? "";
-    return t === topic || t === `realtime:${topic}` || t.endsWith(`:${topic}`);
-  });
-  if (existing) {
-    await existing.send({
-      type: "broadcast",
-      event: VOICE_ROSTER_EVENT,
-      payload,
+  let channel = supabase
+    .getChannels()
+    .find((ch) => matchRosterChannel(ch, topic));
+
+  if (!channel) {
+    // channel() reuses by topic if MessengerShell already opened it.
+    channel = supabase.channel(topic, {
+      config: { broadcast: { self: true } },
     });
-    return;
+    await new Promise<void>((resolve) => {
+      const timer = window.setTimeout(() => resolve(), 600);
+      channel!.subscribe((status) => {
+        if (
+          status === "SUBSCRIBED" ||
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT"
+        ) {
+          window.clearTimeout(timer);
+          resolve();
+        }
+      });
+    });
   }
-  const channel = supabase.channel(topic, {
-    config: { broadcast: { self: false } },
-  });
-  await new Promise<void>((resolve) => {
-    const timer = window.setTimeout(() => resolve(), 800);
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        window.clearTimeout(timer);
-        resolve();
-      }
-    });
-  });
+
   try {
     await channel.send({
       type: "broadcast",
       event: VOICE_ROSTER_EVENT,
       payload,
     });
-  } finally {
-    void supabase.removeChannel(channel);
+  } catch {
+    /* postgres_changes remains the fallback */
   }
 }

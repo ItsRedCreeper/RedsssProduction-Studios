@@ -1,25 +1,21 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Voice join/leave presence latency)
+**Last updated:** 2026-11-28 (Voice regression after roster fix)
 
 ## Localhost health
 **Healthy**
 
-## Voice presence (~10s join/leave delay) — cause + fix
+## Voice regression after `5590c49` — cause + fix
 **Cause**
-1. `voice_states` had **REPLICA IDENTITY DEFAULT**, so Realtime DELETE payloads lacked `server_id` → RLS `is_server_member(server_id)` dropped leave events. Peers only noticed on a later full refetch (often another user’s ~15s heartbeat).
-2. Join UI waited on a **full REST refetch** inside the postgres_changes handler (queued behind other PostgREST traffic) instead of applying the payload.
-3. No broadcast fast path for roster changes.
+supabase-js **reuses RealtimeChannel instances by topic**. The roster publisher’s `removeChannel()` and MessengerShell’s speaking-watch cleanup could tear down the live `voice-speaking:*` bus (and disturb the shared realtime socket). That broke speaking outlines and could scramble WebRTC signaling while join/leave UI still looked fast.
 
 **Fix**
-- `ALTER TABLE voice_states REPLICA IDENTITY FULL`
-- Apply INSERT/UPDATE/DELETE payloads in-memory immediately (filtered by `server_id`)
-- Broadcast `voice-roster:{serverId}` on join / leave / mute / camera / screenshare
-- Infrequent reconcile refetch on INSERT/DELETE only (not heartbeats)
-- Subscribe as soon as a server is active (don’t wait for `loadingServers` to open the socket)
+- `publishVoiceRoster`: never `removeChannel` on the roster topic; reuse or leave the channel for MessengerShell
+- On join, VoiceSessionProvider **takes ownership** of `voice-speaking:{channelId}` (clear stale watchers, then subscribe fresh)
+- Speaking-watch cleanup **skips** the currently joined speaking topic
+- Voice roster subscriptions no longer remount when `loadingServers` flips
 
-## Performance (prior)
-- Voice/call deferred off home; dynamic heavy messenger UI; logo 4–10KB; DM last-message RPC; REST cap 6
+Fast roster path kept: in-memory postgres apply + roster broadcast + `REPLICA IDENTITY FULL`.
 
 ## Still open / broken
 - Reports / Funding placeholders

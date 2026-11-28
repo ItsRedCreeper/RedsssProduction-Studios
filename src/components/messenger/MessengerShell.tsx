@@ -2396,6 +2396,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     serverRoles,
   ]);
 
+  // Keep voice realtime subscriptions stable — do not remount when loadingServers flips.
+  const loadingServersRef = useRef(loadingServers);
+  loadingServersRef.current = loadingServers;
+
   useEffect(() => {
     if (!activeServerId || previewMode) {
       setVoiceStates([]);
@@ -2448,7 +2452,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     async function load(silent = false) {
       // Avoid competing with critical boot REST unless we're reconciling.
-      if (!silent && loadingServers) return;
+      if (!silent && loadingServersRef.current) return;
       const { data, error: voiceError } = await supabase
         .from("voice_states")
         .select("*")
@@ -2464,7 +2468,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     // Initial snapshot — short yield so servers/messages keep pool priority.
     const boot = window.setTimeout(() => {
       void load(false);
-    }, loadingServers ? 400 : 0);
+    }, loadingServersRef.current ? 400 : 0);
+    // If servers finish loading after boot skipped, pull once.
+    const catchup = window.setTimeout(() => {
+      if (!cancelled && !loadingServersRef.current) void load(true);
+    }, 800);
 
     const channel = supabase
       .channel(`voice:${serverId}`)
@@ -2514,11 +2522,12 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     return () => {
       cancelled = true;
       window.clearTimeout(boot);
+      window.clearTimeout(catchup);
       if (reconcileTimer != null) window.clearTimeout(reconcileTimer);
       void supabase.removeChannel(channel);
       void supabase.removeChannel(roster);
     };
-  }, [activeServerId, previewMode, loadingServers]);
+  }, [activeServerId, previewMode]);
 
   // Listen for speaking rings on occupied voice channels you are NOT joined to.
   // (Joined channel is already handled by VoiceSessionProvider's speaking subscription.)
@@ -2531,6 +2540,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const [watchedSpeakingIds, setWatchedSpeakingIds] = useState<Set<string>>(
     () => new Set(),
   );
+
+  // Live joined channel id for speaking-watch cleanup (avoid stale closure).
+  const joinedVoiceChannelRef = useRef<string | null>(null);
+  joinedVoiceChannelRef.current = connection?.channelId ?? null;
 
   useEffect(() => {
     if (previewMode || !occupiedVoiceChannelKey) {
@@ -2557,21 +2570,44 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       );
     };
     // Must match VoiceSessionProvider publish topic (`voice-speaking:${id}`).
-    const channels = channelIds.map((channelId) =>
-      supabase
-        .channel(`voice-speaking:${channelId}`)
-        .on("broadcast", { event: "speaking" }, ({ payload }) => {
-          const userId = (payload as { userId?: string })?.userId;
-          if (!userId) return;
-          const on = Boolean((payload as { speaking?: boolean })?.speaking);
-          if (on) speaking.set(userId, true);
-          else speaking.delete(userId);
-          flush();
-        })
-        .subscribe(),
-    );
+    // Skip topics VoiceSessionProvider already owns (join race).
+    const channels = channelIds.flatMap((channelId) => {
+      const topic = `voice-speaking:${channelId}`;
+      const owned = supabase.getChannels().some((ch) => {
+        const t = ch.topic ?? "";
+        const sub = (ch as { subTopic?: string }).subTopic ?? "";
+        return sub === topic || t === topic || t === `realtime:${topic}`;
+      });
+      // If we're about to join / already joined this id, never steal the bus.
+      if (owned && joinedVoiceChannelRef.current === channelId) return [];
+      return [
+        supabase
+          .channel(topic)
+          .on("broadcast", { event: "speaking" }, ({ payload }) => {
+            const userId = (payload as { userId?: string })?.userId;
+            if (!userId) return;
+            const on = Boolean((payload as { speaking?: boolean })?.speaking);
+            if (on) speaking.set(userId, true);
+            else speaking.delete(userId);
+            flush();
+          })
+          .subscribe(),
+      ];
+    });
     return () => {
+      const liveJoined = joinedVoiceChannelRef.current;
       for (const channel of channels) {
+        const t = channel.topic ?? "";
+        const sub = (channel as { subTopic?: string }).subTopic ?? "";
+        // Never tear down the joined speaking bus owned by VoiceSessionProvider.
+        if (
+          liveJoined &&
+          (sub === `voice-speaking:${liveJoined}` ||
+            t === `voice-speaking:${liveJoined}` ||
+            t === `realtime:voice-speaking:${liveJoined}`)
+        ) {
+          continue;
+        }
         void supabase.removeChannel(channel);
       }
     };

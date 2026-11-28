@@ -544,8 +544,19 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       detachBroadcast();
       setSpeakingUserIds(new Set());
       const supabase = createClient();
+      const topic = `voice-speaking:${channelId}`;
+      // supabase-js reuses RealtimeChannel by topic. MessengerShell may already
+      // be watching this topic — remove those instances first so we own a fresh
+      // channel. Otherwise their later removeChannel() would kill our speaking bus.
+      for (const existing of [...supabase.getChannels()]) {
+        const t = existing.topic ?? "";
+        const sub = (existing as { subTopic?: string }).subTopic ?? "";
+        if (sub === topic || t === topic || t === `realtime:${topic}`) {
+          void supabase.removeChannel(existing);
+        }
+      }
       const channel = supabase
-        .channel(`voice-speaking:${channelId}`)
+        .channel(topic)
         .on("broadcast", { event: "speaking" }, ({ payload }) => {
           const userId = (payload as { userId?: string })?.userId;
           const speaking = Boolean((payload as { speaking?: boolean })?.speaking);
