@@ -116,7 +116,9 @@ export function MediaLightbox({
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = objectUrl;
-      anchor.download = current.name || "download";
+      anchor.download = (current.name || "download")
+        .replace(/[\\/<>:"|?*\u0000-\u001f]/g, "_")
+        .slice(0, 180);
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();

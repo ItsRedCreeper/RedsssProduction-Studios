@@ -349,7 +349,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         p.last_seen_at === current.last_seen_at &&
         p.manual_status === current.manual_status &&
         p.manual_status_expires_at === current.manual_status_expires_at &&
-        p.status_text_expires_at === current.status_text_expires_at
+        p.status_text_expires_at === current.status_text_expires_at &&
+        p.avatar_url === current.avatar_url &&
+        p.username === current.username &&
+        p.bio === current.bio &&
+        p.banner_url === current.banner_url &&
+        p.banner_color === current.banner_color
       ) {
         return prev;
       }
@@ -380,7 +385,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         p.last_seen_at === current.last_seen_at &&
         p.manual_status === current.manual_status &&
         p.manual_status_expires_at === current.manual_status_expires_at &&
-        p.status_text_expires_at === current.status_text_expires_at
+        p.status_text_expires_at === current.status_text_expires_at &&
+        p.avatar_url === current.avatar_url &&
+        p.username === current.username &&
+        p.bio === current.bio &&
+        p.banner_url === current.banner_url &&
+        p.banner_color === current.banner_color
       ) {
         return prev;
       }

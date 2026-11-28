@@ -55,6 +55,7 @@ import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS_PER_MESSAGE,
 } from "@/lib/message-media";
+import { pushOverlayEscape } from "@/lib/overlay-escape";
 
 export type MentionSuggestion = {
   id: string;
@@ -396,6 +397,16 @@ export function MessageComposer({
     window.addEventListener("mousedown", onPointerDown);
     return () => window.removeEventListener("mousedown", onPointerDown);
   }, [emojiOpen, gifOpen, stickerOpen, attachMenuOpen]);
+
+  // Escape while emoji/gif/sticker search is focused (outside the textarea).
+  useEffect(() => {
+    if (!emojiOpen && !gifOpen && !stickerOpen) return;
+    return pushOverlayEscape(() => {
+      setEmojiOpen(false);
+      setGifOpen(false);
+      setStickerOpen(false);
+    });
+  }, [emojiOpen, gifOpen, stickerOpen]);
 
   useLayoutEffect(() => {
     if (!emojiOpen && !gifOpen && !stickerOpen) {
@@ -1059,6 +1070,8 @@ export function MessageComposer({
                     return;
                   }
                   if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
                     onDraft(`${draft} `);
                     return;
                   }
@@ -1090,11 +1103,14 @@ export function MessageComposer({
                   }
                   if (event.key === "Escape") {
                     event.preventDefault();
+                    event.stopPropagation();
                     onDraft(`${draft} `);
                     return;
                   }
                 }
                 if (event.key === "Escape" && (emojiOpen || gifOpen || stickerOpen)) {
+                  event.preventDefault();
+                  event.stopPropagation();
                   setEmojiOpen(false);
                   setGifOpen(false);
                   setStickerOpen(false);
@@ -1107,6 +1123,7 @@ export function MessageComposer({
                   pendingFiles.length === 0
                 ) {
                   event.preventDefault();
+                  event.stopPropagation();
                   onCancelReply();
                   return;
                 }

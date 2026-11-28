@@ -221,14 +221,23 @@ export function hydrateMessages(
 
   return rows.map((row) => {
     const parent = row.reply_to_id ? byId.get(row.reply_to_id) : undefined;
-    const reply: ReplyPreview | null = parent
-      ? {
-          id: parent.id,
-          content: parent.content,
-          user_id: parent.user_id,
-          profiles: profileMap.get(parent.user_id) ?? null,
-        }
-      : null;
+    let reply: ReplyPreview | null = null;
+    if (parent) {
+      reply = {
+        id: parent.id,
+        content: parent.content,
+        user_id: parent.user_id,
+        profiles: profileMap.get(parent.user_id) ?? null,
+      };
+    } else if (row.reply_to_id) {
+      // Parent deleted or out of range — keep a stub so the reply bar doesn't vanish.
+      reply = {
+        id: row.reply_to_id,
+        content: "Original message was deleted.",
+        user_id: "",
+        profiles: null,
+      };
+    }
     return {
       ...row,
       profiles: profileMap.get(row.user_id) ?? null,
@@ -274,12 +283,21 @@ function parseChannelMessagesPayload(data: unknown): ChannelMessagesPayload {
 function mapChannelMessageRows(rows: ChannelMessageRpcRow[]): ChatMessage[] {
   return rows.map((row) => {
     const { profiles, reply_to, ...message } = row;
+    let preview = reply_to ?? null;
+    if (!preview && message.reply_to_id) {
+      preview = {
+        id: message.reply_to_id,
+        content: "Original message was deleted.",
+        user_id: "",
+        profiles: null,
+      };
+    }
     return {
       ...message,
       profiles: profiles
         ? { username: profiles.username, avatar_url: profiles.avatar_url }
         : null,
-      reply_to: reply_to ?? null,
+      reply_to: preview,
     };
   });
 }

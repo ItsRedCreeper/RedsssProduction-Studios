@@ -20,9 +20,16 @@ type MessageMediaProps = {
   };
 };
 
+function safeDownloadName(name: string | undefined | null) {
+  const raw = (name ?? "download").trim() || "download";
+  // Strip path separators / control chars that break Content-Disposition-like names.
+  return raw.replace(/[\\/<>:"|?*\u0000-\u001f]/g, "_").slice(0, 180);
+}
+
 export function MessageMedia({ message }: MessageMediaProps) {
   const items = useMemo(() => attachmentsFromMessage(message), [message]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
   const inlineVideoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
 
   useEffect(() => {
@@ -50,6 +57,30 @@ export function MessageMedia({ message }: MessageMediaProps) {
 
   function closeLightbox() {
     setLightboxIndex(null);
+  }
+
+  async function downloadFile(item: MessageAttachment) {
+    if (downloadingUrl === item.url) return;
+    setDownloadingUrl(item.url);
+    const filename = safeDownloadName(item.name);
+    try {
+      const res = await fetch(item.url);
+      if (!res.ok) throw new Error("download failed");
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      // Fallback: open in a new tab if blob download is blocked (CORS / opaque).
+      window.open(item.url, "_blank", "noopener,noreferrer");
+    } finally {
+      setDownloadingUrl(null);
+    }
   }
 
   return (
@@ -115,12 +146,11 @@ export function MessageMedia({ message }: MessageMediaProps) {
           }
 
           const body = (
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noreferrer"
-              download={item.name}
-              className="inline-flex max-w-full items-center gap-3 rounded-md border border-[#3f4147] bg-[var(--ms-sidebar)] px-3 py-2.5 text-sm text-[var(--ms-text)] hover:bg-[#35373c]"
+            <button
+              type="button"
+              onClick={() => void downloadFile(item)}
+              disabled={downloadingUrl === item.url}
+              className="inline-flex max-w-full items-center gap-3 rounded-md border border-[#3f4147] bg-[var(--ms-sidebar)] px-3 py-2.5 text-left text-sm text-[var(--ms-text)] hover:bg-[#35373c] disabled:opacity-60"
             >
               {item.type.includes("pdf") || item.type.startsWith("text/") ? (
                 <FileText className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.75} />
@@ -138,7 +168,7 @@ export function MessageMedia({ message }: MessageMediaProps) {
                 )}
               </span>
               <Download className="h-4 w-4 shrink-0 text-[var(--ms-text-muted)]" strokeWidth={1.75} />
-            </a>
+            </button>
           );
 
           return spoiler ? (

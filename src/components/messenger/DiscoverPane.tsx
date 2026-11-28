@@ -120,7 +120,28 @@ export function DiscoverPane({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "server_members" },
-        () => scheduleStatsRefresh(),
+        (payload) => {
+          const row =
+            (payload.new as { user_id?: string; server_id?: string } | null) ??
+            (payload.old as { user_id?: string; server_id?: string } | null);
+          if (row?.user_id === user.id && row.server_id) {
+            if (payload.eventType === "DELETE") {
+              setMemberIds((current) =>
+                current.filter((id) => id !== row.server_id),
+              );
+              setJoiningId((current) =>
+                current === row.server_id ? null : current,
+              );
+            } else if (payload.eventType === "INSERT" && row.server_id) {
+              setMemberIds((current) =>
+                current.includes(row.server_id!)
+                  ? current
+                  : [...current, row.server_id!],
+              );
+            }
+          }
+          scheduleStatsRefresh();
+        },
       )
       .on(
         "postgres_changes",
@@ -150,13 +171,14 @@ export function DiscoverPane({
 
   async function joinServer(serverId: string) {
     if (!user) return;
+    if (joiningId) return;
     setJoiningId(serverId);
     setError(null);
     const supabase = createClient();
     const { joinServerWithDefaultRole } = await import(
       "@/lib/server-membership"
     );
-    const { error: joinError } = await joinServerWithDefaultRole(
+    const { error: joinError, alreadyMember } = await joinServerWithDefaultRole(
       supabase,
       serverId,
       user.id,
@@ -171,16 +193,18 @@ export function DiscoverPane({
     setMemberIds((current) =>
       current.includes(serverId) ? current : [...current, serverId],
     );
-    setStatsById((prev) => {
-      const current = prev[serverId] ?? { member_count: 0, online_count: 0 };
-      return {
-        ...prev,
-        [serverId]: {
-          member_count: current.member_count + 1,
-          online_count: current.online_count + 1,
-        },
-      };
-    });
+    if (!alreadyMember) {
+      setStatsById((prev) => {
+        const current = prev[serverId] ?? { member_count: 0, online_count: 0 };
+        return {
+          ...prev,
+          [serverId]: {
+            member_count: current.member_count + 1,
+            online_count: current.online_count + 1,
+          },
+        };
+      });
+    }
     onJoined(serverId);
   }
 

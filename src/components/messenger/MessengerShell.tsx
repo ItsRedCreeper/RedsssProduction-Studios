@@ -543,6 +543,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const fresh = voiceStates.filter((state) => {
       // Keep your own seat while connected even between heartbeats.
       if (user && connection && state.user_id === user.id) return true;
+      if (isBlocked(state.user_id)) return false;
       const age = now - new Date(state.updated_at).getTime();
       return !Number.isFinite(age) || age <= VOICE_STALE_AFTER_MS;
     });
@@ -579,6 +580,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     deafened,
     voice.cameraOn,
     voice.screenSharing,
+    isBlocked,
   ]);
 
   const scope = `${pane}:${activeChannelId ?? ""}:${activeConversationId ?? ""}`;
@@ -2527,20 +2529,30 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           if (!stillCurrent()) return;
           const row = payload.new as Tables<"messages">;
           setMessages((prev) =>
-            prev.map((message) =>
-              message.id === row.id
-                ? {
-                    ...message,
+            prev.map((message) => {
+              if (message.id === row.id) {
+                return {
+                  ...message,
+                  content: row.content,
+                  edited_at: row.edited_at,
+                  pinned: row.pinned,
+                  reply_to_id: row.reply_to_id,
+                  attachment_url: row.attachment_url,
+                  attachment_type: row.attachment_type,
+                  attachments: row.attachments ?? [],
+                };
+              }
+              if (message.reply_to_id === row.id && message.reply_to) {
+                return {
+                  ...message,
+                  reply_to: {
+                    ...message.reply_to,
                     content: row.content,
-                    edited_at: row.edited_at,
-                    pinned: row.pinned,
-                    reply_to_id: row.reply_to_id,
-                    attachment_url: row.attachment_url,
-                    attachment_type: row.attachment_type,
-                    attachments: row.attachments ?? [],
-                  }
-                : message,
-            ),
+                  },
+                };
+              }
+              return message;
+            }),
           );
         },
       )
@@ -2556,10 +2568,30 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           if (!stillCurrent()) return;
           const row = payload.old as { id?: string };
           if (!row.id) return;
-          setMessages((prev) => prev.filter((message) => message.id !== row.id));
+          setMessages((prev) =>
+            prev
+              .filter((message) => message.id !== row.id)
+              .map((message) =>
+                message.reply_to_id === row.id
+                  ? {
+                      ...message,
+                      reply_to: {
+                        id: row.id!,
+                        content: "Original message was deleted.",
+                        user_id: message.reply_to?.user_id ?? "",
+                        profiles: message.reply_to?.profiles ?? null,
+                      },
+                    }
+                  : message,
+              ),
+          );
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          bumpReconnect({ resubscribe: true });
+        }
+      });
 
     const pollChannel = supabase
       .channel(`poll-votes:${channelId}`)
@@ -2832,20 +2864,30 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           if (!stillCurrent()) return;
           const row = payload.new as Tables<"dm_messages">;
           setDmMessages((prev) =>
-            prev.map((message) =>
-              message.id === row.id
-                ? {
-                    ...message,
+            prev.map((message) => {
+              if (message.id === row.id) {
+                return {
+                  ...message,
+                  content: row.content,
+                  edited_at: row.edited_at,
+                  pinned: row.pinned,
+                  reply_to_id: row.reply_to_id,
+                  attachment_url: row.attachment_url ?? null,
+                  attachment_type: row.attachment_type ?? null,
+                  attachments: row.attachments ?? [],
+                };
+              }
+              if (message.reply_to_id === row.id && message.reply_to) {
+                return {
+                  ...message,
+                  reply_to: {
+                    ...message.reply_to,
                     content: row.content,
-                    edited_at: row.edited_at,
-                    pinned: row.pinned,
-                    reply_to_id: row.reply_to_id,
-                    attachment_url: row.attachment_url ?? null,
-                    attachment_type: row.attachment_type ?? null,
-                    attachments: row.attachments ?? [],
-                  }
-                : message,
-            ),
+                  },
+                };
+              }
+              return message;
+            }),
           );
           setPinnedExtra((prev) => {
             if (!row.pinned) {
@@ -2867,7 +2909,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           if (!stillCurrent()) return;
           const row = payload.old as { id?: string };
           if (!row.id) return;
-          setDmMessages((prev) => prev.filter((message) => message.id !== row.id));
+          setDmMessages((prev) =>
+            prev
+              .filter((message) => message.id !== row.id)
+              .map((message) =>
+                message.reply_to_id === row.id
+                  ? {
+                      ...message,
+                      reply_to: {
+                        id: row.id!,
+                        content: "Original message was deleted.",
+                        user_id: message.reply_to?.user_id ?? "",
+                        profiles: message.reply_to?.profiles ?? null,
+                      },
+                    }
+                  : message,
+              ),
+          );
         },
       )
       .subscribe((status) => {
@@ -3546,6 +3604,36 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [canMentionEveryone, serverRoles]);
 
   const mentionSuggestions = useMemo<MentionSuggestion[]>(() => {
+    if (dmMode && activeThread) {
+      const peerIds = activeThread.isGroup
+        ? (activeThread.participantIds ?? []).filter(
+            (id) => id !== user?.id && !isBlocked(id),
+          )
+        : activeThread.otherUserId && !isBlocked(activeThread.otherUserId)
+          ? [activeThread.otherUserId]
+          : [];
+      const users = peerIds.map((id) => {
+        const fromThread =
+          !activeThread.isGroup && id === activeThread.otherUserId
+            ? activeThread.username
+            : null;
+        const fromMap = reactorNamesById[id];
+        let label = fromThread || fromMap || "User";
+        if (activeThread.isGroup && !fromThread) {
+          const hit = threads.find(
+            (thread) =>
+              !thread.isGroup && thread.otherUserId === id,
+          );
+          if (hit) label = hit.username;
+        }
+        return {
+          id,
+          label,
+          kind: "user" as const,
+        };
+      });
+      return users;
+    }
     const users = visibleMembers.map((member) => ({
       id: member.user_id,
       label: member.nickname?.trim() || member.username,
@@ -3564,7 +3652,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         kind: "channel" as const,
       }));
     return [...users, ...roles, ...channelItems];
-  }, [visibleMembers, mentionableRoles, channels]);
+  }, [
+    dmMode,
+    activeThread,
+    user?.id,
+    isBlocked,
+    threads,
+    reactorNamesById,
+    visibleMembers,
+    mentionableRoles,
+    channels,
+  ]);
 
   const mentionMaps = useMemo<MentionMaps>(() => {
     const usersById: MentionMaps["usersById"] = {};
@@ -5044,11 +5142,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       : stripUnauthorizedEveryoneMentions(encoded);
     const editedAt = new Date().toISOString();
     setMessages((prev) =>
-      prev.map((message) =>
-        message.id === messageId
-          ? { ...message, content: nextContent, edited_at: editedAt }
-          : message,
-      ),
+      prev.map((message) => {
+        if (message.id === messageId) {
+          return { ...message, content: nextContent, edited_at: editedAt };
+        }
+        if (message.reply_to_id === messageId && message.reply_to) {
+          return {
+            ...message,
+            reply_to: { ...message.reply_to, content: nextContent },
+          };
+        }
+        return message;
+      }),
     );
     const supabase = createClient();
     const { error: updateError } = await supabase
@@ -5102,11 +5207,18 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const nextContent = resolveEmojiShortcodes(content, customEmojis, null);
     const editedAt = new Date().toISOString();
     setDmMessages((prev) =>
-      prev.map((message) =>
-        message.id === messageId
-          ? { ...message, content: nextContent, edited_at: editedAt }
-          : message,
-      ),
+      prev.map((message) => {
+        if (message.id === messageId) {
+          return { ...message, content: nextContent, edited_at: editedAt };
+        }
+        if (message.reply_to_id === messageId && message.reply_to) {
+          return {
+            ...message,
+            reply_to: { ...message.reply_to, content: nextContent },
+          };
+        }
+        return message;
+      }),
     );
     const supabase = createClient();
     const { error: updateError } = await supabase

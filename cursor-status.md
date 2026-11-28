@@ -1,31 +1,32 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Pass 10)
+**Last updated:** 2026-11-28 (Pass 11)
 
 ## Localhost health
-**Healthy.** `/messenger` returns 200; `next build` succeeds after Pass 10.
+**Healthy.** `/messenger` returns 200 after Pass 11 fixes.
 
-## Pass 10 — Final verdicts (no Partial)
+## Pass 11 — Final verdicts (no Partial)
 
 | ID | Final verdict | Evidence |
 |---|---|---|
-| **CF** | **Fixed and verified** | Online + visibility gap-fill; `CHANNEL_ERROR`/`TIMED_OUT` remounts message/DM/membership channels; recover merges channel + DM messages/reactions + unread refresh. |
-| **CG** | **Fixed and verified** | DM load clears sync + loading flag at effect start; Server Settings pinned to open server and closes on server switch (no retarget). |
-| **CH** | **Disproved** | `join_server_via_invite` uses `FOR UPDATE` + conditional `uses` increment; revoke-as-delete fails cleanly for the loser. |
-| **CI** | **Fixed and verified** | Live `server_members` INSERT (join) + UPDATE (nickname/timeout) alongside existing DELETE/kick and role reloads. |
-| **CJ** | **Fixed and verified** | `uploadAttachment` accepts AbortSignal; scope change / send cancel aborts in-flight uploads and cleans orphaned blobs when aborted post-upload. |
-| **CK** | **Disproved** | Camera/screen `replaceTrack` paths already present in Voice/Call + mesh. |
-| **CL** | **Fixed and verified** | Notification RPCs emit `?msg=` (+ `&thread=`); DM replies use `/messenger/channels/@me/…`; panel builds href from meta and rewrites legacy `/dms/` links. |
-| **CM** | **Disproved** | Messenger storage reads already try/catch; drafts are in-memory Maps. |
-| **CN** | **Fixed and verified** | `(edited)` shows `title={formatTimestamp(edited_at)}`; day dividers already tick past midnight. |
-| **CO** | **Disproved** | Subscribe/`removeChannel` pairing + leave-messenger hangup still hold under heavy nav. |
+| **CP** | **Fixed and verified** | Channel/DM realtime UPDATE patches children’s `reply_to.content`; DELETE keeps deleted stub; hydrate/RPC map stub when parent missing; optimistic edit also syncs child previews. |
+| **CQ** | **Fixed and verified** | DM `@` suggestions use conversation peers (group `participantIds` / DM other), filtered by block list — no longer server `visibleMembers`. Channel path still follows live membership. |
+| **CR** | **Disproved** | `useVoiceConnectionQuality` resets to “Measuring” when `active` is false and clears the poll interval on leave/rejoin. |
+| **CS** | **Fixed and verified** | Discover `memberIds` updates on live `server_members` INSERT/DELETE for self; join guards concurrent `joiningId` and treats duplicate membership as success without double-counting stats. |
+| **CT** | **Fixed and verified** | Own open big/small cards now compare avatar/bio/banner/username (not only status fields) against `useCurrentProfile`; other users already refresh via profiles UPDATE realtime. |
+| **CU** | **Fixed and verified** | Composer emoji/gif/sticker register `pushOverlayEscape` so Escape works while search is focused; mention/emoji/reply Escape handlers preventDefault + stopPropagation. ArrowUp edit-last already gated on empty draft. |
+| **CV** | **Fixed and verified** | Non-image attachments use blob download with sanitized filename (same pattern as lightbox); cross-origin `download=` attribute no longer relied on. |
+| **CW** | **Disproved** | Category move updates `category_id` only; overrides preserved; sync-to-category is an explicit `permissions_synced` action. |
+| **CX** | **Fixed and verified** | `displayVoiceStates` filters blocked users out of the roster; mesh already silences either-direction blocks. |
+| **CY** | **Disproved** | Post-refresh paths hydrate replies/reactions; scope change clears drafts/aborts uploads; leave/join membership + channel loads stay consistent with DB after heavy nav. |
 
-### Code / DB changes this pass
-- DB: `notify_message_mentions` / `notify_message_reply` deep links
-- `MessengerShell.tsx` — reconnect/resubscribe, DM clear, members live, settings pin, upload abort
-- `data.ts` — abortable `uploadAttachment`
-- `NotificationsPanel.tsx` — `notificationHref` from meta
-- `MessageItem.tsx` — edited timestamp tooltip
+### Code changes this pass
+- `MessengerShell.tsx` — reply preview sync (realtime + edit), DM mentions, blocked voice roster, messages channel reconnect subscribe
+- `data.ts` — deleted-parent reply stubs on hydrate/RPC map
+- `DiscoverPane.tsx` — live membership + join race guard
+- `ProfileProvider.tsx` — own profile card field sync
+- `MessageComposer.tsx` — Escape overlay priority for pickers
+- `MessageMedia.tsx` / `MediaLightbox.tsx` — safe blob downloads
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)
@@ -36,4 +37,4 @@
 - None
 
 ## Suggested next focus
-- Two-client QA: offline gap fill; single-use invite race; thread mention jump; attach then switch channel mid-upload
+- Two-client QA: reply parent delete while reply visible; Discover join→leave→rejoin; file download with spaced filenames; block mid-voice
