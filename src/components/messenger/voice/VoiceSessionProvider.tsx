@@ -335,6 +335,8 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       const userId = userIdRef.current;
       if (!userId) return;
       await stopMesh();
+      // Ignore join/leave sounds for peers already present when we connect.
+      let peersLive = false;
       const supabase = createClient();
       const { data: peers } = await supabase
         .from("voice_states")
@@ -358,6 +360,10 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
         },
         onPeerJoined: (peerId) => {
           void checkPeerBlock(peerId);
+          if (peersLive) playSound("voice-user-join");
+        },
+        onPeerLeft: () => {
+          if (peersLive) playSound("voice-user-leave");
         },
         onRemoteVideo: applyRemoteVideo,
         onError: (message) => setMicError(message),
@@ -371,6 +377,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       );
       meshRef.current = mesh;
       await mesh.start(peerIds);
+      peersLive = true;
       if (streamRef.current) await mesh.setLocalStream(streamRef.current);
       if (cameraTrackRef.current) {
         await mesh.setLocalVideoTrack(cameraTrackRef.current);
@@ -827,6 +834,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     const mesh = meshRef.current;
     if (!mesh || !connectionRef.current) return;
     if (screenTrackRef.current) {
+      playSound("screenshare-stop");
       await mesh.setLocalScreenTrack(null);
       screenTrackRef.current.stop();
       screenTrackRef.current = null;
@@ -856,11 +864,13 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       screenTrackRef.current = track;
       setScreenSharing(true);
       setLocalScreenStream(new MediaStream([track]));
+      playSound("screenshare-start");
       await persistMediaFlags(!!cameraTrackRef.current, true);
       track.addEventListener(
         "ended",
         () => {
           void (async () => {
+            playSound("screenshare-stop");
             await meshRef.current?.setLocalScreenTrack(null);
             screenTrackRef.current = null;
             setScreenSharing(false);
@@ -878,6 +888,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
   const toggleDeafen = useCallback(() => {
     if (deafenedRef.current) {
+      playSound("undeafen");
       if (muteLinkedRef.current) {
         setMuteLinked(false);
         muteLinkedRef.current = false;
@@ -887,6 +898,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void persistFlags(mutedRef.current, false);
       return;
     }
+    playSound("deafen");
     if (!mutedRef.current) {
       setMuteLinked(true);
       muteLinkedRef.current = true;

@@ -569,11 +569,19 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       }
       const stream = await startMedia(args.withVideo);
       const supabase = createClient();
+      // Skip join sounds for peers already in the call when we connect.
+      let peersLive = false;
       const mesh = new VoiceMesh({
         supabase,
         channelId: args.conversationId,
         userId: user.id,
         topicPrefix: "call-rtc",
+        onPeerJoined: () => {
+          if (peersLive) playSound("voice-user-join");
+        },
+        onPeerLeft: () => {
+          if (peersLive) playSound("voice-user-leave");
+        },
         onRemoteVideo: (peerId, remoteStream, kind) => {
           setRemoteMedia((prev) => {
             const current = prev[peerId] ?? { camera: null, screen: null };
@@ -600,6 +608,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       });
       meshRef.current = mesh;
       await mesh.start(args.peerUserIds);
+      peersLive = true;
       if (stream) await mesh.setLocalStream(stream);
       if (cameraTrackRef.current) {
         await mesh.setLocalVideoTrack(cameraTrackRef.current);
@@ -853,6 +862,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     setDeafened((prev) => {
       const next = !prev;
       meshRef.current?.setDeafened(next);
+      playSound(next ? "deafen" : "undeafen");
       if (next) {
         setMuted(true);
         mutedRef.current = true;
@@ -940,6 +950,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   const toggleScreenShare = useCallback(async () => {
     if (!meshRef.current) return;
     if (screenTrackRef.current) {
+      playSound("screenshare-stop");
       await meshRef.current.setLocalScreenTrack(null);
       screenTrackRef.current.stop();
       screenTrackRef.current = null;
@@ -968,10 +979,12 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       screenTrackRef.current = track;
       setScreenSharing(true);
       setLocalScreenStream(new MediaStream([track]));
+      playSound("screenshare-start");
       track.addEventListener(
         "ended",
         () => {
           void (async () => {
+            playSound("screenshare-stop");
             await meshRef.current?.setLocalScreenTrack(null);
             screenTrackRef.current = null;
             setScreenSharing(false);

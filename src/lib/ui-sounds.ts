@@ -10,8 +10,14 @@ export type UiSoundName =
   | "notification"
   | "voice-join"
   | "voice-leave"
+  | "voice-user-join"
+  | "voice-user-leave"
   | "mute"
   | "unmute"
+  | "deafen"
+  | "undeafen"
+  | "screenshare-start"
+  | "screenshare-stop"
   | "incoming-call"
   | "error";
 
@@ -25,15 +31,27 @@ const DEBOUNCE_MS: Partial<Record<UiSoundName, number>> = {
   error: 400,
   mute: 80,
   unmute: 80,
+  deafen: 80,
+  undeafen: 80,
   "voice-join": 40,
   "voice-leave": 40,
+  "voice-user-join": 180,
+  "voice-user-leave": 180,
+  "screenshare-start": 80,
+  "screenshare-stop": 80,
 };
 
 const EAGER: UiSoundName[] = [
   "voice-leave",
   "voice-join",
+  "voice-user-join",
+  "voice-user-leave",
   "mute",
   "unmute",
+  "deafen",
+  "undeafen",
+  "screenshare-start",
+  "screenshare-stop",
   "message-send",
   "message-receive",
 ];

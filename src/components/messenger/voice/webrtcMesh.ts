@@ -85,6 +85,8 @@ export type VoiceMeshOptions = {
   onPeerCount?: (count: number) => void;
   /** Fired when a peer slot is created (hello / offer). */
   onPeerJoined?: (peerId: string) => void;
+  /** Fired when a remote peer disconnects (not during local mesh.stop). */
+  onPeerLeft?: (peerId: string) => void;
   /** Remote video/screen track for a peer (null when removed). */
   onRemoteVideo?: (
     peerId: string,
@@ -849,6 +851,8 @@ export class VoiceMesh {
   private closePeer(peerId: string) {
     const slot = this.peers.get(peerId);
     if (!slot) return;
+    // Capture before delete — skip leave callbacks while tearing down locally.
+    const notifyLeft = !this.closed;
     this.peers.delete(peerId);
     this.clearPendingVideoPublish(peerId, "camera");
     this.clearPendingVideoPublish(peerId, "screen");
@@ -864,5 +868,6 @@ export class VoiceMesh {
     slot.audioEl.remove();
     this.opts.onPeerCount?.(this.peers.size);
     this.opts.onSpeaking?.(peerId, false);
+    if (notifyLeft) this.opts.onPeerLeft?.(peerId);
   }
 }
