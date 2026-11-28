@@ -104,11 +104,18 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       return;
     }
     const supabase = createClient();
+    // No read inbox — drop any leftover read rows, then load unread only.
+    void supabase
+      .from("notifications")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("read", true);
     const [notifs, summary] = await Promise.all([
       supabase
         .from("notifications")
         .select("*")
         .eq("user_id", user.id)
+        .eq("read", false)
         .order("created_at", { ascending: false })
         .limit(80),
       supabase.rpc("get_unread_summary"),
@@ -274,18 +281,18 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
 
   const markNotificationRead = useCallback(
     async (id: string, read = true) => {
-      setNotifications((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, read } : item)),
-      );
+      // Read notifications are removed — there is no read inbox.
+      if (!read) return;
+      setNotifications((prev) => prev.filter((item) => item.id !== id));
       const supabase = createClient();
-      await supabase.from("notifications").update({ read }).eq("id", id);
+      await supabase.from("notifications").delete().eq("id", id);
     },
     [],
   );
 
   const markAllNotificationsRead = useCallback(async () => {
     if (!user) return;
-    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+    setNotifications([]);
     // Also clear message unread by advancing reads to now for all unread channels/dms
     const now = new Date().toISOString();
     const channelIds = [...new Set(channels.map((c) => c.channel_id))];
@@ -294,11 +301,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     setDms([]);
     publishReadSync({ type: "mark-all", at: now, channelIds, dmIds });
     const supabase = createClient();
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("user_id", user.id)
-      .eq("read", false);
+    await supabase.from("notifications").delete().eq("user_id", user.id);
     await Promise.all([
       ...channelIds.map((id) => saveChannelRead(user.id, id, now)),
       ...dmIds.map((id) => saveDmRead(user.id, id, now)),
@@ -314,24 +317,23 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       setChannels((prev) => prev.filter((row) => row.channel_id !== channelId));
       publishReadSync({ type: "channel", channelId, at: when });
       await saveChannelRead(user.id, channelId, when);
-      // Mark related mention/reply notifs for this channel as read
-      const toMark: string[] = [];
+      // Remove related mention/reply notifs for this channel (no read inbox).
+      const toDelete: string[] = [];
       setNotifications((prev) =>
-        prev.map((item) => {
-          if (item.read) return item;
+        prev.filter((item) => {
           const meta = item.meta ?? {};
           if (meta.channel_id === channelId || item.link?.includes(channelId)) {
-            toMark.push(item.id);
-            return { ...item, read: true };
+            toDelete.push(item.id);
+            return false;
           }
-          return item;
+          return true;
         }),
       );
-      if (toMark.length > 0) {
+      if (toDelete.length > 0) {
         const supabase = createClient();
         await Promise.all(
-          toMark.map((id) =>
-            supabase.from("notifications").update({ read: true }).eq("id", id),
+          toDelete.map((id) =>
+            supabase.from("notifications").delete().eq("id", id),
           ),
         );
       }
@@ -349,25 +351,24 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       );
       publishReadSync({ type: "dm", conversationId, at: when });
       await saveDmRead(user.id, conversationId, when);
-      const toMark: string[] = [];
+      const toDelete: string[] = [];
       setNotifications((prev) =>
-        prev.map((item) => {
-          if (item.read) return item;
+        prev.filter((item) => {
           if (
             item.meta?.conversation_id === conversationId ||
             item.link?.includes(conversationId)
           ) {
-            toMark.push(item.id);
-            return { ...item, read: true };
+            toDelete.push(item.id);
+            return false;
           }
-          return item;
+          return true;
         }),
       );
-      if (toMark.length > 0) {
+      if (toDelete.length > 0) {
         const supabase = createClient();
         await Promise.all(
-          toMark.map((id) =>
-            supabase.from("notifications").update({ read: true }).eq("id", id),
+          toDelete.map((id) =>
+            supabase.from("notifications").delete().eq("id", id),
           ),
         );
       }
@@ -494,7 +495,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
 
   const deleteAllReadNotifications = useCallback(async () => {
     if (!user) return;
-    setNotifications((prev) => prev.filter((item) => !item.read));
+    // Legacy: read inbox removed — purge any leftover read rows.
     const supabase = createClient();
     await supabase
       .from("notifications")

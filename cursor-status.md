@@ -1,6 +1,6 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Funder / Pioneer tag display fix)
+**Last updated:** 2026-11-28 (Notifications: no read inbox)
 
 ## Localhost health
 **Healthy** (prior).
