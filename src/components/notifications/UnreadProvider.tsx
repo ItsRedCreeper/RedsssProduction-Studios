@@ -15,6 +15,7 @@ import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import {
   aggregateServerUnread,
   countUnreadPanelRows,
+  isIndividualNotification,
   type AppNotification,
   type UnreadChannelRow,
   type UnreadDmRow,
@@ -24,6 +25,7 @@ import { saveChannelRead } from "@/components/messenger/data";
 import { publishReadSync } from "@/lib/read-sync";
 import { loadBlockedIds } from "@/lib/blocking";
 import { loadIgnoredIds } from "@/lib/ignoring";
+import { playSound } from "@/lib/ui-sounds";
 
 type UnreadContextValue = {
   loading: boolean;
@@ -210,7 +212,17 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
           table: "notifications",
           filter: `user_id=eq.${user.id}`,
         },
-        () => scheduleRefresh(),
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const row = payload.new as AppNotification;
+            if (row.type === "mention" || row.type === "reply") {
+              playSound("mention");
+            } else if (isIndividualNotification(row.type)) {
+              playSound("notification");
+            }
+          }
+          scheduleRefresh();
+        },
       )
       .on(
         "postgres_changes",

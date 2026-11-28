@@ -19,6 +19,11 @@ import { VoiceMesh } from "@/components/messenger/voice/webrtcMesh";
 import { useOptionalVoiceSession } from "@/components/messenger/voice/VoiceSessionProvider";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import { encodeMissedCallMessage } from "@/lib/missed-call";
+import {
+  playSound,
+  startSoundLoop,
+  stopSoundLoop,
+} from "@/lib/ui-sounds";
 
 /** Discord-style: ~30s ring, then missed-call notice. Decline ends earlier with no chat message. */
 const RING_TIMEOUT_MS = 30_000;
@@ -166,50 +171,6 @@ type RingtoneHandle = {
   stop: () => void;
 };
 
-function startRingtone(): RingtoneHandle {
-  let stopped = false;
-  let ctx: AudioContext | null = null;
-  let intervalId: ReturnType<typeof setInterval> | null = null;
-
-  const beep = () => {
-    if (stopped) return;
-    try {
-      if (!ctx) ctx = new AudioContext();
-      const now = ctx.currentTime;
-      for (const [i, freq] of [880, 660].entries()) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
-        gain.gain.exponentialRampToValueAtTime(
-          0.0001,
-          now + 0.28 + i * 0.12,
-        );
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + i * 0.32);
-        osc.stop(now + 0.35 + i * 0.12);
-      }
-    } catch {
-      /* autoplay / AudioContext blocked until gesture */
-    }
-  };
-
-  beep();
-  intervalId = setInterval(beep, 1800);
-
-  return {
-    stop: () => {
-      stopped = true;
-      if (intervalId) clearInterval(intervalId);
-      void ctx?.close();
-      ctx = null;
-    },
-  };
-}
-
 export function CallSessionProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, profile } = useCurrentProfile();
@@ -292,13 +253,14 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
   const stopIncomingAlerts = useCallback(() => {
     ringtoneRef.current?.stop();
     ringtoneRef.current = null;
+    stopSoundLoop();
     desktopNotifRef.current?.close();
     desktopNotifRef.current = null;
   }, []);
 
   const startIncomingAlerts = useCallback((fromUsername: string) => {
     stopIncomingAlerts();
-    ringtoneRef.current = startRingtone();
+    ringtoneRef.current = startSoundLoop("incoming-call");
     try {
       if (
         typeof Notification !== "undefined" &&
@@ -368,6 +330,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     clearRingTimer();
     stopIncomingAlerts();
     const conn = connectionRef.current;
+    if (conn) playSound("voice-leave");
     const uid = userIdRef.current;
     const outgoingPeer = outgoingRef.current?.peerUserId;
     if (conn && uid) {
@@ -651,6 +614,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
         participantIds: [user.id, ...args.peerUserIds],
         peerNames: args.peerNames ?? {},
       });
+      playSound("voice-join");
       setStageExpanded(true);
       setOpenCalls((prev) => ({
         ...prev,
@@ -876,6 +840,7 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       meshRef.current?.setMuted(next);
       const track = streamRef.current?.getAudioTracks()[0];
       if (track) track.enabled = !next;
+      playSound(next ? "mute" : "unmute");
       return next;
     });
   }, []);

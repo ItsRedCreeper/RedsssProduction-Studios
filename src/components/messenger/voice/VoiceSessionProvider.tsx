@@ -21,6 +21,7 @@ import { saveVoiceState } from "@/components/messenger/data";
 import { VoiceMesh } from "@/components/messenger/voice/webrtcMesh";
 import type { VoiceConnectionQuality } from "@/hooks/useVoiceConnectionQuality";
 import type { VoiceState } from "@/components/messenger/types";
+import { playSound } from "@/lib/ui-sounds";
 
 export type VoiceConnection = {
   channelId: string;
@@ -655,6 +656,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   const leaveVoice = useCallback(async () => {
     const current = connectionRef.current;
     if (current) {
+      playSound("voice-leave");
       // Merge with sessionStorage so an SSR-empty ref can't wipe prior skips.
       for (const id of readSkipChannels()) {
         skipAutoJoinRef.current.add(id);
@@ -745,6 +747,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       }
       void voiceError;
       void startMicMonitor();
+      playSound("voice-join");
     },
     [attachBroadcast, detachBroadcast, startMesh, startMicMonitor, stopMesh, stopMicMonitor],
   );
@@ -753,9 +756,11 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
     if (mutedRef.current) {
       setMuteLinked(false);
       muteLinkedRef.current = false;
+      playSound("unmute");
       void persistFlags(false, false);
       return;
     }
+    playSound("mute");
     void persistFlags(true, deafenedRef.current);
   }, [persistFlags]);
 

@@ -1,21 +1,31 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Member list symbolic tag badges)
+**Last updated:** 2026-11-28 (Messenger UI sound effects)
 
 ## Localhost health
 **Healthy** (prior).
 
+## UI sounds
+Wired `/public/sounds/*.mp3` via `src/lib/ui-sounds.ts` (`playSound` / `startSoundLoop`).
+
+### Triggers
+- Message send success → `message-send`
+- Active channel/DM receive (not self) → `message-receive`
+- Mention / reply notification → `mention`
+- Friend-style notification → `notification`
+- Voice/call connect → `voice-join`
+- Voice/call leave → `voice-leave`
+- Mute / unmute → `mute` / `unmute`
+- Incoming call → looping `incoming-call` (stops on accept/decline)
+- Send/upload failure → `error`
+
+### Controls
+- Volume ~0.4, per-sound debounce
+- Toggle in Account Settings → Sounds (default on, `localStorage`)
+- Missing files skipped silently
+
 ## Profile tags
-Display-only. ItsRed Creeper tags cleared (`profile_tags = {}`).
-
-### Member list
-- Replaced plain color dots with symbolic badges:
-  - Pioneer = muted-red star
-  - Funder = soft-gold coin with gem center
-- Same line as username; hover still shows name + description
-
-### Profiles
-- Full-text pills still inline beside the username (unchanged this pass)
+ItsRed Creeper tags cleared earlier.
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)

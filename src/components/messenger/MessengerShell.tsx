@@ -147,6 +147,7 @@ import {
   loadIsBlockedBy,
 } from "@/lib/blocking";
 import { previewMissedCallContent } from "@/lib/missed-call";
+import { playSound } from "@/lib/ui-sounds";
 import { useOptionalUnread } from "@/components/notifications/UnreadProvider";
 import {
   loadFriendEdges,
@@ -2575,6 +2576,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           }));
           // Message sent → drop that user's typing indicator immediately.
           if (nextMessage.user_id && nextMessage.user_id !== userIdRef.current) {
+            playSound("message-receive");
             setTypingUsers((prev) => {
               if (!prev[nextMessage.user_id]) return prev;
               const next = { ...prev };
@@ -2920,6 +2922,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           setDmMessages((prev) => mergeIncoming(prev, hydrated));
           // Message sent → drop that user's typing indicator immediately.
           if (hydrated.user_id && hydrated.user_id !== userIdRef.current) {
+            playSound("message-receive");
             const clearId = hydrated.user_id;
             setTypingUsers((prev) => {
               if (!prev[clearId]) return prev;
@@ -4849,6 +4852,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setError(
           userFacingActionError(uploaded.error, "Upload failed"),
         );
+        playSound("error");
         restoreComposer();
         sendingRef.current = false;
         setSending(false);
@@ -4910,6 +4914,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           "Failed to send message",
         ),
       );
+      playSound("error");
       restoreComposer();
       sendingRef.current = false;
     sendingRef.current = false;
@@ -4946,6 +4951,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     });
     setLastMessageAt((prev) => ({ ...prev, [channelId]: saved.created_at }));
     lastChannelSendAt.current[channelId] = Date.now();
+    playSound("message-send");
     if (
       notifyContent.includes("<@") ||
       content.includes("@") ||
@@ -5088,6 +5094,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           );
         });
         setError(userFacingActionError(uploaded.error, "Upload failed"));
+        playSound("error");
         restoreComposer();
         sendingRef.current = false;
         setSending(false);
@@ -5147,6 +5154,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             "Failed to send message",
           ),
       );
+      playSound("error");
       restoreComposer();
       sendingRef.current = false;
     sendingRef.current = false;
@@ -5207,6 +5215,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     );
 
     // DM unread aggregates come from user_dm_reads — no per-message inbox spam.
+    playSound("message-send");
     if (replyPing && replySnapshot) {
       void supabase.rpc("notify_message_reply", {
         p_message_id: data.id,

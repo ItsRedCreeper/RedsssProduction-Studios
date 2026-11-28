@@ -6,6 +6,10 @@ import type { User } from "@supabase/supabase-js";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/field-limits";
 import { createClient } from "@/lib/supabase/client";
+import {
+  areUiSoundsEnabled,
+  setUiSoundsEnabled,
+} from "@/lib/ui-sounds";
 
 type AccountSettingsModalProps = {
   open: boolean;
@@ -46,6 +50,7 @@ export function AccountSettingsModal({
   const [googleBusy, setGoogleBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [uiSoundsOn, setUiSoundsOn] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +61,7 @@ export function AccountSettingsModal({
     setSuccess(null);
     setBusy(false);
     setGoogleBusy(false);
+    setUiSoundsOn(areUiSoundsEnabled());
   }, [open]);
 
   useEffect(() => {
@@ -202,6 +208,28 @@ export function AccountSettingsModal({
         </div>
 
         <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-5 py-5 sm:max-w-[45rem]">
+          <section className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Sounds</h3>
+              <p className="mt-1 text-xs text-[var(--ms-text-muted)]">
+                Soft UI feedback for messages, voice, and notifications.
+              </p>
+            </div>
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5">
+              <span className="text-sm text-white">Messenger sound effects</span>
+              <input
+                type="checkbox"
+                checked={uiSoundsOn}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setUiSoundsOn(next);
+                  setUiSoundsEnabled(next);
+                }}
+                className="h-4 w-4 accent-[var(--accent)]"
+              />
+            </label>
+          </section>
+
           <section className="space-y-3">
             <div>
               <h3 className="text-sm font-semibold text-white">Google</h3>
