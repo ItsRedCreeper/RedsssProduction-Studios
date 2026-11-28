@@ -72,9 +72,14 @@ export function PresenceController() {
     }
 
     function publishLocal() {
+      const focused =
+        typeof document !== "undefined" &&
+        !document.hidden &&
+        // blur to another app often leaves document.hidden false — require focus.
+        (typeof document.hasFocus !== "function" || document.hasFocus());
       const ping: TabPing = {
         tabId,
-        focused: typeof document !== "undefined" && !document.hidden,
+        focused,
         lastInputAt: lastInputRef.current,
         updatedAt: Date.now(),
       };

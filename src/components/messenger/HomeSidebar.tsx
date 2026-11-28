@@ -52,13 +52,18 @@ export function HomeSidebar({
   const feed = useOptionalPresenceFeed();
   void feed?.version;
 
+  // Preserve parent order (MessengerShell already sorts by previewAt + typing).
+  // Re-sort only as a safety net when previewAt differs so a stale parent array
+  // still jumps active conversations to the top.
   const sortedThreads = [...threads].sort((a, b) => {
-    const aUnread = unreadDmCounts[a.id] ?? 0;
-    const bUnread = unreadDmCounts[b.id] ?? 0;
     const aAt = a.previewAt ? Date.parse(a.previewAt) : 0;
     const bAt = b.previewAt ? Date.parse(b.previewAt) : 0;
-    // Most recent activity first (unread or not — activity drives order).
     if (bAt !== aAt) return bAt - aAt;
+    const aTyping = typingUserIds?.has(a.otherUserId) ? 1 : 0;
+    const bTyping = typingUserIds?.has(b.otherUserId) ? 1 : 0;
+    if (aTyping !== bTyping) return bTyping - aTyping;
+    const aUnread = unreadDmCounts[a.id] ?? 0;
+    const bUnread = unreadDmCounts[b.id] ?? 0;
     if (bUnread !== aUnread) return bUnread - aUnread;
     return a.username.localeCompare(b.username);
   });

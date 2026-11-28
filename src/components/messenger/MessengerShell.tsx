@@ -108,6 +108,12 @@ import {
 } from "@/lib/emoji-resolve";
 import { MESSAGE_MAX, MESSAGE_MAX_REACHED } from "@/lib/field-limits";
 import {
+  publishReadSync,
+  READ_SYNC_CHANNEL,
+  READ_SYNC_EVENT,
+  type ReadSyncPayload,
+} from "@/lib/read-sync";
+import {
   can,
   canAccessServerSettings,
   mergeRolePermissions,
@@ -911,12 +917,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           messageUserId: row.user_id,
         });
         const nextAt = row.created_at ?? null;
-        // Skip if this insert is already reflected (e.g. local send patched first).
+        // Skip only when this exact activity is already reflected AND the thread
+        // is already sorted to the top (avoids dropping a needed re-order).
         const current = prev.find((thread) => thread.id === conversationId);
         if (
           current &&
           current.preview === nextPreview &&
-          current.previewAt === nextAt
+          current.previewAt === nextAt &&
+          prev[0]?.id === conversationId
         ) {
           return prev;
         }
@@ -1116,6 +1124,112 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         }
         setDmReadAt((prev) => ({ ...map, ...prev }));
       });
+
+    function applyChannelRead(channelId: string, at: string) {
+      setReadAt((prev) => {
+        const current = prev[channelId];
+        if (current && Date.parse(current) >= Date.parse(at)) return prev;
+        return { ...prev, [channelId]: at };
+      });
+    }
+    function applyDmRead(conversationId: string, at: string) {
+      setDmReadAt((prev) => {
+        const current = prev[conversationId];
+        if (current && Date.parse(current) >= Date.parse(at)) return prev;
+        return { ...prev, [conversationId]: at };
+      });
+    }
+    function applyMarkAll(at: string, channelIds: string[], dmIds: string[]) {
+      setReadAt((prev) => {
+        const next = { ...prev };
+        for (const id of new Set([...Object.keys(prev), ...channelIds])) {
+          const current = next[id];
+          if (!current || Date.parse(current) < Date.parse(at)) next[id] = at;
+        }
+        return next;
+      });
+      setDmReadAt((prev) => {
+        const next = { ...prev };
+        for (const id of new Set([...Object.keys(prev), ...dmIds])) {
+          const current = next[id];
+          if (!current || Date.parse(current) < Date.parse(at)) next[id] = at;
+        }
+        return next;
+      });
+    }
+
+    function onReadSync(payload: ReadSyncPayload) {
+      if (payload.type === "channel") {
+        applyChannelRead(payload.channelId, payload.at);
+      } else if (payload.type === "dm") {
+        applyDmRead(payload.conversationId, payload.at);
+      } else if (payload.type === "mark-all") {
+        applyMarkAll(payload.at, payload.channelIds, payload.dmIds);
+      }
+    }
+
+    function onWindowSync(event: Event) {
+      const detail = (event as CustomEvent<ReadSyncPayload>).detail;
+      if (detail) onReadSync(detail);
+    }
+
+    window.addEventListener(READ_SYNC_EVENT, onWindowSync);
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel(READ_SYNC_CHANNEL);
+      bc.onmessage = (event) => {
+        const data = event.data as ReadSyncPayload | null;
+        if (data) onReadSync(data);
+      };
+    } catch {
+      bc = null;
+    }
+
+    const channel = supabase
+      .channel(`local-reads:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_channel_reads",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as {
+            channel_id?: string;
+            last_read_at?: string;
+          } | null;
+          if (row?.channel_id && row.last_read_at) {
+            applyChannelRead(row.channel_id, row.last_read_at);
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_dm_reads",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as {
+            conversation_id?: string;
+            last_read_at?: string;
+          } | null;
+          if (row?.conversation_id && row.last_read_at) {
+            applyDmRead(row.conversation_id, row.last_read_at);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener(READ_SYNC_EVENT, onWindowSync);
+      bc?.close();
+      void supabase.removeChannel(channel);
+    };
   }, [user]);
 
   // Members who open a preview URL get upgraded to the live server view.
@@ -2230,6 +2344,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       });
       void saveChannelRead(user.id, channelId, at);
       void unreadFeedRef.current?.markChannelRead(channelId, at);
+      // markChannelRead publishes read-sync for other tabs / local badges
     }, 1600);
     return () => window.clearTimeout(timer);
   }, [
@@ -3113,6 +3228,28 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     user,
     dividerFloor,
     showUnreadDivider,
+    unblockedMessages,
+    unblockedDmMessages,
+    activeThreadId,
+  ]);
+
+  // Drop a stuck "new messages" flag once the visible list is loaded and
+  // nothing past the floor remains (avoids divider state with no anchor).
+  useEffect(() => {
+    if (!showUnreadDivider || !dividerFloor) return;
+    const list = dividerFloor.key.startsWith("dm:")
+      ? unblockedDmMessages
+      : activeThreadId
+        ? unblockedMessages.filter(
+            (message) => message.thread_id === activeThreadId,
+          )
+        : unblockedMessages.filter((message) => !message.thread_id);
+    if (list.length === 0) return;
+    if (!firstUnreadMessageId) setShowUnreadDivider(false);
+  }, [
+    showUnreadDivider,
+    dividerFloor,
+    firstUnreadMessageId,
     unblockedMessages,
     unblockedDmMessages,
     activeThreadId,
@@ -4033,7 +4170,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     setDividerFloor({ key: `channel:${activeChannelId}`, at });
     setShowUnreadDivider(true);
     await saveChannelRead(user.id, activeChannelId, at);
-    void unreadFeedRef.current?.markChannelRead(activeChannelId, at);
+    // Do not call markChannelRead — that clears the channel from the unread
+    // feed. Publish the lowered cursor and refresh summary so badges return.
+    publishReadSync({
+      type: "channel",
+      channelId: activeChannelId,
+      at,
+    });
+    void unreadFeedRef.current?.refresh();
     setToast("Marked as unread");
   }
 

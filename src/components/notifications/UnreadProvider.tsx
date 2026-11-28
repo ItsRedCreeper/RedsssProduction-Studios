@@ -21,6 +21,9 @@ import {
   type UnreadSummary,
 } from "@/lib/unread";
 import { saveChannelRead } from "@/components/messenger/data";
+import { publishReadSync } from "@/lib/read-sync";
+import { loadBlockedIds } from "@/lib/blocking";
+import { loadIgnoredIds } from "@/lib/ignoring";
 
 type UnreadContextValue = {
   loading: boolean;
@@ -107,7 +110,24 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
         .limit(80),
       supabase.rpc("get_unread_summary"),
     ]);
-    setNotifications((notifs.data as AppNotification[] | null) ?? []);
+    const [blocked, ignored] = await Promise.all([
+      loadBlockedIds(),
+      loadIgnoredIds(),
+    ]);
+    const hideActors = new Set([...blocked.ids, ...ignored.ids]);
+    const nextNotifs = ((notifs.data as AppNotification[] | null) ?? []).filter(
+      (item) => {
+        const actor =
+          (typeof item.meta?.actor_id === "string" && item.meta.actor_id) ||
+          (typeof item.meta?.from_user_id === "string" &&
+            item.meta.from_user_id) ||
+          (typeof item.meta?.author_id === "string" && item.meta.author_id) ||
+          null;
+        if (!actor) return true;
+        return !hideActors.has(actor);
+      },
+    );
+    setNotifications(nextNotifs);
     let raw = summary.data as UnreadSummary | string | null;
     if (typeof raw === "string") {
       try {
@@ -152,12 +172,22 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "user_channel_reads" },
+        {
+          event: "*",
+          schema: "public",
+          table: "user_channel_reads",
+          filter: `user_id=eq.${user.id}`,
+        },
         () => scheduleRefresh(),
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "user_dm_reads" },
+        {
+          event: "*",
+          schema: "public",
+          table: "user_dm_reads",
+          filter: `user_id=eq.${user.id}`,
+        },
         () => scheduleRefresh(),
       )
       .on(
@@ -203,6 +233,8 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
   );
 
   const bellCount = useMemo(() => {
+    // Must match NotificationsPanel unread row count: 1 per server aggregate,
+    // 1 per unread DM, 1 per unread individual notification.
     const individual = notifications.filter(
       (n) => !n.read && isIndividualNotification(n.type),
     ).length;
@@ -231,6 +263,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     const dmIds = [...new Set(dms.map((d) => d.conversation_id))];
     setChannels([]);
     setDms([]);
+    publishReadSync({ type: "mark-all", at: now, channelIds, dmIds });
     const supabase = createClient();
     await supabase
       .from("notifications")
@@ -249,6 +282,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       if (!user) return;
       const when = at ?? new Date().toISOString();
       setChannels((prev) => prev.filter((row) => row.channel_id !== channelId));
+      publishReadSync({ type: "channel", channelId, at: when });
       await saveChannelRead(user.id, channelId, when);
       // Mark related mention/reply notifs for this channel as read
       setNotifications((prev) =>
@@ -282,6 +316,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       setDms((prev) =>
         prev.filter((row) => row.conversation_id !== conversationId),
       );
+      publishReadSync({ type: "dm", conversationId, at: when });
       await saveDmRead(user.id, conversationId, when);
       setNotifications((prev) =>
         prev.map((item) => {
@@ -319,6 +354,9 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
         .filter((c) => c.server_id === serverId)
         .map((c) => c.channel_id);
       setChannels((prev) => prev.filter((c) => c.server_id !== serverId));
+      for (const id of ids) {
+        publishReadSync({ type: "channel", channelId: id, at: now });
+      }
       await Promise.all(ids.map((id) => saveChannelRead(user.id, id, now)));
       setNotifications((prev) =>
         prev.map((item) => {
