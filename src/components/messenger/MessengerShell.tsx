@@ -609,9 +609,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const bumpReconnectRef = useRef((opts?: { resubscribe?: boolean }) => {
     void opts;
   });
+  /** Prevent CHANNEL_ERROR storms from remounting realtime every few hundred ms. */
+  const lastResubscribeAtRef = useRef(0);
   bumpReconnectRef.current = (opts?: { resubscribe?: boolean }) => {
     setReconnectTick((n) => n + 1);
-    if (opts?.resubscribe) setRealtimeEpoch((n) => n + 1);
+    if (opts?.resubscribe) {
+      const now = Date.now();
+      if (now - lastResubscribeAtRef.current >= 5_000) {
+        lastResubscribeAtRef.current = now;
+        setRealtimeEpoch((n) => n + 1);
+      }
+    }
     void unreadFeedRef.current?.refresh();
   };
   function bumpReconnect(opts?: { resubscribe?: boolean }) {
@@ -2383,6 +2391,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     });
   }, [displayVoiceStates]);
 
+  // Initial/paged channel history — independent of realtimeEpoch so a flaky
+  // websocket cannot cancel in-flight loads or restart the 20s timeout loop.
   useEffect(() => {
     if (!activeChannelId) return;
     // Don't block on server chrome — messages load in parallel with members/roles.
@@ -2411,6 +2421,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     // Sync: show loading before first paint of the new channel so scroll-to-bottom
     // waits for the real message list instead of locking onto stale content.
     setLoadingChannelMessages(true);
+    setError((prev) =>
+      prev === "Timed out loading messages. Try again." ? null : prev,
+    );
 
     function stillCurrent() {
       return !cancelled && requestId === messagesRequest.current;
@@ -2430,6 +2443,9 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         setLastMessageAt((prev) => ({ ...prev, [channelId]: newest }));
       }
       setLoadingChannelMessages(false);
+      setError((prev) =>
+        prev === "Timed out loading messages. Try again." ? null : prev,
+      );
     }
 
     async function loadPreviewMessages() {
@@ -2499,15 +2515,36 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       void loadPreviewMessages().finally(() => {
         window.clearTimeout(loadTimeout);
       });
-      return () => {
-        cancelled = true;
+    } else {
+      void load().finally(() => {
         window.clearTimeout(loadTimeout);
-      };
+      });
     }
 
-    void load().finally(() => {
+    return () => {
+      cancelled = true;
       window.clearTimeout(loadTimeout);
-    });
+    };
+  }, [activeChannelId, activeChannel?.type, previewMode]);
+
+  // Realtime for the open channel — remounts on realtimeEpoch only.
+  useEffect(() => {
+    if (!activeChannelId || previewMode) return;
+    if (
+      activeChannel &&
+      activeChannel.type !== "text" &&
+      activeChannel.type !== "voice"
+    ) {
+      return;
+    }
+
+    const channelId = activeChannelId;
+    const supabase = createClient();
+    let cancelled = false;
+
+    function stillCurrent() {
+      return !cancelled && messagesChannelRef.current === channelId;
+    }
 
     const channel = supabase
       .channel(`messages:${channelId}`)
@@ -2532,7 +2569,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               reply_to: null,
             } as ChatMessage);
           setMessages((prev) => mergeIncoming(prev, nextMessage));
-          setLastMessageAt((prev) => ({ ...prev, [channelId]: nextMessage.created_at }));
+          setLastMessageAt((prev) => ({
+            ...prev,
+            [channelId]: nextMessage.created_at,
+          }));
           // Message sent → drop that user's typing indicator immediately.
           if (nextMessage.user_id && nextMessage.user_id !== userIdRef.current) {
             setTypingUsers((prev) => {
@@ -2711,7 +2751,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
     return () => {
       cancelled = true;
-      window.clearTimeout(loadTimeout);
       void supabase.removeChannel(channel);
       void supabase.removeChannel(pollChannel);
     };
@@ -2813,7 +2852,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       ];
       let parents: Tables<"messages">[] = [];
       if (missing.length > 0) {
-        const parentResult = await supabase.from("dm_messages").select("*").in("id", missing);
+        const parentResult = await supabase
+          .from("dm_messages")
+          .select("*")
+          .in("id", missing);
         parents = dmRowsToMessages(parentResult.data ?? []);
       }
       const profiles = await loadProfiles(
@@ -2835,6 +2877,21 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }
 
     void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const conversationId = activeConversationId;
+    const supabase = createClient();
+    let cancelled = false;
+
+    function stillCurrent() {
+      return !cancelled && conversationRef.current === conversationId;
+    }
 
     const channel = supabase
       .channel(`dm:${conversationId}`)

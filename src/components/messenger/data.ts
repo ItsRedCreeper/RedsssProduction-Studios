@@ -338,33 +338,55 @@ async function hydrateMessageRows(
   return hydrateMessages(rows, [...authorProfiles, ...extraProfiles], parents);
 }
 
+async function raceTimeout<T>(promise: Promise<T>, ms: number, label: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(label)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function loadChannelMessages(
   channelId: string,
   opts?: { limit?: number; before?: string | null },
 ) {
   const supabase = createClient();
   const limit = opts?.limit ?? CHANNEL_MESSAGE_PAGE_SIZE;
-  // One RPC: messages + author/reply profiles + reactions for this page.
-  const { data, error } = await supabase.rpc("get_channel_messages", {
-    p_channel_id: channelId,
-    p_limit: limit,
-    p_before: opts?.before ?? null,
-  });
 
-  if (error) {
-    // Fallback for older deployments / transient RPC issues.
-    const { data: rows, error: tableError } = await supabase
+  async function viaTable(fallbackError?: string | null) {
+    // Fallback for older deployments / hung or failed RPC.
+    const tableQuery = supabase
       .from("messages")
       .select("*")
       .eq("channel_id", channelId)
       .order("created_at", { ascending: false })
       .limit(limit);
+    let rows: Tables<"messages">[] | null = null;
+    let tableError: { message: string } | null = null;
+    try {
+      const result = await raceTimeout(tableQuery, 10_000, "table_timeout");
+      rows = result.data;
+      tableError = result.error;
+    } catch {
+      return {
+        messages: [] as ChatMessage[],
+        reactions: [] as Tables<"message_reactions">[],
+        hasMore: false,
+        error: fallbackError ?? "Timed out loading messages. Try again.",
+      };
+    }
     if (tableError || !rows) {
       return {
         messages: [] as ChatMessage[],
         reactions: [] as Tables<"message_reactions">[],
         hasMore: false,
-        error: error.message,
+        error: tableError?.message ?? fallbackError ?? "Failed to load messages",
       };
     }
     const messages = await hydrateMessageRows(rows);
@@ -376,13 +398,33 @@ export async function loadChannelMessages(
     };
   }
 
-  const payload = parseChannelMessagesPayload(data);
-  return {
-    messages: mapChannelMessageRows(payload.messages),
-    reactions: payload.reactions,
-    hasMore: payload.messages.length >= limit,
-    error: null as string | null,
-  };
+  // One RPC: messages + author/reply profiles + reactions for this page.
+  // Cap wait so a hung PostgREST call cannot sit until the UI's 20s banner.
+  try {
+    const { data, error } = await raceTimeout(
+      supabase.rpc("get_channel_messages", {
+        p_channel_id: channelId,
+        p_limit: limit,
+        p_before: opts?.before ?? null,
+      }),
+      10_000,
+      "rpc_timeout",
+    );
+
+    if (error) {
+      return viaTable(error.message);
+    }
+
+    const payload = parseChannelMessagesPayload(data);
+    return {
+      messages: mapChannelMessageRows(payload.messages),
+      reactions: payload.reactions,
+      hasMore: payload.messages.length >= limit,
+      error: null as string | null,
+    };
+  } catch {
+    return viaTable("Timed out loading messages. Try again.");
+  }
 }
 
 type PublicPreviewMember = {

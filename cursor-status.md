@@ -1,22 +1,27 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Notifications: no read inbox)
+**Last updated:** 2026-11-28 (Fix message-load timeout)
 
 ## Localhost health
 **Healthy** (prior).
 
+## Message load timeout
+Fixed "Timed out loading messages. Try again."
+
+### Cause
+- Channel/DM history load shared an effect with realtime subscriptions
+- `CHANNEL_ERROR` / `TIMED_OUT` bumped `realtimeEpoch` → remounted the load effect, cancelled in-flight fetches, and could leave a sticky 20s timeout banner
+- RPC had no client-side deadline (hung calls waited for the UI timer)
+
+### Fix
+- Split history load vs realtime subscribe (channel + DM)
+- Debounce realtime resubscribe to ≥5s
+- `loadChannelMessages`: 10s RPC race → table fallback; table also capped at 10s
+- Clear the timeout banner when messages arrive successfully
+- RPC now returns `message_kind` / `poll` / `thread_id` / etc.
+
 ## Profile tags
-Site reward tags (not server roles).
-
-### Display fix
-- Funder pill used near-transparent gold + dark text → invisible on dark cards
-- Now: solid soft gold `#e8b84a` + dark `#1f1608` (with explicit `WebkitTextFillColor`)
-- Pioneer: muted red fill + light `#fecaca` text
-- Fixed min-height / padding so pills never collapse empty
-- Small card: tags sit under the name button (not inside it) so styles don’t fight
-
-### Data (unchanged)
-- ItsRed Creeper still has both `pioneer` + `funder`
+Unchanged (Funder/Pioneer pills + ItsRed Creeper seed).
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)
