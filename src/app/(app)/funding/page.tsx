@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   title: "Funding",
 };
 
+export const instant = false;
+
 export default function FundingPage() {
   return (
     <PlaceholderPage

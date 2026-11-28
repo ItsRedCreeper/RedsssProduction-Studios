@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   title: "Games",
 };
 
+export const instant = false;
+
 export default function GamesPage() {
   return (
     <PlaceholderPage

@@ -79,6 +79,7 @@ export function Navbar() {
         <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-2 px-2 sm:gap-3 sm:px-5">
           <button
             type="button"
+            suppressHydrationWarning
             className="rounded-md p-2 text-muted hover:bg-surface-hover hover:text-foreground lg:hidden"
             aria-label={navOpen ? "Close menu" : "Open menu"}
             aria-expanded={navOpen}
@@ -92,6 +93,7 @@ export function Navbar() {
           </button>
           <Link
             href="/"
+            suppressHydrationWarning
             className="flex min-w-0 shrink items-center gap-2 transition-opacity hover:opacity-90 sm:gap-2.5"
           >
             <SiteLogo />
@@ -110,6 +112,7 @@ export function Navbar() {
           <nav
             className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex"
             aria-label="Primary"
+            suppressHydrationWarning
           >
             {NAV_LINKS.map((link) => {
               const active = isActive(pathname, link.href);
@@ -117,6 +120,7 @@ export function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
+                  suppressHydrationWarning
                   className={`relative shrink-0 rounded-md px-2 py-1.5 text-sm font-medium transition-colors xl:px-3 ${
                     active
                       ? "text-accent"

@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   title: "RedsssMessenger",
 };
 
+export const instant = false;
+
 export default function MessengerPage() {
   return <MessengerEntry />;
 }

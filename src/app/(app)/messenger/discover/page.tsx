@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   title: "Discover · RedsssMessenger",
 };
 
+export const instant = false;
+
 export default function MessengerDiscoverRoute() {
   return <MessengerLayout discover />;
 }

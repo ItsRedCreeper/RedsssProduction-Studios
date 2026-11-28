@@ -40,8 +40,12 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${sora.variable} ${jetbrains.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="relative flex h-full min-h-0 flex-col overflow-x-hidden bg-background font-sans text-foreground">
+      <body
+        className="relative flex h-full min-h-0 flex-col overflow-x-hidden bg-background font-sans text-foreground"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

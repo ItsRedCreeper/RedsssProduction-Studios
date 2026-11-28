@@ -365,6 +365,8 @@ export function HoverTip({
 
   const child = isValidElement(children) ? (
     cloneElement(children as ReactElement<Record<string, unknown>>, {
+      // Cursor IDE browser injects data-cursor-ref before hydrate; ignore attr noise.
+      suppressHydrationWarning: true,
       "aria-describedby": tip ? tipId : undefined,
       title: undefined,
       onPointerEnter: (event: React.PointerEvent<HTMLElement>) => {

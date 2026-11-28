@@ -38,6 +38,7 @@ export function ServerRailButton({
       <HoverTip label={label} side="right" delayMs={60}>
         <button
           type="button"
+          suppressHydrationWarning
           aria-label={
             unreadCount > 0 && !active
               ? `${label} (${unreadCount} unread)`
