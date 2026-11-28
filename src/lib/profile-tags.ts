@@ -48,9 +48,9 @@ export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
     label: "Pioneer",
     tip: "Funded before official release",
     className:
-      "border border-[rgba(248,113,113,0.35)] bg-[rgba(185,28,28,0.32)] text-[#fecaca]",
+      "border border-[rgba(252,165,165,0.28)] bg-[rgba(185,28,28,0.24)] text-[#fecaca]",
     dotClassName:
-      "border border-[rgba(248,113,113,0.45)] bg-[rgba(220,60,60,0.85)]",
+      "border border-[rgba(254,202,202,0.4)] bg-[#c23b3b]",
     textColor: "#fecaca",
   },
   funder: {
@@ -58,9 +58,9 @@ export const PROFILE_TAG_META: Record<ProfileTagId, ProfileTagMeta> = {
     label: "Funder",
     tip: "Funded RedsssProduction Studios",
     className:
-      "border border-[rgba(201,146,46,0.45)] bg-[#e2b44f] text-[#1f1608]",
+      "border border-[rgba(212,168,75,0.4)] bg-[#dfb04a] text-[#1f1608]",
     dotClassName:
-      "border border-[rgba(201,146,46,0.55)] bg-[#e2b44f]",
+      "border border-[rgba(253,230,138,0.45)] bg-[#dfb04a]",
     textColor: "#1f1608",
   },
 };

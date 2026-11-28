@@ -613,27 +613,25 @@ export function BigProfileModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto rounded-b-2xl px-6 pb-6 pt-3">
           <div className="rounded-xl border border-white/[0.04] bg-[#1e1f22] p-4">
-            <h2
-              id="big-profile-title"
-              className={`text-2xl font-bold tracking-tight ${
-                nameColor ? "" : "text-white"
-              }`}
-              style={
-                nameColor
-                  ? { color: nameColor, WebkitTextFillColor: nameColor }
-                  : undefined
-              }
-            >
-              {shownName}
-            </h2>
+            <div className="flex min-w-0 items-center gap-2">
+              <h2
+                id="big-profile-title"
+                className={`min-w-0 truncate text-2xl font-bold tracking-tight ${
+                  nameColor ? "" : "text-white"
+                }`}
+                style={
+                  nameColor
+                    ? { color: nameColor, WebkitTextFillColor: nameColor }
+                    : undefined
+                }
+              >
+                {shownName}
+              </h2>
+              <ProfileTagsPills tags={profile.profile_tags} size="md" />
+            </div>
             {shownName !== profile.username && (
               <p className="mt-0.5 text-sm text-[#6d6f78]">@{profile.username}</p>
             )}
-            <ProfileTagsPills
-              tags={profile.profile_tags}
-              size="md"
-              className="mt-1"
-            />
             {!restricted ? (
               <PresenceCaption
                 userId={profile.id}

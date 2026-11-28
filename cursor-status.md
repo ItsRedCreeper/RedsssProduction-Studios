@@ -1,29 +1,22 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Tag circles in member list + cleaner pills)
+**Last updated:** 2026-11-28 (Tags inline with username + restyle)
 
 ## Localhost health
 **Healthy** (prior).
 
 ## Profile tags
-Site reward tags (not server roles). Display-only pass — who has tags unchanged.
+Display-only — who has tags unchanged (ItsRed Creeper = pioneer + funder).
+
+### Small / big profile
+- Full-text pills sit on the **same line** as the username (to the right)
+- Name truncates first; pills stay `shrink-0`
+- Smaller/lighter pills: soft muted red + soft gold, fully rounded
 
 ### Member list
-- Small colored circles on the same line as the username (after the name)
-- Pioneer = muted red; Funder = soft gold
-- Hover tip: tag name + description
-- Username truncates first; circles stay `shrink-0`
-
-### Profile card / big profile
-- Full-text pills kept (`Pioneer`, `Funder`)
-- Cleaner padding, softer fills, fully rounded, consistent height/gap
-
-### Tooltips
-- Pioneer: “Funded before official release”
-- Funder: “Funded RedsssProduction Studios”
-
-### Data
-- ItsRed Creeper still has both `pioneer` + `funder`
+- Circles stay on the username line
+- Cleaner 11px circles with soft fill + subtle border/highlight
+- Hover: tag name + description
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)

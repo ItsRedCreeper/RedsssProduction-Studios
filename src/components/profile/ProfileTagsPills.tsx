@@ -30,7 +30,7 @@ export function ProfileTagsPills({
   if (variant === "dots") {
     return (
       <span
-        className={`inline-flex shrink-0 items-center gap-1 ${className}`}
+        className={`inline-flex shrink-0 items-center gap-[5px] ${className}`}
         aria-label={items.map((t) => t.label).join(", ")}
       >
         {items.map((tag) => (
@@ -41,7 +41,7 @@ export function ProfileTagsPills({
             side="top"
           >
             <span
-              className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] ${tag.dotClassName}`}
+              className={`inline-block h-[11px] w-[11px] shrink-0 rounded-full shadow-[inset_0_1px_1px_rgba(255,255,255,0.22),0_0_0_1px_rgba(0,0,0,0.18)] ${tag.dotClassName}`}
               aria-label={tag.label}
             />
           </HoverTip>
@@ -52,12 +52,12 @@ export function ProfileTagsPills({
 
   const pad =
     size === "md"
-      ? "h-[1.125rem] px-2 text-[10px] leading-none"
-      : "h-4 px-1.5 text-[10px] leading-none";
+      ? "h-4 px-1.5 text-[10px] leading-none"
+      : "h-3.5 px-1.5 text-[9px] leading-none";
 
   return (
     <span
-      className={`inline-flex max-w-full flex-wrap items-center gap-1 ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1 ${className}`}
     >
       {items.map((tag) => (
         <HoverTip key={tag.id} label={tag.tip} delayMs={40} side="top">

@@ -201,20 +201,28 @@ export function SmallProfileCard({
           onClick={onViewProfile}
           className="block w-full text-left"
         >
-          <HoverTip label={shownName} onlyIfTruncated delayMs={40} className="block min-w-0">
-            <p
-              className={`truncate text-base font-semibold ${
-                nameColor ? "" : "text-white"
-              }`}
-              style={
-                nameColor
-                  ? { color: nameColor, WebkitTextFillColor: nameColor }
-                  : undefined
-              }
+          <span className="flex min-w-0 items-center gap-1.5">
+            <HoverTip
+              label={shownName}
+              onlyIfTruncated
+              delayMs={40}
+              className="min-w-0 flex-1 overflow-hidden"
             >
-              {shownName}
-            </p>
-          </HoverTip>
+              <p
+                className={`truncate text-base font-semibold ${
+                  nameColor ? "" : "text-white"
+                }`}
+                style={
+                  nameColor
+                    ? { color: nameColor, WebkitTextFillColor: nameColor }
+                    : undefined
+                }
+              >
+                {shownName}
+              </p>
+            </HoverTip>
+            <ProfileTagsPills tags={profile.profile_tags} size="sm" />
+          </span>
           {displayName && displayName !== profile.username && (
             <HoverTip
               label={`@${profile.username}`}
@@ -237,11 +245,6 @@ export function SmallProfileCard({
             />
           ) : null}
         </button>
-        <ProfileTagsPills
-          tags={profile.profile_tags}
-          size="sm"
-          className="mt-0.5"
-        />
 
         {roles.length > 0 && (
           <div className="mt-2">
