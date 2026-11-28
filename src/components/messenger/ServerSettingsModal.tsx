@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import {
   Check,
   ChevronDown,
@@ -437,14 +438,7 @@ export function ServerSettingsModal({
     onClose();
   }
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") requestClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose, overviewDirty]);
+  useEscapeToClose(open, requestClose);
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -1373,12 +1367,25 @@ export function ServerSettingsModal({
       setError(`Channel name must be ${CHANNEL_NAME_MAX} characters or fewer.`);
       return;
     }
+    if (
+      channels.some(
+        (channel) => channel.name.toLowerCase() === trimmed.toLowerCase(),
+      )
+    ) {
+      setError("A channel with that name already exists.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = createClient();
-    const overrides = newChannelPrivate
+    let overrides = newChannelPrivate
       ? setChannelPrivate({}, true)
       : undefined;
+    if (overrides && actorRoleIds.length > 0) {
+      for (const roleId of actorRoleIds) {
+        overrides = setRoleChannelView(overrides, roleId, true);
+      }
+    }
     const { data, error: insertError } = await supabase
       .from("channels")
       .insert({

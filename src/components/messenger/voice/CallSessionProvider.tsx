@@ -414,26 +414,52 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
         setMicError("Voice is not supported in this browser.");
         return null;
       }
+      const audioConstraint: MediaTrackConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+      };
+      if (devices.inputDeviceId) {
+        audioConstraint.deviceId = { ideal: devices.inputDeviceId };
+      }
       try {
-        const raw = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            deviceId: devices.inputDeviceId
-              ? { exact: devices.inputDeviceId }
-              : undefined,
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
-          video: withVideo
-            ? {
-                facingMode: "user",
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-              }
-            : false,
-        });
+        let raw: MediaStream;
+        try {
+          raw = await navigator.mediaDevices.getUserMedia({
+            audio: devices.inputDeviceId
+              ? {
+                  ...audioConstraint,
+                  deviceId: { exact: devices.inputDeviceId },
+                }
+              : audioConstraint,
+            video: withVideo
+              ? {
+                  facingMode: "user",
+                  width: { ideal: 1280 },
+                  height: { ideal: 720 },
+                }
+              : false,
+          });
+        } catch {
+          // Exact device missing (unplugged / revoked) — fall back to ideal/default.
+          raw = await navigator.mediaDevices.getUserMedia({
+            audio: audioConstraint,
+            video: withVideo
+              ? {
+                  facingMode: "user",
+                  width: { ideal: 1280 },
+                  height: { ideal: 720 },
+                }
+              : false,
+          });
+        }
         rawStreamRef.current = raw;
         const audioTrack = raw.getAudioTracks()[0] ?? null;
-        if (audioTrack) audioTrack.enabled = !mutedRef.current;
+        if (audioTrack) {
+          audioTrack.enabled = !mutedRef.current;
+          audioTrack.onended = () => {
+            setMicError("Microphone stopped — check permissions or device.");
+          };
+        }
         const out = new MediaStream(audioTrack ? [audioTrack] : []);
         streamRef.current = out;
         const video = raw.getVideoTracks()[0] ?? null;
@@ -441,6 +467,11 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
           cameraTrackRef.current = video;
           setCameraOn(true);
           setLocalVideoStream(new MediaStream([video]));
+          video.onended = () => {
+            setCameraOn(false);
+            setLocalVideoStream(null);
+            cameraTrackRef.current = null;
+          };
         }
         return out;
       } catch {
@@ -459,6 +490,93 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       await leaveCall();
     }
   }, [leaveCall, voice]);
+
+  const callInputDeviceRef = useRef<string | null>(null);
+
+  // Mid-call input device change / re-grant after revoke (skip first join).
+  useEffect(() => {
+    if (!connection) {
+      callInputDeviceRef.current = null;
+      return;
+    }
+    const prev = callInputDeviceRef.current;
+    callInputDeviceRef.current = devices.inputDeviceId;
+    if (prev === null) return;
+    if (prev === devices.inputDeviceId) return;
+    let cancelled = false;
+    async function switchInput() {
+      if (!navigator.mediaDevices?.getUserMedia) return;
+      try {
+        let raw: MediaStream;
+        try {
+          raw = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              deviceId: devices.inputDeviceId
+                ? { exact: devices.inputDeviceId }
+                : undefined,
+              echoCancellation: true,
+              noiseSuppression: true,
+            },
+            video: false,
+          });
+        } catch {
+          raw = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              deviceId: devices.inputDeviceId
+                ? { ideal: devices.inputDeviceId }
+                : undefined,
+              echoCancellation: true,
+              noiseSuppression: true,
+            },
+            video: false,
+          });
+        }
+        if (cancelled) {
+          for (const track of raw.getTracks()) track.stop();
+          return;
+        }
+        const nextAudio = raw.getAudioTracks()[0] ?? null;
+        if (!nextAudio) {
+          for (const track of raw.getTracks()) track.stop();
+          setMicError("No microphone track available.");
+          return;
+        }
+        nextAudio.enabled = !mutedRef.current;
+        nextAudio.onended = () => {
+          setMicError("Microphone stopped — check permissions or device.");
+        };
+        for (const track of streamRef.current?.getAudioTracks() ?? []) {
+          track.stop();
+        }
+        for (const track of rawStreamRef.current?.getAudioTracks() ?? []) {
+          track.stop();
+        }
+        const keepVideo = rawStreamRef.current?.getVideoTracks() ?? [];
+        rawStreamRef.current = new MediaStream([
+          nextAudio,
+          ...keepVideo,
+          ...raw.getVideoTracks(),
+        ]);
+        const out = new MediaStream([nextAudio]);
+        streamRef.current = out;
+        await meshRef.current?.setLocalStream(out);
+        setMicError(null);
+      } catch {
+        if (!cancelled) {
+          setMicError("Mic unavailable — check permissions or device.");
+        }
+      }
+    }
+    void switchInput();
+    return () => {
+      cancelled = true;
+    };
+  }, [connection, devices.inputDeviceId]);
+
+  useEffect(() => {
+    if (!connection) return;
+    meshRef.current?.setOutputDeviceId(devices.outputDeviceId);
+  }, [devices.outputDeviceId, connection]);
 
   const joinMesh = useCallback(
     async (args: {

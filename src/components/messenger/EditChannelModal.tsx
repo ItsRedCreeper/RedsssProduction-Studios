@@ -21,6 +21,7 @@ import {
   type OverrideState,
   type Permission,
 } from "@/lib/permissions";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import type { Category, Channel, Role } from "@/components/messenger/types";
 
 const SLOWMODE_OPTIONS = [
@@ -45,6 +46,10 @@ type EditChannelModalProps = {
   channel: Channel | null;
   roles: Role[];
   categories?: Category[];
+  /** Caller's role ids — auto-allowed VIEW when making a channel private. */
+  actorRoleIds?: string[];
+  /** Sibling channel names for duplicate rename checks. */
+  existingNames?: string[];
   onClose: () => void;
   onSaved: (channel: Channel) => void;
   onDuplicated?: (channel: Channel) => void;
@@ -92,6 +97,8 @@ export function EditChannelModal({
   channel,
   roles,
   categories = [],
+  actorRoleIds = [],
+  existingNames = [],
   onClose,
   onSaved,
   onDuplicated,
@@ -158,14 +165,7 @@ export function EditChannelModal({
     onClose();
   }
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") requestClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose, overviewDirty, permsDirty]);
+  useEscapeToClose(open, requestClose);
 
   if (!open || !channel) return null;
 
@@ -184,6 +184,16 @@ export function EditChannelModal({
     }
     if (trimmed.length > CHANNEL_NAME_MAX) {
       setError(`Channel name must be ${CHANNEL_NAME_MAX} characters or fewer.`);
+      return;
+    }
+    if (
+      existingNames.some(
+        (existing) =>
+          existing.toLowerCase() === trimmed.toLowerCase() &&
+          existing.toLowerCase() !== channel.name.toLowerCase(),
+      )
+    ) {
+      setError("A channel with that name already exists.");
       return;
     }
     setSaving(true);
@@ -469,9 +479,18 @@ export function EditChannelModal({
                   type="checkbox"
                   checked={privateChannel}
                   onChange={(event) =>
-                    setOverrides((current) =>
-                      setChannelPrivate(current, event.target.checked),
-                    )
+                    setOverrides((current) => {
+                      let next = setChannelPrivate(
+                        current,
+                        event.target.checked,
+                      );
+                      if (event.target.checked) {
+                        for (const roleId of actorRoleIds) {
+                          next = setRoleChannelView(next, roleId, true);
+                        }
+                      }
+                      return next;
+                    })
                   }
                   className="mt-0.5 h-4 w-4 rounded border-[#3f4147] accent-accent"
                 />

@@ -12,6 +12,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { VoiceChannelControls } from "@/components/messenger/VoiceChannelControls";
 import { useCallSession } from "@/components/messenger/voice/CallSessionProvider";
 import { HoverTip } from "@/components/ui/HoverTip";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import { createClient } from "@/lib/supabase/client";
 
 type StageItem =
@@ -311,17 +312,10 @@ export function CallOverlay() {
     }
   }, [focusedKey, stageItems]);
 
-  useEffect(() => {
-    if (!focusedKey) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        focusedHadMediaRef.current = false;
-        setFocusedKey(null);
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [focusedKey]);
+  useEscapeToClose(!!focusedKey, () => {
+    focusedHadMediaRef.current = false;
+    setFocusedKey(null);
+  });
 
   if (!call.connection) return null;
 

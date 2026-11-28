@@ -109,6 +109,7 @@ import {
   resolveServerEmojisByIds,
   seedEmojiCache,
 } from "@/lib/emoji-resolve";
+import { pushOverlayEscape } from "@/lib/overlay-escape";
 import {
   CATEGORY_NAME_MAX,
   CATEGORY_NAME_MIN,
@@ -475,10 +476,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const activeChannel = channels.find((channel) => channel.id === activeChannelId) ?? null;
   const activeThread =
     threads.find((thread) => thread.id === activeConversationId) ?? null;
+  // 1:1 only — blocking one member must not lock an entire group DM composer.
   const dmBlocked =
-    !!activeThread && isBlocked(activeThread.otherUserId);
+    !!activeThread &&
+    !activeThread.isGroup &&
+    isBlocked(activeThread.otherUserId);
   const [dmBlockedByThem, setDmBlockedByThem] = useState(false);
-  const dmOtherId = activeThread?.otherUserId ?? null;
+  const dmOtherId =
+    activeThread && !activeThread.isGroup ? activeThread.otherUserId : null;
   /** Block, ignore, or (DM) blocked-by-them — hide messages / typing content. */
   const isMessageHidden = useCallback(
     (userId: string | null | undefined) =>
@@ -2931,6 +2936,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     }, 400);
     return () => {
       window.clearInterval(tick);
+      // Tell peers we stopped before tearing down the broadcast channel.
+      if (typingWantedRef.current && user?.id) {
+        void channel.send({
+          type: "broadcast",
+          event: "typing",
+          payload: {
+            userId: user.id,
+            username: profile?.username ?? "Someone",
+            avatarUrl: profile?.avatar_url ?? null,
+            stop: true,
+          },
+        });
+      }
       typingWantedRef.current = false;
       setSelfTyping(false);
       if (typingChannelRef.current === channel) {
@@ -3064,26 +3082,21 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   useEffect(() => {
     if (!membersOpen && !voiceChatOpen) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      // Only intercept Escape on the mobile sheets (desktop lists are persistent).
-      if (window.matchMedia("(min-width: 1024px)").matches) return;
-      event.preventDefault();
+    // Only intercept Escape on the mobile sheets (desktop lists are persistent).
+    if (window.matchMedia("(min-width: 1024px)").matches) return;
+    return pushOverlayEscape(() => {
       if (membersOpen) setMembersOpen(false);
       if (voiceChatOpen) setVoiceChatOpen(false);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    });
   }, [membersOpen, voiceChatOpen]);
 
   useEffect(() => {
     if (!pinsOpen) return;
+    const unregisterEscape = pushOverlayEscape(() => {
+      setPinsOpen(false);
+      pinsButtonRef.current?.focus();
+    });
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setPinsOpen(false);
-        pinsButtonRef.current?.focus();
-        return;
-      }
       if (event.key !== "Tab") return;
       const panel = pinsPanelRef.current;
       if (!panel) return;
@@ -3111,6 +3124,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const first = pinsPanelRef.current?.querySelector<HTMLElement>("button");
     first?.focus();
     return () => {
+      unregisterEscape();
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("mousedown", onPointer);
     };
@@ -6839,6 +6853,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           serverId={activeServer.id}
           categories={categories}
           channelCount={channels.length}
+          existingNames={channels.map((channel) => channel.name)}
+          creatorRoleIds={myRoleIds}
           initialType={createChannelType}
           initialCategoryId={createChannelCategoryId}
           onClose={() => setCreateChannelOpen(false)}
@@ -6865,6 +6881,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           }
           roles={serverRoles}
           categories={categories}
+          actorRoleIds={myRoleIds}
+          existingNames={channels.map((channel) => channel.name)}
           onClose={() => setEditChannelId(null)}
           onSaved={(next) => {
             setChannels((prev) =>

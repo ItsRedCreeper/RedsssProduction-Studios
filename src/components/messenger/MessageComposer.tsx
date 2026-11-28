@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent,
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
@@ -347,8 +348,9 @@ export function MessageComposer({
       if (typingStopTimer.current != null) {
         window.clearTimeout(typingStopTimer.current);
       }
+      onTypingStop?.();
     };
-  }, []);
+  }, [onTypingStop]);
 
   useEffect(() => {
     if (draft === "" && slotListRef.current.length > 0) {
@@ -504,6 +506,21 @@ export function MessageComposer({
   function takeFiles(list: FileList | File[] | null) {
     if (!list || !allowAttach) return;
     onFiles(Array.from(list));
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    if (!allowAttach) return;
+    const items = event.clipboardData?.items;
+    if (!items?.length) return;
+    const files: File[] = [];
+    for (const item of items) {
+      if (item.kind !== "file") continue;
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+    if (files.length === 0) return;
+    event.preventDefault();
+    takeFiles(files);
   }
 
   const mentionQuery = useMemo(() => {
@@ -1012,6 +1029,7 @@ export function MessageComposer({
                   });
                 }
               }}
+              onPaste={handlePaste}
               onScroll={(event) => {
                 if (mirrorRef.current) {
                   mirrorRef.current.scrollTop = event.currentTarget.scrollTop;

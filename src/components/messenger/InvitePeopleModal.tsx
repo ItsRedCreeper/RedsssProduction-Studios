@@ -10,6 +10,7 @@ import {
   makeInviteCode,
 } from "@/components/messenger/data";
 import { LiveStatusDot } from "@/components/presence/LiveStatusDot";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import type { Server } from "@/components/messenger/types";
 
 type FriendRow = {
@@ -73,14 +74,7 @@ export function InvitePeopleModal({
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscapeToClose(open, onClose);
 
   useEffect(() => {
     if (!open) return;

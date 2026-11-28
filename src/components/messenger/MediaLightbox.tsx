@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { MessageAttachment } from "@/lib/message-media";
 import { isImageMime, isVideoMime } from "@/lib/message-media";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 
 type MediaLightboxProps = {
   items: MessageAttachment[];
@@ -54,9 +55,10 @@ export function MediaLightbox({
     setOffset({ x: 0, y: 0 });
   }, [index, current?.url]);
 
+  useEscapeToClose(true, onClose);
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
       if (event.key === "+" || event.key === "=") {
         event.preventDefault();
         setZoom((value) => Math.min(MAX_ZOOM, value + ZOOM_STEP));
@@ -83,7 +85,7 @@ export function MediaLightbox({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [hasMany, index, items.length, onClose, onIndexChange, zoom]);
+  }, [hasMany, index, items.length, onIndexChange, zoom]);
 
   if (!current) return null;
 

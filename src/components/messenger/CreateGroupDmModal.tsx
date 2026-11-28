@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import type { FriendEntry } from "@/components/messenger/types";
 
 type CreateGroupDmModalProps = {
@@ -32,14 +33,7 @@ export function CreateGroupDmModal({
     setError(null);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscapeToClose(open, onClose);
 
   if (!open) return null;
 

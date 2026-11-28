@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { X } from "lucide-react";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import type { Channel, DmThread, Server } from "@/components/messenger/types";
 
 type ForwardMessageModalProps = {
@@ -30,14 +31,7 @@ export function ForwardMessageModal({
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscapeToClose(open, onClose);
 
   const channelOptions = useMemo(() => {
     const out: { id: string; label: string; serverId: string }[] = [];

@@ -7,7 +7,8 @@ import {
   CHANNEL_NAME_MAX,
   CHANNEL_NAME_MIN,
 } from "@/lib/field-limits";
-import { setChannelPrivate } from "@/lib/permissions";
+import { setChannelPrivate, setRoleChannelView } from "@/lib/permissions";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import type { Category, Channel } from "@/components/messenger/types";
 
 type CreateChannelModalProps = {
@@ -15,6 +16,10 @@ type CreateChannelModalProps = {
   serverId: string;
   categories: Category[];
   channelCount: number;
+  /** Existing channel names (slug form) for duplicate checks. */
+  existingNames?: string[];
+  /** Creator role ids — auto-allowed VIEW when creating a private channel. */
+  creatorRoleIds?: string[];
   initialType?: "text" | "voice";
   initialCategoryId?: string | null;
   onClose: () => void;
@@ -26,6 +31,8 @@ export function CreateChannelModal({
   serverId,
   categories,
   channelCount,
+  existingNames = [],
+  creatorRoleIds = [],
   initialType = "text",
   initialCategoryId = null,
   onClose,
@@ -57,14 +64,7 @@ export function CreateChannelModal({
     setCategoryId(preferred);
   }, [open, initialType, initialCategoryId, categories]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscapeToClose(open, onClose);
 
   if (!open) return null;
 
@@ -77,6 +77,14 @@ export function CreateChannelModal({
     }
     if (trimmed.length > CHANNEL_NAME_MAX) {
       setError(`Channel name must be ${CHANNEL_NAME_MAX} characters or fewer.`);
+      return;
+    }
+    if (
+      existingNames.some(
+        (existing) => existing.toLowerCase() === trimmed.toLowerCase(),
+      )
+    ) {
+      setError("A channel with that name already exists.");
       return;
     }
     setSaving(true);
@@ -106,7 +114,12 @@ export function CreateChannelModal({
       nextCategoryId = category.id;
     }
 
-    const overrides = isPrivate ? setChannelPrivate({}, true) : undefined;
+    let overrides = isPrivate ? setChannelPrivate({}, true) : undefined;
+    if (overrides && creatorRoleIds.length > 0) {
+      for (const roleId of creatorRoleIds) {
+        overrides = setRoleChannelView(overrides, roleId, true);
+      }
+    }
     const { data, error: insertError } = await supabase
       .from("channels")
       .insert({

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { makeInviteCode } from "@/components/messenger/data";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import {
   SERVER_DESCRIPTION_MAX,
   SERVER_NAME_MAX,
@@ -34,14 +35,7 @@ export function CreateServerModal({
     setError(null);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscapeToClose(open, onClose);
 
   if (!open) return null;
 

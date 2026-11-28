@@ -7,6 +7,7 @@ import {
   CATEGORY_NAME_MAX,
   CATEGORY_NAME_MIN,
 } from "@/lib/field-limits";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import type { Category } from "@/components/messenger/types";
 
 type CreateCategoryModalProps = {
@@ -34,14 +35,7 @@ export function CreateCategoryModal({
     setError(null);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscapeToClose(open, onClose);
 
   if (!open) return null;
 

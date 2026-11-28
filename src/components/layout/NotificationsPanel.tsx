@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useEscapeToClose } from "@/hooks/useEscapeToClose";
 import {
   Bell,
   Check,
@@ -64,17 +65,7 @@ export function NotificationsPanel({
     onUnreadChange?.(bellCount);
   }, [bellCount, onUnreadChange]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscapeToClose(open, onClose);
 
   if (!open) return null;
 

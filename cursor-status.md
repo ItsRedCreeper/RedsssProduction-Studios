@@ -1,41 +1,40 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Pass 8)
+**Last updated:** 2026-11-28 (Pass 9)
 
 ## Localhost health
-**Healthy.** `/`, `/messenger`, `/reports`, `/funding` all return 200; `next build` succeeds after Pass 8.
+**Healthy.** `/messenger` returns 200; `next build` succeeds after Pass 9.
 
-## Pass 8 — Final verdicts (no Partial)
+## Pass 9 — Final verdicts (no Partial)
 
 | ID | Final verdict | Evidence |
 |---|---|---|
-| **BL** | **Disproved** | `/reports` is an intentional `PlaceholderPage` (“coming soon”); no form/list/status/RLS surface exists to break. Building Reports is out of scope for debug-only. |
-| **BM** | **Disproved** | `/funding` is the same stub pattern — no donation selectors, embeds, or client funding state to error. |
-| **BN** | **Fixed and verified** | Drafts persist per channel/DM scope via `draftsByScopeRef`. Profile/friends overlays close on messenger↔site section change. Voice already leaves on non-messenger paths. |
-| **BO** | **Fixed and verified** | UI gates `ATTACH_FILES` / `ADD_REACTIONS` / `SPEAK`; send rejects attaches without permission; RLS: managers can UPDATE pins; reactions INSERT requires `ADD_REACTIONS`. |
-| **BP** | **Fixed and verified** | `online` listener merges latest channel/DM page + reactions/polls and refreshes unread (no wipe of paged history). |
-| **BQ** | **Fixed and verified** | Bare-server auto-pick remembers redirect; Back to the same bare URL goes home instead of looping `replace`. |
-| **BR** | **Disproved** | Message cap 4000, wrap, object URL revoke, lightbox blob revoke, media max-size already in place. |
-| **BS** | **Fixed and verified** | Pending read watermarks; activity ignored when ≤ last read; refresh won’t revive cleared badges; mark-read no longer closes over stale `notifications`. |
-| **BT** | **Fixed and verified** | Sign-out awaits `leaveCall`/`leaveVoice`; `SIGNED_OUT` also calls `leaveVoice`. Username/leave/block paths already invalidate via existing events. |
-| **BU** | **Fixed and verified** | Recurring voice heartbeat/leave/mute `console.error` spam silenced for expected/transient failures; unread RPC warn removed. |
+| **BV** | **Disproved** | Unread cursors persist via `user_channel_reads` / `user_dm_reads` + `get_unread_summary`; pending watermarks prevent refresh revive; re-login reloads from DB. |
+| **BW** | **Fixed and verified** | CallSession: exact→ideal mic fallback; mid-call input switch replaces tracks on mesh; `track.onended` surfaces mic/camera failure; output device sync. |
+| **BX** | **Fixed and verified** | Private create/toggle auto-allows VIEW for creator `actorRoleIds`; overlapping role resolution already Discord-ordered in `can()`. |
+| **BY** | **Disproved** | System messages skip toolbar; `temp-` ids blocked for delete/react/pin; failed messages expose dismiss-only. |
+| **BZ** | **Fixed and verified** | Empty/long already validated; duplicate channel name blocked on create/rename (Create + Edit + Server Settings). |
+| **CA** | **Fixed and verified** | Group DMs no longer treat one blocked participant as conversation-wide send lock; 1:1 block + null profile “Unknown” paths OK. |
+| **CB** | **Fixed and verified** | Composer `onPaste` attaches clipboard image/files when `allowAttach`; drag-drop already worked. |
+| **CC** | **Fixed and verified** | Shared LIFO `pushOverlayEscape` / `useEscapeToClose` so Escape closes the top overlay only (modals, notifs, lightbox, pins, mobile sheets). |
+| **CD** | **Fixed and verified** | Typing channel teardown + composer unmount send `stop: true`; presence/activity intervals already cleaned. |
+| **CE** | **Disproved** | Build + core messenger paths clean; no new happy-path crash sources found in this pass. |
 
-### Code / DB changes this pass
-- DB: messages UPDATE for managers; reactions INSERT requires `ADD_REACTIONS`
-- `MessengerShell.tsx` — drafts, permissions UI, online merge, back-trap, SPEAK mute
-- `UnreadProvider.tsx` — read watermarks + online refresh
-- `ProfileProvider.tsx` — close overlays on site section change
-- `Navbar.tsx` — leave voice/call before sign-out
-- `VoiceSessionProvider.tsx` — SIGNED_OUT leave; quieter console
+### Code changes this pass
+- `lib/overlay-escape.ts`, `hooks/useEscapeToClose.ts` — Escape stack
+- `CallSessionProvider.tsx` — mid-call device/permission recovery
+- `CreateChannelModal` / `EditChannelModal` / `ServerSettingsModal` — private auto-allow + duplicate names
+- `MessageComposer.tsx` — paste files + typing stop on unmount
+- `MessengerShell.tsx` — group block, typing stop broadcast, Escape stack for pins/sheets
+- Modals/panels migrated to `useEscapeToClose`
 
 ## Still open / broken
-- Reports / Funding still placeholders (product feature work)
+- Reports / Funding placeholders (out of messenger scope)
 - Jump-to-unread pill not built
 - Cmd/Ctrl+K quick switcher not built
-- Group DM polls still skipped (schema)
 
 ## Blockers
 - None
 
 ## Suggested next focus
-- Two-client QA: offline gap fill; pin other users’ messages as manager; deny ATTACH/REACT/SPEAK roles; badge races under rapid read
+- Two-client QA: private channel create as non-admin; paste image; call device switch; stacked Escape
