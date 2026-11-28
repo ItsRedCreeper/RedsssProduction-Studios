@@ -5,6 +5,7 @@ import { Ban, Check, UserPlus } from "lucide-react";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useOptionalProfileUi } from "@/components/profile/ProfileProvider";
 import { loadIsBlockedBy } from "@/lib/blocking";
+import { createClient } from "@/lib/supabase/client";
 import {
   acceptFriendRequest,
   loadFriendshipWith,
@@ -57,10 +58,12 @@ export function ProfileFriendButton({
       return;
     }
     let cancelled = false;
-    setRelationReady(false);
-    void (async () => {
+
+    async function refreshRelation(opts?: { silent?: boolean }) {
+      const silent = opts?.silent === true;
+      if (!silent) setRelationReady(false);
       const blockedResult =
-        initialBlockedByThem !== undefined
+        initialBlockedByThem !== undefined && !silent
           ? { blockedByThem: initialBlockedByThem }
           : await loadIsBlockedBy(otherUserId);
       if (cancelled) return;
@@ -71,21 +74,38 @@ export function ProfileFriendButton({
         setRelationReady(true);
         return;
       }
-      if (initialStatus) {
+      if (!silent && initialStatus) {
         setStatus(initialStatus);
         setEdgeId(initialEdgeId);
         setRelationReady(true);
-        return;
+      } else if (!silent) {
+        setStatus("loading");
       }
-      setStatus("loading");
       const result = await loadFriendshipWith(otherUserId);
       if (cancelled) return;
       setStatus(result.status);
       setEdgeId(result.edgeId);
       setRelationReady(true);
-    })();
+    }
+
+    void refreshRelation();
+
+    // Keep in sync when friends panel (or another tab) accepts / cancels.
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`profile-friend:${user.id}:${otherUserId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "friends" },
+        () => {
+          void refreshRelation({ silent: true });
+        },
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
+      void supabase.removeChannel(channel);
     };
   }, [
     user,

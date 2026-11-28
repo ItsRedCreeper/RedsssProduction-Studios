@@ -795,6 +795,21 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       cameraTrackRef.current = track;
       setCameraOn(true);
       setLocalVideoStream(new MediaStream([track]));
+      track.addEventListener(
+        "ended",
+        () => {
+          void (async () => {
+            await meshRef.current?.setLocalVideoTrack(null);
+            if (cameraTrackRef.current === track) {
+              cameraTrackRef.current = null;
+            }
+            setCameraOn(false);
+            setLocalVideoStream(null);
+            await persistMediaFlags(false, !!screenTrackRef.current);
+          })();
+        },
+        { once: true },
+      );
       await persistMediaFlags(true, !!screenTrackRef.current);
     } catch {
       setMicError("Camera permission denied.");

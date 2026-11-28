@@ -2613,6 +2613,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }, [pinsOpen]);
 
   useEffect(() => {
+    if (!membersOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      // Only intercept Escape on the mobile members sheet (desktop list is persistent).
+      if (window.matchMedia("(min-width: 1024px)").matches) return;
+      event.preventDefault();
+      setMembersOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [membersOpen]);
+
+  useEffect(() => {
     if (!pinsOpen) return;
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -2704,6 +2717,14 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const canManageChannels = can(myPerms, PERMISSIONS.MANAGE_CHANNELS, {
     isOwner: isServerOwner,
   });
+  const canMentionEveryone = can(myPerms, PERMISSIONS.MENTION_EVERYONE, {
+    isOwner: isServerOwner,
+    overrides: activeChannel?.permission_overrides,
+    roleIds: myRoleIds,
+    userId: user?.id,
+  });
+  /** While viewing as a role, hide real management affordances. */
+  const manageUiAllowed = !viewAsRoleId && !previewMode;
   const canManageRoles = can(myPerms, PERMISSIONS.MANAGE_ROLES, {
     isOwner: isServerOwner,
   });
@@ -2830,13 +2851,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     [members, isBlocked],
   );
 
+  const mentionableRoles = useMemo(() => {
+    // MENTION_EVERYONE gates @everyone / @here / all role pings.
+    if (!canMentionEveryone) return [];
+    return serverRoles;
+  }, [canMentionEveryone, serverRoles]);
+
   const mentionSuggestions = useMemo<MentionSuggestion[]>(() => {
     const users = visibleMembers.map((member) => ({
       id: member.user_id,
       label: member.nickname?.trim() || member.username,
       kind: "user" as const,
     }));
-    const roles = serverRoles.map((role) => ({
+    const roles = mentionableRoles.map((role) => ({
       id: role.id,
       label: role.name,
       kind: "role" as const,
@@ -2849,7 +2876,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         kind: "channel" as const,
       }));
     return [...users, ...roles, ...channelItems];
-  }, [visibleMembers, serverRoles, channels]);
+  }, [visibleMembers, mentionableRoles, channels]);
 
   const mentionMaps = useMemo<MentionMaps>(() => {
     const usersById: MentionMaps["usersById"] = {};
@@ -3003,13 +3030,19 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const loadOlderChannel = useCallback(async () => {
     if (!activeChannelId || loadingOlderMessages || !channelHasMore) return;
+    const channelId = activeChannelId;
     const oldest = messages[0]?.created_at;
     if (!oldest) return;
     setLoadingOlderMessages(true);
+    const stillHere = () => activeChannelRef.current === channelId;
     if (previewMode) {
-      const result = await loadPublicChannelMessages(activeChannelId, {
+      const result = await loadPublicChannelMessages(channelId, {
         before: oldest,
       });
+      if (!stillHere()) {
+        setLoadingOlderMessages(false);
+        return;
+      }
       if (result.error) {
         setError(result.error);
         setLoadingOlderMessages(false);
@@ -3024,7 +3057,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setLoadingOlderMessages(false);
       return;
     }
-    const result = await loadOlderChannelMessages(activeChannelId, oldest);
+    const result = await loadOlderChannelMessages(channelId, oldest);
+    if (!stillHere()) {
+      setLoadingOlderMessages(false);
+      return;
+    }
     if (result.error) {
       setError(result.error);
       setLoadingOlderMessages(false);
@@ -3056,10 +3093,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   const loadOlderDm = useCallback(async () => {
     if (!activeConversationId || loadingOlderMessages || !dmHasMore) return;
+    const conversationId = activeConversationId;
     const oldest = dmMessages[0]?.created_at;
     if (!oldest) return;
     setLoadingOlderMessages(true);
-    const result = await loadOlderDmMessages(activeConversationId, oldest);
+    const stillHere = () => conversationRef.current === conversationId;
+    const result = await loadOlderDmMessages(conversationId, oldest);
+    if (!stillHere()) {
+      setLoadingOlderMessages(false);
+      return;
+    }
     if (result.error) {
       setError(result.error);
       setLoadingOlderMessages(false);
@@ -3076,6 +3119,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             .select("*")
             .in("message_id", ids)
         : { data: [] as Tables<"dm_message_reactions">[] };
+    if (!stillHere()) {
+      setLoadingOlderMessages(false);
+      return;
+    }
     setDmMessages((prev) => {
       const seen = new Set(prev.map((message) => message.id));
       const older = result.messages.filter((message) => !seen.has(message.id));
@@ -3393,6 +3440,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     type?: "text" | "voice";
     categoryId?: string | null;
   }) {
+    if (viewAsRoleId || previewMode) {
+      setError("Channel management is disabled while viewing as a role.");
+      return;
+    }
     if (!canManageChannels && !isServerOwner) {
       setError("You don't have permission to manage channels.");
       return;
@@ -3403,6 +3454,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   function openCreateCategory() {
+    if (viewAsRoleId || previewMode) {
+      setError("Channel management is disabled while viewing as a role.");
+      return;
+    }
     if (!canManageChannels && !isServerOwner) {
       setError("You don't have permission to manage channels.");
       return;
@@ -3411,6 +3466,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   async function renameCategory(categoryId: string, name: string) {
+    if (viewAsRoleId || previewMode) {
+      setError("Channel management is disabled while viewing as a role.");
+      return false;
+    }
     if (!canManageChannels && !isServerOwner) {
       setError("You don't have permission to manage channels.");
       return false;
@@ -3575,7 +3634,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             id: member.user_id,
             username: member.nickname?.trim() || member.username,
           })),
-          roles: serverRoles.map((role) => ({ id: role.id, name: role.name })),
+          roles: mentionableRoles.map((role) => ({
+            id: role.id,
+            name: role.name,
+          })),
           channels: channels.map((channel) => ({
             id: channel.id,
             name: channel.name,
@@ -3585,6 +3647,16 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const text = encoded;
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
+    const pingReply = replyPing;
+    const sendScope = scopeRef.current;
+    const restoreComposer = () => {
+      // Don't dump a failed draft into a different channel/DM.
+      if (scopeRef.current !== sendScope) return;
+      setDraft(content);
+      setPendingFiles(filesSnapshot);
+      if (replySnapshot) setReplyTo(replySnapshot);
+      setReplyPing(pingReply);
+    };
     const optimistic: ChatMessage = {
       id: tempId,
       channel_id: channelId,
@@ -3617,7 +3689,6 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       optimistic: true,
     };
 
-    const pingReply = replyPing;
     setDraft("");
     setReplyTo(null);
     setReplyPing(true);
@@ -3637,10 +3708,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           ),
         );
         setError(uploaded.error ?? "Upload failed");
-        setDraft(content);
-        setPendingFiles(filesSnapshot);
-        if (replySnapshot) setReplyTo(replySnapshot);
-        setReplyPing(pingReply);
+        restoreComposer();
         setSending(false);
         return;
       }
@@ -3678,9 +3746,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         ),
       );
       setError(insertError?.message ?? "Failed to send message");
-      setDraft(content);
-      setPendingFiles(filesSnapshot);
-      if (replySnapshot) setReplyTo(replySnapshot);
+      restoreComposer();
       setSending(false);
       return;
     }
@@ -3774,6 +3840,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       : "";
     const tempId = `temp-${crypto.randomUUID()}`;
     const replySnapshot = replyTo;
+    const sendScope = scopeRef.current;
+    const restoreComposer = () => {
+      if (scopeRef.current !== sendScope) return;
+      setDraft(content);
+      setPendingFiles(filesSnapshot);
+      if (replySnapshot) setReplyTo(replySnapshot);
+    };
     const optimistic: ChatMessage = {
       id: tempId,
       channel_id: conversationId,
@@ -3823,9 +3896,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           ),
         );
         setError(uploaded.error ?? "Upload failed");
-        setDraft(content);
-        setPendingFiles(filesSnapshot);
-        if (replySnapshot) setReplyTo(replySnapshot);
+        restoreComposer();
         setSending(false);
         return;
       }
@@ -3860,9 +3931,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       const blockedMsg = friendlyBlockDmMessage(insertError?.message);
       if (blockedMsg) setDmBlockedByThem(true);
       setError(blockedMsg ?? insertError?.message ?? "Failed to send message");
-      setDraft(content);
-      setPendingFiles(filesSnapshot);
-      if (replySnapshot) setReplyTo(replySnapshot);
+      restoreComposer();
       setSending(false);
       return;
     }
@@ -4002,6 +4071,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   async function deleteChannel(messageId: string) {
+    // Optimistic / failed ghosts never hit the DB — drop locally only.
+    if (messageId.startsWith("temp-")) {
+      setMessages((prev) => prev.filter((message) => message.id !== messageId));
+      return;
+    }
     const snapshot = messages;
     setMessages((prev) => prev.filter((message) => message.id !== messageId));
     const supabase = createClient();
@@ -4016,6 +4090,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   }
 
   async function deleteDm(messageId: string) {
+    if (messageId.startsWith("temp-")) {
+      setDmMessages((prev) => prev.filter((message) => message.id !== messageId));
+      return;
+    }
     const snapshot = dmMessages;
     setDmMessages((prev) => prev.filter((message) => message.id !== messageId));
     const supabase = createClient();
@@ -4741,31 +4819,35 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
             speakingUserIds={speakingUserIds}
             loading={false}
             previewMode={previewMode}
-            canLeave={!previewMode && activeServer.owner_id !== user?.id}
-            canManageChannels={!previewMode && canManageChannels}
+            canLeave={manageUiAllowed && activeServer.owner_id !== user?.id}
+            canManageChannels={manageUiAllowed && canManageChannels}
             connectedVoiceChannelId={
               previewMode ? null : connection?.channelId ?? null
             }
             onSelectChannel={selectChannel}
             onInvite={
-              !previewMode && canCreateInvites ? openInvite : undefined
+              manageUiAllowed && canCreateInvites ? openInvite : undefined
             }
             onSettings={
-              !previewMode && canOpenServerSettings
+              manageUiAllowed && canOpenServerSettings
                 ? () => openSettings()
                 : undefined
             }
             onCreateChannel={
-              !previewMode && canManageChannels ? openCreateChannel : undefined
+              manageUiAllowed && canManageChannels
+                ? openCreateChannel
+                : undefined
             }
             onCreateCategory={
-              !previewMode && canManageChannels ? openCreateCategory : undefined
+              manageUiAllowed && canManageChannels
+                ? openCreateCategory
+                : undefined
             }
             onRenameCategory={
-              !previewMode && canManageChannels ? renameCategory : undefined
+              manageUiAllowed && canManageChannels ? renameCategory : undefined
             }
             onEditChannel={
-              !previewMode && canManageChannels
+              manageUiAllowed && canManageChannels
                 ? (channelId) => setEditChannelId(channelId)
                 : undefined
             }
@@ -4832,20 +4914,20 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                     : []
                 }
                 onInvite={
-                  !previewMode && canCreateInvites ? openInvite : undefined
+                  manageUiAllowed && canCreateInvites ? openInvite : undefined
                 }
                 onSettings={
-                  !previewMode && canOpenServerSettings
+                  manageUiAllowed && canOpenServerSettings
                     ? () => openSettings()
                     : undefined
                 }
                 onCreateChannel={
-                  !previewMode && canManageChannels
+                  manageUiAllowed && canManageChannels
                     ? () => openCreateChannel()
                     : undefined
                 }
                 onCreateCategory={
-                  !previewMode && canManageChannels
+                  manageUiAllowed && canManageChannels
                     ? openCreateCategory
                     : undefined
                 }

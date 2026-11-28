@@ -316,7 +316,18 @@ export function MessageItem({
         <span className="text-[11px] text-[var(--ms-text-muted)]">Sending…</span>
       )}
       {message.failed && (
-        <span className="text-[11px] text-accent">Failed to send</span>
+        <span className="inline-flex items-center gap-2 text-[11px] text-accent">
+          Failed to send
+          <button
+            type="button"
+            className="font-semibold underline-offset-2 hover:underline"
+            onClick={() => {
+              void onDelete(message.id);
+            }}
+          >
+            Dismiss
+          </button>
+        </span>
       )}
     </>
   );

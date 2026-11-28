@@ -814,10 +814,34 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
       });
       const track = stream.getVideoTracks()[0];
       if (!track) return;
+      const ok = await meshRef.current.setLocalVideoTrack(track);
+      if (!ok) {
+        try {
+          track.stop();
+        } catch {
+          /* ignore */
+        }
+        setMicError("Camera failed to start.");
+        return;
+      }
       cameraTrackRef.current = track;
       setCameraOn(true);
       setLocalVideoStream(new MediaStream([track]));
-      await meshRef.current.setLocalVideoTrack(track);
+      track.addEventListener(
+        "ended",
+        () => {
+          void (async () => {
+            await meshRef.current?.setLocalVideoTrack(null);
+            if (cameraTrackRef.current === track) {
+              cameraTrackRef.current = null;
+            }
+            setCameraOn(false);
+            setLocalVideoStream(null);
+            await persistMediaFlags(false, !!screenTrackRef.current);
+          })();
+        },
+        { once: true },
+      );
       await persistMediaFlags(true, screenSharing);
     } catch {
       setMicError("Camera permission denied.");
