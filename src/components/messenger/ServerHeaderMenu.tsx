@@ -166,7 +166,7 @@ export function ServerHeaderMenu({
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ms-text)] hover:bg-[#3a3c43] hover:text-white"
               >
                 <Eye className="h-4 w-4" strokeWidth={1.75} />
-                View Server As Role
+                Preview as role
               </button>
               {viewAsOpen ? (
                 <ul className="mx-2 mb-1 max-h-40 overflow-y-auto rounded-md border border-[#2b2d31] bg-[var(--ms-border)] py-1">

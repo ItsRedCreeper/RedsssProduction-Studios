@@ -1247,7 +1247,10 @@ export function ServerSettingsModal({
       .single();
     setSaving(false);
     if (updateError || !data) {
-      setError(updateError?.message ?? "Could not sync permissions.");
+      setError(
+        updateError?.message ??
+          "Couldn’t update this channel’s access settings. Try again.",
+      );
       return;
     }
     onChannelsChanged(
@@ -1987,7 +1990,7 @@ export function ServerSettingsModal({
                       {iconBusy ? "Uploading…" : "Change Icon"}
                     </button>
                     <p className="text-[11px] text-[var(--ms-text-muted)]">
-                      Crop after upload · {STATIC_IMAGE_HINT} · max 512 KB
+                      You’ll crop it next · {STATIC_IMAGE_HINT} · max 512 KB
                     </p>
                   </div>
                 </div>
@@ -2015,15 +2018,20 @@ export function ServerSettingsModal({
                     className="w-full resize-none rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent/60"
                   />
                 </label>
-                <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-3">
+                <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-3">
                   <input
                     type="checkbox"
                     checked={isPublic}
                     onChange={(event) => setIsPublic(event.target.checked)}
-                    className="h-4 w-4 accent-[var(--accent)]"
+                    className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
                   />
-                  <span className="text-sm text-foreground">
-                    Make this server discoverable
+                  <span>
+                    <span className="block text-sm text-foreground">
+                      Make this server discoverable
+                    </span>
+                    <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
+                      Show it in Discover so people can find and join.
+                    </span>
                   </span>
                 </label>
                 <div
@@ -2419,7 +2427,10 @@ export function ServerSettingsModal({
                   </li>
                 )}
                 {members.length === 0 && (
-                  <li className="text-sm text-muted">No members loaded.</li>
+                  <li className="text-sm text-muted">
+                    Couldn’t load members. Try closing and reopening Server
+                    Settings.
+                  </li>
                 )}
                 {members
                   .filter((member) => {
@@ -2832,7 +2843,7 @@ export function ServerSettingsModal({
                   </label>
                   <label className="space-y-1">
                     <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Landing channel
+                      Open this channel first
                     </span>
                     <select
                       value={inviteChannelId}
@@ -2980,8 +2991,9 @@ export function ServerSettingsModal({
                                     Private Category
                                   </span>
                                   <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
-                                    Only selected roles can view channels in this
-                                    category (until synced per channel).
+                                    Only the roles you choose can see channels in
+                                    this category. Channels can still have their
+                                    own access settings.
                                   </span>
                                 </span>
                               </label>
@@ -3210,14 +3222,15 @@ export function ServerSettingsModal({
                                 <button
                                   type="button"
                                   disabled={saving}
+                                  title="Use the same access rules as this channel’s category"
                                   onClick={() =>
                                     void syncChannelToCategory(channel)
                                   }
                                   className="rounded-md px-2 py-1 text-xs text-[var(--ms-text)] hover:bg-white/10 disabled:opacity-50"
                                 >
                                   {channel.permissions_synced
-                                    ? "Re-sync"
-                                    : "Sync Now"}
+                                    ? "Reset to category"
+                                    : "Match category"}
                                 </button>
                               ) : null}
                               <button
@@ -3288,7 +3301,7 @@ export function ServerSettingsModal({
                                   Private Channel
                                 </span>
                                 <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
-                                  Only selected roles can view this channel.
+                                  Only people you choose can see this channel.
                                 </span>
                               </span>
                             </label>
@@ -3357,9 +3370,9 @@ export function ServerSettingsModal({
             {tab === "emojis" && (canManageEmojis || isOwner) && (
               <div className="space-y-5">
                 <p className="text-sm text-[#b5bac1]">
-                  Upload custom emojis for this server. Members can use them in
-                  chat with{" "}
-                  <span className="font-mono text-[var(--ms-text)]">:name:</span>.
+                  Upload custom emojis. Members type{" "}
+                  <span className="font-mono text-[var(--ms-text)]">:name:</span>{" "}
+                  in chat to use them.
                 </p>
                 {canManageEmojis || isOwner ? (
                   <form
@@ -3418,14 +3431,13 @@ export function ServerSettingsModal({
                       </button>
                     </div>
                     <p className="text-[11px] text-[var(--ms-text-muted)]">
-                      PNG, JPG, GIF, or WebP · max {SERVER_EMOJI_MAX_LABEL}{" "}
-                      (larger GIFs are resized) · names use letters, numbers,
-                      and underscores
+                      PNG, JPG, GIF, or WebP · max {SERVER_EMOJI_MAX_LABEL} ·
+                      names use letters, numbers, and underscores
                     </p>
                   </form>
                 ) : (
                   <p className="rounded-md border border-[#3f4147] bg-[var(--ms-border)] px-3 py-2 text-sm text-[var(--ms-text-muted)]">
-                    You need the Manage Emojis permission to upload or delete
+                    You need Manage Expressions to upload or delete
                     emojis.
                   </p>
                 )}
@@ -3569,8 +3581,7 @@ export function ServerSettingsModal({
             {tab === "automod" && (canManageServer || isOwner) && (
               <div className="space-y-5">
                 <p className="text-sm text-[#b5bac1]">
-                  Block messages that contain configured keywords. Rules run when
-                  members send messages in this server.
+                  Automatically block messages that include words you choose.
                 </p>
                 <form
                   onSubmit={(event) => void createAutomodRule(event)}
@@ -3590,7 +3601,7 @@ export function ServerSettingsModal({
                       />
                     </label>
                     <label className="min-w-[12rem] flex-[2] space-y-1 text-xs font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
-                      Keywords (comma-separated)
+                      Blocked words
                       <input
                         value={automodKeywords}
                         onChange={(event) =>
@@ -3609,7 +3620,7 @@ export function ServerSettingsModal({
                     </button>
                   </div>
                   <p className="text-[11px] text-[var(--ms-text-muted)]">
-                    Action: block message · new rules start enabled
+                    Matching messages are blocked. New rules turn on right away.
                   </p>
                 </form>
                 <ul className="space-y-2">
@@ -3789,8 +3800,8 @@ function RoleRow({
             onClick={onMoveUp}
             disabled={!canMoveUp}
             className="rounded p-0.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-30"
-            aria-label={`Move ${role.name} higher in hierarchy`}
-            title="Higher in hierarchy"
+            aria-label={`Move ${role.name} up`}
+            title="Move role up"
           >
             <ChevronUp className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
@@ -3799,8 +3810,8 @@ function RoleRow({
             onClick={onMoveDown}
             disabled={!canMoveDown}
             className="rounded p-0.5 text-[#b5bac1] hover:bg-white/10 hover:text-white disabled:opacity-30"
-            aria-label={`Move ${role.name} lower in hierarchy`}
-            title="Lower in hierarchy"
+            aria-label={`Move ${role.name} down`}
+            title="Move role down"
           >
             <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
@@ -3818,7 +3829,7 @@ function RoleRow({
         ) : null}
         {!canEdit ? (
           <span className="rounded-md px-2 py-1 text-[10px] font-medium text-[var(--ms-text-muted)]">
-            Above your role
+            Higher than your role
           </span>
         ) : role.is_default ? null : confirm ? (
           <>

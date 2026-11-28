@@ -360,7 +360,8 @@ export function DiscoverPane({
               <Compass className="mx-auto mb-3 h-8 w-8 text-accent/70" strokeWidth={1.5} />
               <p className="text-sm font-medium text-white">No public servers found</p>
               <p className="mt-1 text-xs text-[var(--ms-text-muted)]">
-                Create a server and turn on Discoverable in Server Settings.
+                No matches yet. Create a server and make it discoverable in
+                Server Settings.
               </p>
             </div>
           ) : (

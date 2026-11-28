@@ -697,8 +697,8 @@ export function MessageComposer({
             <HoverTip
               label={
                 replyPing
-                  ? "Ping will notify the author"
-                  : "Author will not be notified"
+                  ? "Notify them about this reply"
+                  : "Don’t notify them"
               }
               delayMs={40}
             >

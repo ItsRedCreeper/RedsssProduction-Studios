@@ -459,7 +459,7 @@ export function NotificationsPanel({
             <p className="px-4 py-8 text-center text-sm text-muted">Loading…</p>
           ) : empty ? (
             <p className="px-4 py-8 text-center text-sm text-muted">
-              No notifications
+              You’re all caught up
             </p>
           ) : (
             <>

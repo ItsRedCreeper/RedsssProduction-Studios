@@ -260,7 +260,7 @@ export function InvitePeopleModal({
               Invite friends to {server.name}
             </h2>
             <p className="mt-1 text-sm text-[#b5bac1]">
-              Send a join invite to friends, or copy the permanent link.
+              Invite friends directly, or copy a link they can use anytime.
             </p>
           </div>
           <button
@@ -359,7 +359,7 @@ export function InvitePeopleModal({
         <div className="border-t border-black/30 bg-[var(--ms-sidebar)] px-5 py-4">
           <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
             <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
-            Permanent server invite link
+            Invite link
           </p>
           <div className="flex items-center gap-2">
             <input

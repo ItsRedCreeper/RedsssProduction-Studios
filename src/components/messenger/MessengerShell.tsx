@@ -4374,7 +4374,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     categoryId?: string | null;
   }) {
     if (viewAsRoleId || previewMode) {
-      setError("Channel management is disabled while viewing as a role.");
+      setError("Channel management is off while previewing as a role.");
       return;
     }
     if (!canManageChannels && !isServerOwner) {
@@ -4388,7 +4388,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   function openCreateCategory() {
     if (viewAsRoleId || previewMode) {
-      setError("Channel management is disabled while viewing as a role.");
+      setError("Channel management is off while previewing as a role.");
       return;
     }
     if (!canManageChannels && !isServerOwner) {
@@ -4400,7 +4400,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
 
   async function renameCategory(categoryId: string, name: string) {
     if (viewAsRoleId || previewMode) {
-      setError("Channel management is disabled while viewing as a role.");
+      setError("Channel management is off while previewing as a role.");
       return false;
     }
     if (!canManageChannels && !isServerOwner) {
@@ -4605,7 +4605,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
     if (viewAsRoleId) {
-      setError("Exit View Server As Role to send messages.");
+      setError("Exit role preview to send messages.");
       return;
     }
     const me = members.find((member) => member.user_id === user.id);
@@ -6362,7 +6362,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
           {viewAsRoleId && activeServer && !previewMode && (
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2">
               <p className="text-xs font-medium text-amber-100 sm:text-sm">
-                Viewing as{" "}
+                Previewing as{" "}
                 <span className="text-white">
                   {serverRoles.find((role) => role.id === viewAsRoleId)?.name ??
                     "role"}
@@ -6629,7 +6629,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
               <MessagesSquare className="mb-3 h-12 w-12 text-[#4e5058]" strokeWidth={1.5} />
               <h2 className="text-xl font-semibold text-white">Your DMs</h2>
               <p className="mt-2 max-w-sm text-sm text-[var(--ms-text-muted)]">
-                Pick a conversation from the sidebar, or message someone from a server member list.
+                Choose a chat on the left, or message someone from a server.
               </p>
             </div>
           )}
@@ -6898,7 +6898,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 key={`composer:${scope}`}
                 placeholder={
                   textMode && viewAsRoleId
-                    ? "Exit View Server As Role to send messages"
+                    ? "Exit role preview to send messages"
                     : textMode && !canSendMessages
                       ? "You don't have permission to send messages"
                       : replyTo
@@ -7083,7 +7083,7 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
                 key={`composer:${scope}`}
                 placeholder={
                   viewAsRoleId
-                    ? "Exit View Server As Role to send messages"
+                    ? "Exit role preview to send messages"
                     : !canSendMessages
                       ? "You don't have permission to send messages"
                       : replyTo

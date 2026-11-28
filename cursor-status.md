@@ -1,41 +1,35 @@
 # Cursor Status
 
-**Last updated:** 2026-11-28 (Pass 12)
+**Last updated:** 2026-11-28 (User-facing copy pass)
 
 ## Localhost health
-**Healthy.** `/messenger` returns 200 after Pass 12 fixes.
+**Healthy.** `/messenger` returns 200.
 
-## Pass 12 — Final verdicts (no Partial)
+## Copy rewrite summary
+Rewrote **~45** user-facing strings that sounded like developer notes or Discord-admin jargon.
 
-| ID | Final verdict | Evidence |
-|---|---|---|
-| **CZ** | **Fixed and verified** | `/poll` only matches as a whole command (`/^\/poll(\s|$)/i`); `encodeMentions` masks `http(s)://` URLs so `#channel` / `@name` inside links are not rewritten. Unknown `/…` / `!…` remain plain text; slash expand still exact-name. |
-| **DA** | **Fixed and verified** | Copy Text uses `displayMentionText` + `:emoji:` shortcodes instead of raw `<@uuid>` / `<:name:id>` tokens. No Quote action exists (not added — out of scope). |
-| **DB** | **Disproved** | Server icons already append `?v=`; avatars/emojis use unique storage paths + emoji cache invalidation. |
-| **DC** | **Disproved** | Voice/call join ops cancel stale work; same-channel rejoin short-circuits; `displayVoiceStates` de-dupes self. |
-| **DD** | **Fixed and verified** | `effectiveChannelOverrides` uses category map when `permissions_synced`; category save pushes to synced channels; channel save clears sync; new channels in a category inherit + sync; Re-sync always available. |
-| **DE** | **Disproved** | No chat `document.title` / favicon / message sound path to mishandle; unread badges clear via mark-read. |
-| **DF** | **Disproved** | No channel/category drag-reorder UI exists; create-time `position` display sort is stable — nothing to reset. (DnD would be a new feature.) |
-| **DG** | **Disproved** | Empty server/DM/members/Discover already render dedicated empty states. |
-| **DH** | **Disproved** | `LinkEmbeds` is content-driven; edit/delete remounts/cancels previews. |
-| **DI** | **Fixed and verified** | `userFacingActionError` on send/upload; `SIGNED_OUT` sets session-expired error + toast; drafts already restored via `restoreComposer`. |
+### Rewrote (examples)
+- Permission sync: “until synced per channel” → clear access language; Sync Now/Re-sync → Match/Reset to category
+- Permission list: dropped “overrides,” “permission bit” tone; Administrator / @everyone / Join Voice clarified
+- Tri-state: Inherit → Default + plain tooltips
+- Role preview: “View Server As Role” → Preview as role
+- Voice quality tips: dropped raw `ms` / Measuring → Checking / Connection looks great
+- Stickers: removed APNG jargon
+- AutoMod, Discover empty, invite link, reply ping tips, notifications empty, discoverable helpers
 
-### Code changes this pass
-- `lib/auth-errors.ts` — session failure detection + copy
-- `lib/mentions.ts` — URL-safe mention encoding
-- `lib/permissions.ts` — `effectiveChannelOverrides`
-- `MessengerShell.tsx` — `/poll` match, effective overrides, auth feedback
-- `ServerSettingsModal.tsx` / `CreateChannelModal.tsx` — category sync inheritance
-- `MessageItem.tsx` — display-form Copy Text
+### Left unchanged on purpose
+- Friends panel empty states (already plain)
+- Create Channel private helper (already user-facing)
+- Age-restricted / Pause invites / Create Server intro (already clear)
+- Session-expired message (already clear)
+- Code comments (not user-facing)
+- Raw Supabase `.message` fallbacks still exist in some paths — mapped where we already had auth helpers; full error sanitization is a separate pass
 
 ## Still open / broken
 - Reports / Funding placeholders (out of messenger scope)
 - Jump-to-unread pill not built
 - Cmd/Ctrl+K quick switcher not built
-- Channel/category drag-and-drop reorder not built (feature, not a regression)
+- Channel/category drag-and-drop reorder not built
 
 ## Blockers
 - None
-
-## Suggested next focus
-- Two-client QA: category deny + channel allow; `/pollfoo` still sends; copy mention paste; expire session mid-upload

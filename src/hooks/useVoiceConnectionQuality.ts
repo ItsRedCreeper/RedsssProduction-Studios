@@ -16,10 +16,10 @@ function classify(latencyMs: number | null): VoiceConnectionQuality {
   if (latencyMs == null || !Number.isFinite(latencyMs)) {
     return {
       level: "unknown",
-      label: "Measuring",
+      label: "Checking",
       latencyMs: null,
       colorClass: "text-[#949ba4]",
-      tip: "Measuring connection…",
+      tip: "Checking your connection…",
     };
   }
   if (latencyMs < 80) {
@@ -28,7 +28,7 @@ function classify(latencyMs: number | null): VoiceConnectionQuality {
       label: "Excellent",
       latencyMs,
       colorClass: "text-[#23a559]",
-      tip: `Excellent — ${Math.round(latencyMs)}ms`,
+      tip: "Connection looks great",
     };
   }
   if (latencyMs < 150) {
@@ -37,7 +37,7 @@ function classify(latencyMs: number | null): VoiceConnectionQuality {
       label: "Good",
       latencyMs,
       colorClass: "text-[#23a559]",
-      tip: `Good — ${Math.round(latencyMs)}ms`,
+      tip: "Connection is good",
     };
   }
   if (latencyMs < 250) {
@@ -46,15 +46,15 @@ function classify(latencyMs: number | null): VoiceConnectionQuality {
       label: "Fair",
       latencyMs,
       colorClass: "text-[#f0b232]",
-      tip: `Fair — ${Math.round(latencyMs)}ms`,
+      tip: "Connection is okay",
     };
   }
   return {
     level: "poor",
     label: "Poor",
     latencyMs,
-      colorClass: "text-[#ed4245]",
-    tip: `Poor — ${Math.round(latencyMs)}ms`,
+    colorClass: "text-[#ed4245]",
+    tip: "Connection is weak",
   };
 }
 

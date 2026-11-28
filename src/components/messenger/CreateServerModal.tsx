@@ -101,7 +101,7 @@ export function CreateServerModal({
       setLoading(false);
       setError(
         categoryError?.message ??
-          "Server was created, but categories failed. You can still open it and add channels.",
+          "Server created, but we couldn’t set up the starter channels. You can still open it and add them yourself.",
       );
       onCreated(server.id);
       onClose();
@@ -228,16 +228,21 @@ export function CreateServerModal({
             />
           </label>
 
-          <label className="flex cursor-pointer items-center gap-3 rounded-md border border-[#3f4147] bg-background px-3 py-3">
+          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#3f4147] bg-background px-3 py-3">
             <input
               type="checkbox"
               checked={isPublic}
               onChange={(event) => setIsPublic(event.target.checked)}
               disabled={loading}
-              className="h-4 w-4 accent-[var(--accent)]"
+              className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
             />
-            <span className="text-sm text-foreground">
-              Make this server discoverable
+            <span>
+              <span className="block text-sm text-foreground">
+                Make this server discoverable
+              </span>
+              <span className="mt-0.5 block text-xs text-muted">
+                Show it in Discover so people can find and join.
+              </span>
             </span>
           </label>
 

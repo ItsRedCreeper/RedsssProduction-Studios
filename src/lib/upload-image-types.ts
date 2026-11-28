@@ -66,4 +66,4 @@ export function isAllowedStickerImage(file: File) {
 export const STATIC_IMAGE_HINT = "PNG, JPG, or WebP";
 export const GIF_NOT_ALLOWED_HERE =
   "GIFs aren't allowed here. Use PNG, JPG, or WebP.";
-export const STICKER_IMAGE_HINT = "PNG or WebP (APNG ok as PNG)";
+export const STICKER_IMAGE_HINT = "PNG or WebP";

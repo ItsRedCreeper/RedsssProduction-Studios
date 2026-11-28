@@ -69,13 +69,19 @@ function TriState({
   const cycle: OverrideState[] = ["inherit", "allow", "deny"];
   const next = cycle[(cycle.indexOf(state) + 1) % cycle.length] ?? "inherit";
   const label =
-    state === "allow" ? "Allow" : state === "deny" ? "Deny" : "Inherit";
+    state === "allow" ? "Allow" : state === "deny" ? "Deny" : "Default";
+  const tip =
+    state === "allow"
+      ? "Allowed. Click to change."
+      : state === "deny"
+        ? "Denied. Click to change."
+        : "Uses the role’s normal permission. Click to allow or deny.";
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={() => onChange(next)}
-      title={`Permission: ${label}. Click to cycle.`}
+      title={tip}
       className={`inline-flex h-7 min-w-[4.5rem] items-center justify-center rounded-md border px-2 text-[11px] font-semibold disabled:opacity-50 ${
         state === "allow"
           ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
@@ -499,7 +505,7 @@ export function EditChannelModal({
                     Private Channel
                   </span>
                   <span className="mt-0.5 block text-xs text-[var(--ms-text-muted)]">
-                    Only selected roles can view this channel.
+                    Only people you choose can see this channel.
                   </span>
                 </span>
               </label>
@@ -544,7 +550,7 @@ export function EditChannelModal({
 
                 <div className="space-y-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ms-text-muted)]">
-                    Advanced permissions
+                    Channel permissions
                   </p>
                   {privateChannel && target !== EVERYONE_OVERRIDE_KEY ? (
                     <label className="mb-2 flex items-center gap-2 text-sm text-[var(--ms-text)]">

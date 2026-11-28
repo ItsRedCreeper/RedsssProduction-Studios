@@ -554,7 +554,7 @@ export function VoicePane({
       </div>
       <h2 className="text-xl font-semibold text-white">{channelName}</h2>
       <p className="mt-2 max-w-sm text-sm text-[var(--ms-text-muted)]">
-        Setting up your voice tile…
+        Getting your camera ready…
       </p>
     </div>
   );
