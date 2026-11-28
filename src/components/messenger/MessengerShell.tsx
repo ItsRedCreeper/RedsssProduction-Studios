@@ -878,7 +878,13 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
         .eq("user_id", user.id)
         .abortSignal(membersAbort.signal);
       memberships = result.data;
-      memberError = result.error;
+      memberError = result.error
+        ? {
+            message: /abort/i.test(result.error.message)
+              ? "Timed out loading servers. Try again."
+              : result.error.message,
+          }
+        : null;
     } catch {
       memberError = { message: "Timed out loading servers. Try again." };
     } finally {
@@ -890,6 +896,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       setError(memberError.message);
       setServers([]);
       setLoadingServers(false);
+      // Unblock channelPending "Loading…" when membership fetch fails/aborts.
+      if (routeServerRef.current) {
+        setLoadedServerId(routeServerRef.current);
+      }
+      setLoadingChannels(false);
       return;
     }
 
@@ -934,6 +945,10 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     if (serversError) {
       setError(serversError.message);
       setServers([]);
+      if (routeServerRef.current) {
+        setLoadedServerId(routeServerRef.current);
+      }
+      setLoadingChannels(false);
     } else {
       const next = data ?? [];
       setServers(next);
