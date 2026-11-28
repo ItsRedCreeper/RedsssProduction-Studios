@@ -6,11 +6,14 @@
 **Healthy**
 
 ## UI sounds on production
-Root cause: Vercel builds were failing (`lint_or_type_error`), so sound code/assets never reached production. Live site stayed on an older deploy.
+Two blockers:
+1. Vercel builds were failing (`lint_or_type_error`) — sound code never reached production
+2. Auth proxy redirected `/sounds/*.mp3` → `/login`, so Audio/fetch got an HTML page instead of MP3
 
 ### Fixes
-- Build: `raceTimeout` accepts thenables; `asProfile` accepts DB `string[]` tags; `ui-sounds` TS idle timer
-- Playback: unlock AudioContext on first gesture; HTMLAudio fallback when Web Audio is suspended; absolute `/sounds/` URLs; don’t permanently blacklist transient fetch failures
+- Build type errors fixed so deploys succeed
+- `/sounds/` (and mp3 matcher) skipped by auth proxy
+- Playback: unlock AudioContext on gesture; HTMLAudio fallback when Web Audio is suspended
 
 ### Wired sounds (unchanged set)
 Send/receive, mention, notification, error, voice join/leave, peer join/leave, mute/unmute, deafen/undeafen, screenshare start/stop, incoming-call loop.
