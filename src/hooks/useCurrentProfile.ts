@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/supabase/database.types";
@@ -14,72 +14,115 @@ export function notifyProfileUpdated() {
   window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
 }
 
-export function useCurrentProfile() {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<CurrentProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const userIdRef = useRef<string | null>(null);
+type Snapshot = {
+  user: User | null;
+  profile: CurrentProfile | null;
+  loading: boolean;
+};
 
-  const loadProfile = useCallback(async (userId: string) => {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle();
-    setProfile(data);
+const serverSnapshot: Snapshot = {
+  user: null,
+  profile: null,
+  loading: true,
+};
+
+let snapshot: Snapshot = serverSnapshot;
+const listeners = new Set<() => void>();
+let started = false;
+let profileRequest = 0;
+
+function emit() {
+  for (const listener of listeners) listener();
+}
+
+function setSnapshot(next: Snapshot) {
+  snapshot = next;
+  emit();
+}
+
+async function fetchProfile(userId: string) {
+  const request = ++profileRequest;
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
+  if (request !== profileRequest) return;
+  if (snapshot.user?.id !== userId) return;
+  setSnapshot({ ...snapshot, profile: data, loading: false });
+}
+
+function applyUser(nextUser: User | null) {
+  const sameUser = snapshot.user?.id === nextUser?.id;
+  setSnapshot({
+    user: nextUser,
+    profile: sameUser ? snapshot.profile : null,
+    loading: false,
+  });
+  if (nextUser && !sameUser) {
+    void fetchProfile(nextUser.id);
+  } else if (nextUser && sameUser && !snapshot.profile) {
+    void fetchProfile(nextUser.id);
+  }
+}
+
+function ensureStarted() {
+  if (started || typeof window === "undefined") return;
+  started = true;
+
+  const supabase = createClient();
+
+  // Local session first — avoids N parallel /auth/v1/user network calls when
+  // Navbar, Voice, Call, Unread, Presence, and MessengerShell all mount.
+  void supabase.auth.getSession().then(({ data: { session } }) => {
+    if (snapshot.user) return;
+    applyUser(session?.user ?? null);
+  });
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    applyUser(session?.user ?? null);
+  });
+
+  function onUpdated() {
+    const id = snapshot.user?.id;
+    if (id) void fetchProfile(id);
+  }
+
+  window.addEventListener(PROFILE_UPDATED_EVENT, onUpdated);
+}
+
+function subscribe(onStoreChange: () => void) {
+  ensureStarted();
+  listeners.add(onStoreChange);
+  return () => {
+    listeners.delete(onStoreChange);
+  };
+}
+
+function getSnapshot() {
+  return snapshot;
+}
+
+function getServerSnapshot() {
+  return serverSnapshot;
+}
+
+export function useCurrentProfile() {
+  const state = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot,
+  );
+
+  const refreshProfile = useCallback(async (userId: string) => {
+    await fetchProfile(userId);
   }, []);
 
-  useEffect(() => {
-    const supabase = createClient();
-    let cancelled = false;
-
-    async function init() {
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
-
-      if (cancelled) return;
-
-      userIdRef.current = currentUser?.id ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        await loadProfile(currentUser.id);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    }
-
-    void init();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      const nextUser = session?.user ?? null;
-      userIdRef.current = nextUser?.id ?? null;
-      setUser(nextUser);
-      if (nextUser) {
-        void loadProfile(nextUser.id);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
-
-    function onUpdated() {
-      const id = userIdRef.current;
-      if (id) void loadProfile(id);
-    }
-
-    window.addEventListener(PROFILE_UPDATED_EVENT, onUpdated);
-
-    return () => {
-      cancelled = true;
-      subscription.unsubscribe();
-      window.removeEventListener(PROFILE_UPDATED_EVENT, onUpdated);
-    };
-  }, [loadProfile]);
-
-  return { user, profile, loading, refreshProfile: loadProfile };
+  return {
+    user: state.user,
+    profile: state.profile,
+    loading: state.loading,
+    refreshProfile,
+  };
 }

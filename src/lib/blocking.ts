@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { getClientUser } from "@/lib/supabase/auth-user";
 import type { FriendProfile } from "@/lib/friends";
 
 export type BlockedUser = FriendProfile & {
@@ -26,9 +27,7 @@ function asBlockedProfile(
 /** IDs the current user has blocked (outgoing blocks only). */
 export async function loadBlockedIds() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user) {
     return { ids: [] as string[], error: null as string | null };
   }
@@ -45,9 +44,7 @@ export async function loadBlockedIds() {
 
 export async function loadBlockedUsers() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user) {
     return { users: [] as BlockedUser[], error: null as string | null };
   }
@@ -88,9 +85,7 @@ export async function loadBlockedUsers() {
 /** True if current user has blocked otherUserId (outgoing). */
 export async function loadIsBlocked(otherUserId: string) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user || user.id === otherUserId) {
     return { blocked: false, error: null as string | null };
   }
@@ -107,9 +102,7 @@ export async function loadIsBlocked(otherUserId: string) {
 /** Either-direction block check via SECURITY DEFINER RPC helper. */
 export async function loadAreUsersBlocked(otherUserId: string) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user || user.id === otherUserId) {
     return { blocked: false, error: null as string | null };
   }
@@ -124,9 +117,7 @@ export async function loadAreUsersBlocked(otherUserId: string) {
 /** True if otherUserId has blocked the current user (incoming). */
 export async function loadIsBlockedBy(otherUserId: string) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user || user.id === otherUserId) {
     return { blockedByThem: false, error: null as string | null };
   }

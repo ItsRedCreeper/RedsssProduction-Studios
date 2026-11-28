@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 
 function getSupabaseKey() {
@@ -8,9 +9,14 @@ function getSupabaseKey() {
   );
 }
 
+let browserClient: SupabaseClient<Database> | null = null;
+
+/** One shared browser client — avoids duplicate GoTrue init /auth/v1/user work. */
 export function createClient() {
-  return createBrowserClient<Database>(
+  if (browserClient) return browserClient;
+  browserClient = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     getSupabaseKey(),
   );
+  return browserClient;
 }

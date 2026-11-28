@@ -867,10 +867,23 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
     const request = ++serversRequest.current;
     setLoadingServers(true);
     const supabase = createClient();
-    const { data: memberships, error: memberError } = await supabase
-      .from("server_members")
-      .select("server_id")
-      .eq("user_id", user.id);
+    const membersAbort = new AbortController();
+    const membersTimer = window.setTimeout(() => membersAbort.abort(), 12_000);
+    let memberships: { server_id: string }[] | null = null;
+    let memberError: { message: string } | null = null;
+    try {
+      const result = await supabase
+        .from("server_members")
+        .select("server_id")
+        .eq("user_id", user.id)
+        .abortSignal(membersAbort.signal);
+      memberships = result.data;
+      memberError = result.error;
+    } catch {
+      memberError = { message: "Timed out loading servers. Try again." };
+    } finally {
+      window.clearTimeout(membersTimer);
+    }
 
     if (serversRequest.current !== request) return;
     if (memberError) {
@@ -898,11 +911,24 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       return;
     }
 
-    const { data, error: serversError } = await supabase
-      .from("servers")
-      .select("*")
-      .in("id", serverIds)
-      .order("created_at", { ascending: true });
+    const serversAbort = new AbortController();
+    const serversTimer = window.setTimeout(() => serversAbort.abort(), 12_000);
+    let data: typeof servers | null = null;
+    let serversError: { message: string } | null = null;
+    try {
+      const result = await supabase
+        .from("servers")
+        .select("*")
+        .in("id", serverIds)
+        .order("created_at", { ascending: true })
+        .abortSignal(serversAbort.signal);
+      data = result.data;
+      serversError = result.error;
+    } catch {
+      serversError = { message: "Timed out loading servers. Try again." };
+    } finally {
+      window.clearTimeout(serversTimer);
+    }
 
     if (serversRequest.current !== request) return;
     if (serversError) {

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { getClientUser } from "@/lib/supabase/auth-user";
 import type { PresenceStatus } from "@/components/messenger/data";
 import { notifyProfileUpdated } from "@/hooks/useCurrentProfile";
 
@@ -278,9 +279,7 @@ export async function setManualStatus(opts: {
   });
   if (error) return { error: error.message };
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   let manualStatusExpiresAt: string | null | undefined;
   let statusTextExpiresAt: string | null | undefined;
   let manualStatus: string | null | undefined;

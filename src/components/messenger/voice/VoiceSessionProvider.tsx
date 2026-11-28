@@ -929,6 +929,7 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
   }, [syncSkipFromStorage]);
 
   // Restore connection from DB after remount — but never after an intentional leave.
+  // Deferred so messenger servers/messages win the connection pool on first paint.
   useEffect(() => {
     // useRef(readSkipChannels()) can run during SSR with no sessionStorage; re-sync on client.
     syncSkipFromStorage();
@@ -939,11 +940,28 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
 
     async function restore() {
       syncSkipFromStorage();
-      const { data } = await supabase
-        .from("voice_states")
-        .select("*")
-        .eq("user_id", user!.id)
-        .maybeSingle();
+      const abort = new AbortController();
+      const timer = window.setTimeout(() => abort.abort(), 5_000);
+      let data: {
+        channel_id: string;
+        server_id: string;
+        muted: boolean;
+        deafened: boolean;
+        updated_at: string;
+      } | null = null;
+      try {
+        const result = await supabase
+          .from("voice_states")
+          .select("*")
+          .eq("user_id", user!.id)
+          .abortSignal(abort.signal)
+          .maybeSingle();
+        data = result.data;
+      } catch {
+        return;
+      } finally {
+        window.clearTimeout(timer);
+      }
       if (cancelled || !data) return;
       if (connectionRef.current) return;
 
@@ -990,9 +1008,12 @@ export function VoiceSessionProvider({ children }: { children: ReactNode }) {
       void startMicMonitor();
     }
 
-    void restore();
+    const defer = window.setTimeout(() => {
+      void restore();
+    }, 1_500);
     return () => {
       cancelled = true;
+      window.clearTimeout(defer);
     };
   }, [user, attachBroadcast, startMesh, startMicMonitor, syncSkipFromStorage]);
 

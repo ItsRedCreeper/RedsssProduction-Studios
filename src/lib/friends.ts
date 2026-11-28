@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { getClientUser } from "@/lib/supabase/auth-user";
 import type { Tables } from "@/lib/supabase/database.types";
 import {
   normalizeProfileTags,
@@ -80,9 +81,7 @@ export function formatSinceDate(iso: string | null | undefined) {
 
 export async function loadFriendsSince(otherUserId: string) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user || user.id === otherUserId) {
     return { friendsSince: null as string | null, error: null as string | null };
   }
@@ -174,9 +173,7 @@ export function relationshipFor(
 /** Friendship status between the signed-in user and another profile. */
 export async function loadFriendshipWith(otherUserId: string) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user || user.id === otherUserId) {
     return {
       status: "none" as FriendStatus,
@@ -315,9 +312,7 @@ export async function acceptFriendRequest(requestId: string) {
 
 export async function declineOrCancelFriendRequest(requestId: string) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user) return { error: "Not signed in." };
 
   const { data: row, error: loadError } = await supabase
@@ -356,9 +351,7 @@ export async function declineOrCancelFriendRequest(requestId: string) {
 
 export async function removeFriendship(edgeId: string) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user) return { error: "Not signed in." };
 
   const { data: row, error: loadError } = await supabase

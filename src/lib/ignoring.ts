@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { getClientUser } from "@/lib/supabase/auth-user";
 import type { FriendProfile } from "@/lib/friends";
 
 export type IgnoredUser = FriendProfile & {
@@ -25,9 +26,7 @@ function asIgnoredProfile(
 
 export async function loadIgnoredIds() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user) return { ids: [] as string[], error: null as string | null };
   const { data, error } = await supabase
     .from("ignored_users")
@@ -42,9 +41,7 @@ export async function loadIgnoredIds() {
 
 export async function loadIgnoredUsers() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user) return { users: [] as IgnoredUser[], error: null as string | null };
 
   const { data, error } = await supabase

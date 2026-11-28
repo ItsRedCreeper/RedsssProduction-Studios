@@ -338,14 +338,22 @@ async function hydrateMessageRows(
   return hydrateMessages(rows, [...authorProfiles, ...extraProfiles], parents);
 }
 
-async function raceTimeout<T>(promise: PromiseLike<T>, ms: number, label: string) {
+async function raceTimeout<T>(
+  promise: PromiseLike<T>,
+  ms: number,
+  label: string,
+  abort?: AbortController,
+) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     // Supabase builders are thenables, not native Promises — wrap for Promise.race.
     return await Promise.race([
       Promise.resolve(promise),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(label)), ms);
+        timer = setTimeout(() => {
+          abort?.abort();
+          reject(new Error(label));
+        }, ms);
       }),
     ]);
   } finally {
@@ -362,16 +370,23 @@ export async function loadChannelMessages(
 
   async function viaTable(fallbackError?: string | null) {
     // Fallback for older deployments / hung or failed RPC.
+    const tableAbort = new AbortController();
     const tableQuery = supabase
       .from("messages")
       .select("*")
       .eq("channel_id", channelId)
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .limit(limit)
+      .abortSignal(tableAbort.signal);
     let rows: Tables<"messages">[] | null = null;
     let tableError: { message: string } | null = null;
     try {
-      const result = await raceTimeout(tableQuery, 10_000, "table_timeout");
+      const result = await raceTimeout(
+        tableQuery,
+        8_000,
+        "table_timeout",
+        tableAbort,
+      );
       rows = result.data;
       tableError = result.error;
     } catch {
@@ -402,14 +417,18 @@ export async function loadChannelMessages(
   // One RPC: messages + author/reply profiles + reactions for this page.
   // Cap wait so a hung PostgREST call cannot sit until the UI's 20s banner.
   try {
+    const rpcAbort = new AbortController();
     const { data, error } = await raceTimeout(
-      supabase.rpc("get_channel_messages", {
-        p_channel_id: channelId,
-        p_limit: limit,
-        p_before: opts?.before ?? null,
-      }),
-      10_000,
+      supabase
+        .rpc("get_channel_messages", {
+          p_channel_id: channelId,
+          p_limit: limit,
+          p_before: opts?.before ?? null,
+        })
+        .abortSignal(rpcAbort.signal),
+      8_000,
       "rpc_timeout",
+      rpcAbort,
     );
 
     if (error) {

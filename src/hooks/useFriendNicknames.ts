@@ -25,12 +25,18 @@ export function useFriendNicknames() {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    // Defer past messenger server/message boot (avoids PostgREST 504 stampede).
+    const boot = window.setTimeout(() => {
+      void refresh();
+    }, 2_000);
     function onChanged() {
       void refresh();
     }
     window.addEventListener(NICKNAMES_CHANGED_EVENT, onChanged);
-    return () => window.removeEventListener(NICKNAMES_CHANGED_EVENT, onChanged);
+    return () => {
+      window.clearTimeout(boot);
+      window.removeEventListener(NICKNAMES_CHANGED_EVENT, onChanged);
+    };
   }, [refresh]);
 
   const nicknameFor = useCallback(

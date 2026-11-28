@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getClientUser } from "@/lib/supabase/auth-user";
 import {
   ignoreUser as ignoreUserRpc,
   loadIgnoredIds,
@@ -27,12 +28,18 @@ export function useIgnoredUsers() {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    // Defer past messenger server/message boot (avoids PostgREST 504 stampede).
+    const boot = window.setTimeout(() => {
+      void refresh();
+    }, 2_000);
     function onChanged() {
       void refresh();
     }
     window.addEventListener(IGNORED_CHANGED_EVENT, onChanged);
-    return () => window.removeEventListener(IGNORED_CHANGED_EVENT, onChanged);
+    return () => {
+      window.clearTimeout(boot);
+      window.removeEventListener(IGNORED_CHANGED_EVENT, onChanged);
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -41,9 +48,7 @@ export function useIgnoredUsers() {
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
     void (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getClientUser();
       if (cancelled || !user) return;
       channel = supabase
         .channel(`ignored-users:${user.id}:${channelSuffix}`)

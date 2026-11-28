@@ -1,12 +1,11 @@
 import { createClient } from "@/lib/supabase/client";
+import { getClientUser } from "@/lib/supabase/auth-user";
 
 export type NicknameMap = Record<string, string>;
 
 export async function loadFriendNicknames() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getClientUser();
   if (!user) return { map: {} as NicknameMap, error: null as string | null };
 
   const { data, error } = await supabase

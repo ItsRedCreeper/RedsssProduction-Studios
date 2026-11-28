@@ -211,11 +211,11 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
 
   // Load viewer privacy context (friends + memberships), keep it fresh via
   // realtime, and always track self so own profiles show true activity.
+  // Deferred slightly so messenger server/message loads win the connection pool.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     watchedRef.current.add(user.id);
-    void fetchUsers([user.id]);
 
     async function refreshPrivacy() {
       const [edges, membership, nickResult] = await Promise.all([
@@ -250,7 +250,11 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    void refreshPrivacy();
+    const bootTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      void fetchUsers([user.id]);
+      void refreshPrivacy();
+    }, 2_000);
 
     const supabase = createClient();
     const privacyChannel = supabase
@@ -280,6 +284,7 @@ export function PresenceFeedProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(bootTimer);
       void supabase.removeChannel(privacyChannel);
     };
   }, [user?.id, upsert, fetchUsers]);
