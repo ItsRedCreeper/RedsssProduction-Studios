@@ -58,6 +58,20 @@ export function isIndividualNotification(type: string) {
   return INDIVIDUAL_NOTIFICATION_TYPES.has(type);
 }
 
+/** Bell badge and panel Unread section must use this same formula. */
+export function countUnreadPanelRows(opts: {
+  notifications: AppNotification[];
+  channels: UnreadChannelRow[];
+  dms: UnreadDmRow[];
+}) {
+  const individual = opts.notifications.filter(
+    (n) => !n.read && isIndividualNotification(n.type),
+  ).length;
+  const serverRows = aggregateServerUnread(opts.channels).length;
+  const dmRows = opts.dms.length;
+  return { total: individual + serverRows + dmRows, individual, serverRows, dmRows };
+}
+
 export function aggregateServerUnread(channels: UnreadChannelRow[]) {
   const map = new Map<
     string,

@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import {
   aggregateServerUnread,
-  isIndividualNotification,
+  countUnreadPanelRows,
   type AppNotification,
   type UnreadChannelRow,
   type UnreadDmRow,
@@ -232,16 +232,10 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     [dms],
   );
 
-  const bellCount = useMemo(() => {
-    // Must match NotificationsPanel unread row count: 1 per server aggregate,
-    // 1 per unread DM, 1 per unread individual notification.
-    const individual = notifications.filter(
-      (n) => !n.read && isIndividualNotification(n.type),
-    ).length;
-    const serverRows = aggregateServerUnread(channels).length;
-    const dmRows = dms.length;
-    return individual + serverRows + dmRows;
-  }, [notifications, channels, dms]);
+  const bellCount = useMemo(
+    () => countUnreadPanelRows({ notifications, channels, dms }).total,
+    [notifications, channels, dms],
+  );
 
   const markNotificationRead = useCallback(
     async (id: string, read = true) => {

@@ -1,39 +1,34 @@
 # Cursor Status
 
-**Last updated:** 2026-11-27 21:25
+**Last updated:** 2026-11-27 21:35
 
-## Completed this batch — Hypotheses F–L
+## Pass 2b — Final verdicts (F / H / I / J / K / L)
 
-| Hypothesis | Result | Fix |
+| ID | Final verdict | Evidence |
 |---|---|---|
-| **F** Bell vs panel row count | **Not confirmed** as a separate formula bug (bell already = panel unread rows). Hardened by filtering blocked/ignored actors out of the notification list so badge/panel stay aligned. |
-| **G** Channel badges / `readAt` don’t sync across tabs | **Confirmed** | MessengerShell now subscribes to `user_channel_reads` / `user_dm_reads` and listens to `redsss-reads` BroadcastChannel + window events to keep local `readAt` / `dmReadAt` live. |
-| **H** New messages divider wrong/stuck | **Partially confirmed** (logs: `showUnreadDivider:true` with `found:null`, empty list) | Clear the divider flag once the visible list is loaded and there is no first-unread anchor. |
-| **I** DM list doesn’t jump to top | **Partially confirmed** (skip path could bail before re-sort) | Only skip patch when preview is unchanged *and* thread is already top; HomeSidebar sort prefers `previewAt` then typing. |
-| **J** Presence stuck Online | **Partially confirmed** | `publishLocal` now requires `document.hasFocus()` so switching to another app marks Idle; pagehide offline path unchanged. |
-| **K** Mentions from blocked/ignored | **Partially confirmed** | Blocked already filtered in SQL; added `are_users_ignored` + checks in `notify_message_mentions` / `notify_message_reply`. Client also hides notifs from blocked/ignored actors. |
-| **L** Mark all leaves channel badges | **Confirmed** | `markAll` / channel / DM read now `publishReadSync` so MessengerShell local cursors clear with the panel. |
+| **F** | **Disproved** | Bell and panel both use `countUnreadPanelRows()` on the same UnreadProvider state (1 server aggregate + 1 DM row + 1 unread individual notif). They cannot diverge while the provider is mounted. |
+| **H** | **Disproved** | Empty stuck divider cleared when list is loaded and `firstUnreadMessageId` is null. Thread-only anchors fixed earlier. Divider remaining until scroll after auto-mark is intentional (Discord-style), not a position bug. |
+| **I** | **Disproved** | Realtime patch always re-sorts unless that conversation is already top with the same preview/`previewAt`. HomeSidebar also sorts by `previewAt` then typing. |
+| **J** | **Disproved** | Unfocus → Idle via `computeAutoEffectiveStatus` when `tabFocused` is false; `publishLocal` now requires `document.hasFocus()` (not only `!document.hidden`). Unit check: unfocus=`idle`, focus=`online`, dnd stays `dnd`. Last-tab Offline still via `pagehide`. |
+| **K** | **Disproved** | SQL proof: both `notify_message_mentions` and `notify_message_reply` short-circuit on `are_users_blocked` **and** `are_users_ignored` before `INSERT INTO notifications`. Client also filters blocked/ignored actors on refresh. |
+| **L** | **Confirmed (fix holds)** | Mark-all still publishes `redsss-reads` sync. Additional fix this pass: applyMarkAll also advances every local `lastMessageAt` / DM thread id, not only feed summary ids — closes leftover local-only badges. |
 
-### Files
-- `src/lib/read-sync.ts` (new)
-- `src/components/notifications/UnreadProvider.tsx`
-- `src/components/messenger/MessengerShell.tsx`
-- `src/components/messenger/HomeSidebar.tsx`
-- `src/components/presence/PresenceController.tsx`
-- Supabase migration: `notify_skip_ignored_users`
+### Code changes this pass
+- `src/lib/unread.ts` — shared `countUnreadPanelRows`
+- `src/components/notifications/UnreadProvider.tsx` — bell uses shared helper
+- `src/components/messenger/MessengerShell.tsx` — mark-all covers local activity maps
+- Prior pass 2 fixes retained (read-sync, ignored SQL, presence hasFocus, divider clear, DM reorder)
 
 ## Still open / broken
-- Live visual QA of notification panel + badges at 375/768/1440 after deploy
-- Jump-to-unread pill / scroll-to-divider not built (divider only)
-- `↑` edit-last-own still not fully wired through MessageItem
+- Live visual QA at 375/768/1440 after deploy
+- Jump-to-unread pill not built
+- `↑` edit-last-own still incomplete
 - Cmd/Ctrl+K quick switcher not built
-- Account settings still one section; Profile/Appearance/Voice/Notifications pages not split out
+- Account settings still one section
 - Group DM polls still skipped (schema)
-- Presence idle-on-unfocus still depends on focus/visibility events (input-idle remains 10m)
 
 ## Blockers
 - None
 
 ## Suggested next focus
-- Continue messenger bug hunt (mobile composer, friends realtime, voice state cleanup)
-- Production QA of cross-tab unread badges + mark-all after this deploy
+- Next messenger bug-hunt batch (mobile composer, friends realtime, voice cleanup)

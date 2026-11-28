@@ -333,6 +333,8 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
   const suppressAutoMarkRef = useRef<Record<string, boolean>>({});
   const unreadFeedRef = useRef(unreadFeed);
   unreadFeedRef.current = unreadFeed;
+  const lastMessageAtRef = useRef(lastMessageAt);
+  lastMessageAtRef.current = lastMessageAt;
   const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const [groupDmOpen, setGroupDmOpen] = useState(false);
   const [pollOpen, setPollOpen] = useState(false);
@@ -1140,9 +1142,17 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       });
     }
     function applyMarkAll(at: string, channelIds: string[], dmIds: string[]) {
+      // Include local activity maps so badges clear even when a channel/DM was
+      // unread only in MessengerShell state and missing from the feed summary.
+      const localChannelIds = Object.keys(lastMessageAtRef.current);
+      const localDmIds = threadsRef.current.map((thread) => thread.id);
       setReadAt((prev) => {
         const next = { ...prev };
-        for (const id of new Set([...Object.keys(prev), ...channelIds])) {
+        for (const id of new Set([
+          ...Object.keys(prev),
+          ...localChannelIds,
+          ...channelIds,
+        ])) {
           const current = next[id];
           if (!current || Date.parse(current) < Date.parse(at)) next[id] = at;
         }
@@ -1150,7 +1160,11 @@ export function MessengerShell({ discover = false }: { discover?: boolean }) {
       });
       setDmReadAt((prev) => {
         const next = { ...prev };
-        for (const id of new Set([...Object.keys(prev), ...dmIds])) {
+        for (const id of new Set([
+          ...Object.keys(prev),
+          ...localDmIds,
+          ...dmIds,
+        ])) {
           const current = next[id];
           if (!current || Date.parse(current) < Date.parse(at)) next[id] = at;
         }
